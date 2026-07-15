@@ -1,0 +1,30 @@
+erDiagram
+  ORGANIZATIONS ||--o{ USERS : has
+  ORGANIZATIONS ||--o{ CLIENTS : owns
+  USERS }o--o{ ROLES : assigned
+  ROLES }o--o{ PERMISSIONS : grants
+
+  CLIENTS ||--o{ CLIENT_DEPENDENTS : has
+  CLIENTS ||--o{ CLIENT_INCOMES : receives
+  CLIENTS ||--o{ CLIENT_EXPENSES : incurs
+  CLIENTS ||--o{ DEBTS : owes
+  CREDITORS ||--o{ DEBTS : holds
+  CLIENTS ||--o{ DIAGNOSES : evaluated
+  DIAGNOSES ||--o{ DIAGNOSIS_REQUIREMENTS : checks
+
+  CLIENTS ||--o{ NEGOTIATIONS : participates
+  DEBTS ||--o{ NEGOTIATIONS : related
+  CREDITORS ||--o{ NEGOTIATIONS : counterpart
+  NEGOTIATIONS ||--o{ INTERACTIONS : records
+
+  CLIENTS ||--o{ TASKS : generates
+  NEGOTIATIONS ||--o{ TASKS : creates
+  USERS ||--o{ TASKS : assigned
+
+  CLIENTS ||--o{ CONTRACTS : signs
+  CONTRACTS ||--o{ INSTALLMENTS : generates
+  INSTALLMENTS ||--o| RECEIPTS : issues
+
+  CLIENTS ||--o{ DOCUMENTS : stores
+  DOCUMENTS ||--o{ GENERATED_REPORTS : supports
+  USERS ||--o{ AUDIT_EVENTS : performs

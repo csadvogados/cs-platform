@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200">
+<style>
+  .bg{fill:#f6f7fb}.title{font:700 30px Arial;fill:#111827}.sub{font:14px Arial;fill:#64748b}
+  .box{fill:#fff;stroke:#b58b2a;stroke-width:2;rx:12}.head{fill:#111827}
+  .htext{font:700 17px Arial;fill:#f2cc63}.field{font:13px Arial;fill:#1f2937}
+  .line{stroke:#64748b;stroke-width:2;fill:none}.label{font:12px Arial;fill:#475569}
+</style>
+<rect class="bg" width="1800" height="1200"/>
+<text x="60" y="55" class="title">CS Platform — Diagrama ER Conceitual</text>
+<text x="60" y="82" class="sub">Núcleo corporativo + módulo CS Recupera</text>
+
+<!-- Core -->
+<g transform="translate(70,130)">
+<rect class="box" width="260" height="155"/><rect class="head" width="260" height="38" rx="12"/>
+<text x="18" y="25" class="htext">ORGANIZATIONS</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">legal_name</text><text x="18" y="106" class="field">tax_id</text><text x="18" y="128" class="field">status</text>
+</g>
+<g transform="translate(420,130)">
+<rect class="box" width="260" height="175"/><rect class="head" width="260" height="38" rx="12"/>
+<text x="18" y="25" class="htext">USERS</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">FK organization_id</text><text x="18" y="106" class="field">full_name</text><text x="18" y="128" class="field">email</text><text x="18" y="150" class="field">status</text>
+</g>
+<g transform="translate(770,130)">
+<rect class="box" width="250" height="145"/><rect class="head" width="250" height="38" rx="12"/>
+<text x="18" y="25" class="htext">ROLES / PERMISSIONS</text>
+<text x="18" y="62" class="field">roles</text><text x="18" y="84" class="field">permissions</text><text x="18" y="106" class="field">user_roles</text><text x="18" y="128" class="field">role_permissions</text>
+</g>
+
+<!-- CRM -->
+<g transform="translate(70,410)">
+<rect class="box" width="300" height="215"/><rect class="head" width="300" height="38" rx="12"/>
+<text x="18" y="25" class="htext">CLIENTS</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">FK organization_id</text><text x="18" y="106" class="field">FK assigned_user_id</text><text x="18" y="128" class="field">full_name / cpf</text><text x="18" y="150" class="field">status</text><text x="18" y="172" class="field">person_natural</text><text x="18" y="194" class="field">good_faith_declared</text>
+</g>
+<g transform="translate(450,390)">
+<rect class="box" width="280" height="205"/><rect class="head" width="280" height="38" rx="12"/>
+<text x="18" y="25" class="htext">FINANCIAL PROFILE</text>
+<text x="18" y="62" class="field">client_incomes</text><text x="18" y="84" class="field">client_expenses</text><text x="18" y="106" class="field">client_dependents</text><text x="18" y="128" class="field">proof documents</text><text x="18" y="150" class="field">recurring values</text><text x="18" y="172" class="field">essential expenses</text>
+</g>
+
+<!-- Recupera -->
+<g transform="translate(820,370)">
+<rect class="box" width="280" height="210"/><rect class="head" width="280" height="38" rx="12"/>
+<text x="18" y="25" class="htext">DEBTS</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">FK client_id</text><text x="18" y="106" class="field">FK creditor_id</text><text x="18" y="128" class="field">nature</text><text x="18" y="150" class="field">current_balance</text><text x="18" y="172" class="field">monthly_installment</text><text x="18" y="194" class="field">included_in_plan</text>
+</g>
+<g transform="translate(1180,370)">
+<rect class="box" width="270" height="175"/><rect class="head" width="270" height="38" rx="12"/>
+<text x="18" y="25" class="htext">CREDITORS</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">legal_name</text><text x="18" y="106" class="field">SAC / Ouvidoria</text><text x="18" y="128" class="field">consumer.gov</text><text x="18" y="150" class="field">contact metadata</text>
+</g>
+<g transform="translate(820,690)">
+<rect class="box" width="300" height="195"/><rect class="head" width="300" height="38" rx="12"/>
+<text x="18" y="25" class="htext">NEGOTIATIONS</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">FK client / debt / creditor</text><text x="18" y="106" class="field">owner_user_id</text><text x="18" y="128" class="field">status / priority</text><text x="18" y="150" class="field">next_action</text><text x="18" y="172" class="field">next_action_due_at</text>
+</g>
+<g transform="translate(1190,690)">
+<rect class="box" width="280" height="190"/><rect class="head" width="280" height="38" rx="12"/>
+<text x="18" y="25" class="htext">INTERACTIONS</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">FK negotiation_id</text><text x="18" y="106" class="field">channel / protocol</text><text x="18" y="128" class="field">description / result</text><text x="18" y="150" class="field">proposal values</text><text x="18" y="172" class="field">attachments</text>
+</g>
+<g transform="translate(450,700)">
+<rect class="box" width="280" height="190"/><rect class="head" width="280" height="38" rx="12"/>
+<text x="18" y="25" class="htext">DIAGNOSES</text>
+<text x="18" y="62" class="field">PK id</text><text x="18" y="84" class="field">FK client_id</text><text x="18" y="106" class="field">totals / commitment</text><text x="18" y="128" class="field">eligibility_score</text><text x="18" y="150" class="field">economic conclusion</text><text x="18" y="172" class="field">legal conclusion</text>
+</g>
+
+<!-- Ops / Finance / Docs -->
+<g transform="translate(70,760)">
+<rect class="box" width="280" height="170"/><rect class="head" width="280" height="38" rx="12"/>
+<text x="18" y="25" class="htext">TASKS / AGENDA</text>
+<text x="18" y="62" class="field">assigned_user_id</text><text x="18" y="84" class="field">client / negotiation</text><text x="18" y="106" class="field">priority / status</text><text x="18" y="128" class="field">due_at</text><text x="18" y="150" class="field">notifications</text>
+</g>
+<g transform="translate(520,990)">
+<rect class="box" width="300" height="170"/><rect class="head" width="300" height="38" rx="12"/>
+<text x="18" y="25" class="htext">CONTRACTS / INSTALLMENTS</text>
+<text x="18" y="62" class="field">12 x R$ 125</text><text x="18" y="84" class="field">payment status</text><text x="18" y="106" class="field">receipts</text><text x="18" y="128" class="field">judicial phase balance</text><text x="18" y="150" class="field">external references</text>
+</g>
+<g transform="translate(970,990)">
+<rect class="box" width="290" height="170"/><rect class="head" width="290" height="38" rx="12"/>
+<text x="18" y="25" class="htext">DOCUMENTS / REPORTS</text>
+<text x="18" y="62" class="field">storage metadata</text><text x="18" y="84" class="field">versions / checksum</text><text x="18" y="106" class="field">generated reports</text><text x="18" y="128" class="field">client dossier</text><text x="18" y="150" class="field">internal report</text>
+</g>
+<g transform="translate(1390,980)">
+<rect class="box" width="300" height="180"/><rect class="head" width="300" height="38" rx="12"/>
+<text x="18" y="25" class="htext">AUDIT EVENTS</text>
+<text x="18" y="62" class="field">user / organization</text><text x="18" y="84" class="field">entity / action</text><text x="18" y="106" class="field">old_values JSONB</text><text x="18" y="128" class="field">new_values JSONB</text><text x="18" y="150" class="field">IP / user agent</text>
+</g>
+
+<!-- Lines -->
+<path class="line" d="M330 205 L420 205"/><text x="355" y="195" class="label">1:N</text>
+<path class="line" d="M680 205 L770 205"/><text x="705" y="195" class="label">N:N</text>
+<path class="line" d="M200 285 L200 410"/><text x="208" y="350" class="label">1:N</text>
+<path class="line" d="M370 500 L450 500"/><text x="392" y="490" class="label">1:N</text>
+<path class="line" d="M370 535 L820 475"/><text x="580" y="485" class="label">1:N</text>
+<path class="line" d="M1100 470 L1180 455"/><text x="1128" y="448" class="label">N:1</text>
+<path class="line" d="M960 580 L960 690"/><text x="970" y="640" class="label">1:N</text>
+<path class="line" d="M1120 785 L1190 785"/><text x="1145" y="775" class="label">1:N</text>
+<path class="line" d="M370 560 L590 700"/><text x="470" y="620" class="label">1:N</text>
+<path class="line" d="M200 625 L200 760"/><text x="210" y="700" class="label">1:N</text>
+<path class="line" d="M300 625 L650 990"/><text x="450" y="810" class="label">1:N</text>
+<path class="line" d="M330 600 L1110 990"/><text x="720" y="790" class="label">1:N</text>
+</svg>
