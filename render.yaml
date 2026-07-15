@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: cs-platform-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cs-platform-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: INITIAL_ADMIN_EMAIL
+        value: admin@csrecupera.com.br
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://sistema.rdsconsultoria.com.br
+
+databases:
+  - name: cs-platform-db
+    databaseName: cs_platform
+    user: cs_platform

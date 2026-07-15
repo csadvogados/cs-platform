@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cs_platform
+      POSTGRES_USER: cs_user
+      POSTGRES_PASSWORD: cs_password
+    ports: ["5432:5432"]
+    volumes: ["cs_pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U cs_user -d cs_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: ./backend
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+psycopg://cs_user:cs_password@db:5432/cs_platform
+      SECRET_KEY: ALTERE-ESTA-CHAVE
+      INITIAL_ADMIN_EMAIL: admin@csrecupera.com.br
+      INITIAL_ADMIN_PASSWORD: ChangeMe123!
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  cs_pgdata:
