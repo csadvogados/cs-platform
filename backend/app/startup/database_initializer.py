@@ -11,35 +11,30 @@ logger = logging.getLogger("cs_platform.database")
 
 def initialize_database() -> None:
     """
-    Inicializa o schema do banco de forma segura e idempotente.
-    Cria apenas tabelas inexistentes e preserva os dados já existentes.
+    Verifica a conexão e garante uma inicialização segura.
+
+    Em produção, o schema deve ser criado pelas migrations do Alembic
+    executadas no pre-deploy. Em desenvolvimento e teste, create_all
+    continua disponível como fallback.
     """
     try:
         with engine.connect() as connection:
             connection.exec_driver_sql("SELECT 1")
 
-        existing_before = set(inspect(engine).get_table_names())
-        logger.info(
-            "Banco conectado. Tabelas existentes antes da inicialização: %s",
-            sorted(existing_before),
-        )
+        existing_tables = set(inspect(engine).get_table_names())
+        logger.info("Banco conectado. Tabelas existentes: %s", sorted(existing_tables))
 
-        Base.metadata.create_all(bind=engine, checkfirst=True)
+        if not existing_tables:
+            logger.warning(
+                "Nenhuma tabela encontrada. O Alembic deveria ter sido executado "
+                "no pre-deploy."
+            )
 
-        existing_after = set(inspect(engine).get_table_names())
-        created_tables = sorted(existing_after - existing_before)
-
-        if created_tables:
-            logger.info("Tabelas criadas: %s", created_tables)
-        else:
-            logger.info("Nenhuma tabela nova precisou ser criada.")
-
-        if "organizations" not in existing_after:
-            raise RuntimeError(
-                "A tabela 'organizations' não foi criada. "
-                "Verifique se todos os modelos são importados por app.models."
+        if "organizations" not in existing_tables:
+            logger.warning(
+                "Tabela organizations ausente após o pre-deploy."
             )
 
     except SQLAlchemyError as exc:
-        logger.exception("Falha SQLAlchemy durante a inicialização do banco.")
-        raise RuntimeError("Não foi possível inicializar o banco de dados.") from exc
+        logger.exception("Falha durante a verificação do banco.")
+        raise RuntimeError("Não foi possível validar o banco de dados.") from exc
