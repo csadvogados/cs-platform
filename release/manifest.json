@@ -2,10 +2,8 @@
   "product": "CS Platform Enterprise",
   "version": "5.0.0",
   "release": "TITANIUM",
-  "package": "01C",
-  "name": "API Foundation",
+  "package": "01D",
+  "name": "Security Foundation",
   "requires_database_migration": false,
-  "replaces_existing_files": [
-    "backend/app/main.py"
-  ]
+  "replaces_existing_files": false
 }

@@ -1,14 +1,12 @@
-# Checklist — Pacote 01C
+# Checklist — Pacote 01D
 
-- [ ] Backup do `main.py`.
+- [ ] Pasta `app/security` criada.
+- [ ] Pasta `tests/security` criada.
 - [ ] Arquivos copiados.
-- [ ] Pasta `app/middleware` criada.
+- [ ] Nenhum arquivo existente foi substituído.
 - [ ] Testes executados.
-- [ ] `/ping` retorna 200.
-- [ ] `/docs` abre.
-- [ ] Login retorna 200.
-- [ ] Erro 404 usa formato padronizado.
-- [ ] Respostas possuem `X-Request-ID`.
-- [ ] Respostas possuem `X-Correlation-ID`.
-- [ ] Respostas possuem `X-Response-Time-Ms`.
-- [ ] Deploy Railway concluído.
+- [ ] Aplicação continua iniciando.
+- [ ] Swagger continua acessível.
+- [ ] Login continua retornando 200.
+- [ ] Criação de usuário continua funcionando.
+- [ ] Commit realizado.

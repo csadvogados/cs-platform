@@ -1,19 +1,18 @@
-# CHANGELOG — Pacote 01C
+# CHANGELOG — Pacote 01D
 
 ## Adicionado
 
-- Responses padronizadas.
-- Paginação genérica.
-- Filtros comuns.
-- Tratamento global de exceções.
-- Middleware de contexto da requisição.
-- Middleware de cabeçalhos de segurança.
-- Testes do Core API.
+- Catálogo de permissões.
+- Matriz RBAC inicial.
+- Verificação de permissões.
+- Política de senha.
+- Contexto de segurança por requisição.
+- Testes unitários de segurança.
 
-## Alterado
+## Não alterado
 
-- `app/main.py` registra handlers e middlewares.
-
-## Migração
-
-Não exige migration de banco.
+- Login atual.
+- JWT atual.
+- Refresh token atual.
+- Rotas protegidas atuais.
+- Banco de dados.
