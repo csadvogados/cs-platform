@@ -4,7 +4,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, clients, dashboard, diagnoses, financial, health, users
+from app.api.routes import admin_recovery, auth, clients, dashboard, diagnoses, financial, health, users
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.services.bootstrap import bootstrap
@@ -50,7 +50,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
+
+app.include_router(admin_recovery.router,prefix="/api/v1/admin-recovery",tags=["Temporary Admin Recovery"],
 
 app.include_router(health.router, prefix="/api/v1", tags=["Health"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
