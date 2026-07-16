@@ -1,0 +1,9 @@
+{
+  "product": "CS Platform Enterprise",
+  "version": "5.0.0",
+  "release": "TITANIUM",
+  "package": "01B",
+  "name": "Core Infrastructure",
+  "requires_database_migration": false,
+  "replaces_existing_files": true
+}
