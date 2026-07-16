@@ -1,49 +1,78 @@
-# CS Platform Enterprise v5.0.0 — Pacote 01B
+# CS Platform Enterprise v5.0.0 — Pacote 01C
 
-## Core Infrastructure
+## API Foundation
 
-Este pacote integra o Foundation Core ao projeto atual, preservando:
+Este pacote adiciona:
 
-- autenticação;
-- bootstrap;
-- Swagger;
-- PostgreSQL;
-- Railway;
-- routers existentes.
+- respostas padronizadas;
+- paginação;
+- filtros comuns;
+- handlers globais de exceção;
+- request ID e correlation ID;
+- tempo de resposta;
+- cabeçalhos básicos de segurança.
 
-## Como aplicar
+## Arquivos substituídos
 
-1. Faça backup de:
-   - backend/app/core/config.py
-   - backend/app/db/base.py
-   - backend/app/main.py
+```text
+backend/app/main.py
+```
 
-2. Copie a pasta backend deste pacote para o repositório.
+## Arquivos novos
 
-3. Confirme:
-   - substituição de config.py;
-   - substituição de db/base.py;
-   - substituição de main.py;
-   - criação de core/logging.py;
-   - criação de core/dependencies.py;
-   - criação dos testes.
+```text
+backend/app/core/responses.py
+backend/app/core/pagination.py
+backend/app/core/filters.py
+backend/app/api/exception_handlers.py
+backend/app/middleware/__init__.py
+backend/app/middleware/request_context.py
+backend/app/middleware/security_headers.py
+backend/tests/core/test_responses.py
+backend/tests/core/test_pagination.py
+backend/tests/core/test_filters.py
+```
 
-4. Não altere:
-   - backend/alembic/env.py;
-   - modelos atuais;
-   - migrations existentes.
+## Aplicação
 
-## Variáveis Railway opcionais
-
-LOG_LEVEL=INFO
-LOG_JSON=false
-DEBUG=false
-TIMEZONE=America/Sao_Paulo
+1. Faça backup de `backend/app/main.py`.
+2. Copie a pasta `backend` do pacote.
+3. Confirme a substituição do `main.py`.
+4. Confirme a criação dos novos arquivos.
+5. Não altere modelos, migrations ou rotas atuais.
 
 ## Testes
 
+```bash
 pytest tests/core -q
+```
+
+## Validação
+
+Verifique:
+
+```text
+GET /
+GET /ping
+GET /docs
+GET /api/v1/health
+POST /api/v1/auth/login
+```
+
+As respostas de erros dos endpoints passarão a utilizar o formato:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "...",
+    "message": "..."
+  }
+}
+```
 
 ## Commit sugerido
 
-Core Infrastructure 01B - config, logging, dependencies e base integration
+```text
+API Foundation 01C - responses, pagination, filters and handlers
+```

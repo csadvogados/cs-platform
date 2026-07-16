@@ -1,15 +1,14 @@
-# Checklist de Homologação — Pacote 01B
+# Checklist — Pacote 01C
 
-- [ ] Backup dos arquivos substituídos.
-- [ ] Pacote copiado.
-- [ ] dependencies.py criado.
-- [ ] logging.py criado.
-- [ ] config.py substituído.
-- [ ] db/base.py substituído.
-- [ ] main.py substituído.
+- [ ] Backup do `main.py`.
+- [ ] Arquivos copiados.
+- [ ] Pasta `app/middleware` criada.
 - [ ] Testes executados.
-- [ ] /ping retorna 200.
-- [ ] /docs abre.
-- [ ] /api/v1/health retorna 200.
+- [ ] `/ping` retorna 200.
+- [ ] `/docs` abre.
 - [ ] Login retorna 200.
+- [ ] Erro 404 usa formato padronizado.
+- [ ] Respostas possuem `X-Request-ID`.
+- [ ] Respostas possuem `X-Correlation-ID`.
+- [ ] Respostas possuem `X-Response-Time-Ms`.
 - [ ] Deploy Railway concluído.

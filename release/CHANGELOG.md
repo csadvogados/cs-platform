@@ -1,17 +1,19 @@
-# CHANGELOG — Pacote 01B
+# CHANGELOG — Pacote 01C
 
 ## Adicionado
-- Logging estruturado.
-- Dependência oficial de sessão de banco.
-- Configuração Enterprise consolidada.
-- Testes de config e logging.
+
+- Responses padronizadas.
+- Paginação genérica.
+- Filtros comuns.
+- Tratamento global de exceções.
+- Middleware de contexto da requisição.
+- Middleware de cabeçalhos de segurança.
+- Testes do Core API.
 
 ## Alterado
-- app/db/base.py passa a reutilizar a nova Base.
-- app/main.py usa configuração e logging centralizados.
 
-## Preservado
-- Routers.
-- Bootstrap.
-- Autenticação.
-- Endpoints atuais.
+- `app/main.py` registra handlers e middlewares.
+
+## Migração
+
+Não exige migration de banco.
