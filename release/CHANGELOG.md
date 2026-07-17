@@ -1,3 +1,6 @@
+# v5.3.1
+- Segurança HTTP, rate limiting e observabilidade OpenMetrics.
+
 # CHANGELOG — Pacote 01D
 
 ## Adicionado

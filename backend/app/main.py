@@ -12,6 +12,7 @@ from app.api.routes import (
     diagnoses,
     financial,
     health,
+    metrics,
     organizations,
     users,
     access_control,
@@ -22,7 +23,9 @@ from app.db.session import SessionLocal
 from app.middleware import (
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
+    RateLimitMiddleware,
 )
+from app.observability import MetricsMiddleware
 from app.services.bootstrap import bootstrap
 from app.startup.database_initializer import initialize_database
 
@@ -69,6 +72,8 @@ app = FastAPI(
 register_exception_handlers(app)
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(MetricsMiddleware)
 app.add_middleware(RequestContextMiddleware)
 
 app.add_middleware(
@@ -79,6 +84,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(metrics.router)
 app.include_router(
     health.router,
     prefix=settings.api_v1_prefix,

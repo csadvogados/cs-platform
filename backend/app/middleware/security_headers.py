@@ -24,6 +24,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Permissions-Policy",
             "camera=(), microphone=(), geolocation=()",
         )
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
+        response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
         return response
 

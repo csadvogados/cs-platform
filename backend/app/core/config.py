@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     healthcheck_database: bool = True
     organization_api_enabled: bool = False
 
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 120
+    rate_limit_window_seconds: int = 60
+    login_rate_limit_requests: int = 10
+    metrics_enabled: bool = True
+    trusted_proxy_headers: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
