@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_identity_context
 from app.core.config import settings
 from app.core.security import (
     create_access_token,
@@ -27,7 +27,9 @@ from app.schemas.auth import (
     RefreshRequest,
     TokenPair,
 )
+from app.schemas.identity import IdentityRead
 from app.schemas.user import UserRead
+from app.security.identity import IdentityContext
 from app.services.audit import record_audit
 
 
@@ -238,11 +240,23 @@ def logout(
     return None
 
 
-@router.get("/me", response_model=UserRead)
+@router.get("/me", response_model=IdentityRead)
 def me(
-    user: User = Depends(get_current_user),
+    identity: IdentityContext = Depends(get_identity_context),
 ):
-    return user
+    user = identity.user
+    return IdentityRead(
+        id=user.id,
+        organization_id=user.organization_id,
+        full_name=user.full_name,
+        email=user.email,
+        role=user.role,
+        status=user.status,
+        is_superuser=user.is_superuser,
+        must_change_password=user.must_change_password,
+        permissions=sorted(identity.permissions),
+        organization=identity.organization,
+    )
 
 
 @router.post(

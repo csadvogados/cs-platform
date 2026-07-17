@@ -12,6 +12,7 @@ from app.api.routes import (
     diagnoses,
     financial,
     health,
+    organizations,
     users,
 )
 from app.core.config import settings
@@ -92,6 +93,12 @@ app.include_router(
     prefix=f"{settings.api_v1_prefix}/users",
     tags=["Users"],
 )
+if settings.organization_api_enabled:
+    app.include_router(
+        organizations.router,
+        prefix=f"{settings.api_v1_prefix}/organizations",
+        tags=["Organizations"],
+    )
 app.include_router(
     clients.router,
     prefix=f"{settings.api_v1_prefix}/clients",
