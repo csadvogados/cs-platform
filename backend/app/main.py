@@ -61,8 +61,8 @@ app = FastAPI(
     title="CS Platform API",
     version=settings.app_version,
     description=(
-        "CS Platform: autenticação, clientes, cadastro financeiro, "
-        "dívidas, diagnóstico e parecer econômico."
+        "CS Platform Enterprise: identidade, organizações, usuários, CRM, "
+        "gestão financeira, diagnóstico e observabilidade."
     ),
     lifespan=lifespan,
     docs_url=settings.docs_url,

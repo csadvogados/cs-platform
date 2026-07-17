@@ -1,3 +1,7 @@
+# v5.4.1
+
+CRM estabilizado, validado e otimizado com índices compostos, CRUD ampliado e novos indicadores.
+
 # v5.4.0
 - CRM Enterprise: contatos, interações, oportunidades, tarefas e dashboard.
 

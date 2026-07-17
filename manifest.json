@@ -1,6 +1,6 @@
 {
   "product": "CS Platform",
-  "version": "5.2.0",
+  "version": "5.4.1",
   "release": "Enterprise Security & Multi-Tenant",
   "base_required": "02B.4 installed",
   "database_migration": "0003_merge_auth_organization",
@@ -10,5 +10,8 @@
     "test_me_returns_identity_context",
     "test_rejects_token_with_wrong_organization_claim",
     "test_rejects_token_with_stale_role_claim"
-  ]
+  ],
+  "name": "CS Platform v5.4.1 CRM Stabilization",
+  "database_revision": "0006_crm_stabilization",
+  "base_version": "5.4.0"
 }

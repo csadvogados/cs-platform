@@ -24,7 +24,7 @@ from typing import Final
 
 APP_NAME: Final[str] = "CS Platform"
 APP_TITLE: Final[str] = "CS Platform Enterprise"
-APP_VERSION: Final[str] = "5.4.0"
+APP_VERSION: Final[str] = "5.4.1"
 APP_RELEASE_NAME: Final[str] = "TITANIUM"
 DEFAULT_ENVIRONMENT: Final[str] = "development"
 

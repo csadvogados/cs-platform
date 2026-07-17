@@ -1,3 +1,7 @@
+# v5.4.1
+
+CRM estabilizado, validado e otimizado com índices compostos, CRUD ampliado e novos indicadores.
+
 # Changelog
 
 ## 5.3.0 — Enterprise User Management
