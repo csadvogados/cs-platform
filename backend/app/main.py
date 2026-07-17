@@ -13,6 +13,7 @@ from app.api.routes import (
     financial,
     health,
     metrics,
+    crm,
     organizations,
     users,
     access_control,
@@ -112,6 +113,11 @@ if settings.organization_api_enabled:
         prefix=f"{settings.api_v1_prefix}/organizations",
         tags=["Organizations"],
     )
+app.include_router(
+    crm.router,
+    prefix=f"{settings.api_v1_prefix}/crm",
+    tags=["CRM Enterprise"],
+)
 app.include_router(
     clients.router,
     prefix=f"{settings.api_v1_prefix}/clients",

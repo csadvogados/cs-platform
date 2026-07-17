@@ -1,3 +1,6 @@
+# v5.4.0
+- CRM Enterprise: contatos, interações, oportunidades, tarefas e dashboard.
+
 # v5.3.1
 - Segurança HTTP, rate limiting e observabilidade OpenMetrics.
 

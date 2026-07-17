@@ -1,8 +1,8 @@
 {
   "product": "CS Platform Enterprise",
-  "version": "5.3.1",
+  "version": "5.4.0",
   "package": "02B.4",
-  "name": "CS Platform v5.3.1 Security & Observability",
+  "name": "CS Platform v5.4.0 CRM Enterprise",
   "migration_revision": "0002_organization_engine",
   "migration_down_revision": "0001_sprint1",
   "organization_api_registered": false,
