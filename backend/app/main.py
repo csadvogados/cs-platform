@@ -25,6 +25,7 @@ from app.services.bootstrap import bootstrap
 from app.startup.database_initializer import initialize_database
 
 from app.models import *  # noqa: F401,F403
+from app.models.organization_registry import *  # noqa: F401,F403
 
 
 configure_logging()
