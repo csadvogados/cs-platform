@@ -14,6 +14,7 @@ from app.api.routes import (
     health,
     organizations,
     users,
+    access_control,
 )
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -93,6 +94,12 @@ app.include_router(
     prefix=f"{settings.api_v1_prefix}/users",
     tags=["Users"],
 )
+
+app.include_router(access_control.roles_router, prefix=f"{settings.api_v1_prefix}/roles", tags=["Roles"])
+app.include_router(access_control.permissions_router, prefix=f"{settings.api_v1_prefix}/permissions", tags=["Permissions"])
+app.include_router(access_control.invitations_router, prefix=f"{settings.api_v1_prefix}/invitations", tags=["Invitations"])
+app.include_router(access_control.sessions_router, prefix=f"{settings.api_v1_prefix}/sessions", tags=["Sessions"])
+
 if settings.organization_api_enabled:
     app.include_router(
         organizations.router,

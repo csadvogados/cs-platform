@@ -77,6 +77,15 @@ class User(TimestampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
 
     organization = relationship(
         "Organization",
@@ -84,6 +93,17 @@ class User(TimestampMixin, Base):
     )
     refresh_tokens = relationship(
         "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    roles = relationship(
+        "Role",
+        secondary="user_roles",
+        back_populates="users",
+        lazy="selectin",
+    )
+    sessions = relationship(
+        "UserSession",
         back_populates="user",
         cascade="all, delete-orphan",
     )

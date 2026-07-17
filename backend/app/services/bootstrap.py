@@ -9,6 +9,7 @@ from app.models.organization_branding import OrganizationBranding
 from app.models.organization_license import OrganizationLicense
 from app.models.organization_settings import OrganizationSettings
 from app.models.user import User
+from app.services.access_control import seed_permissions_and_roles
 
 logger = logging.getLogger("cs_platform.bootstrap")
 
@@ -78,6 +79,8 @@ def bootstrap(db: Session) -> None:
                 admin.email,
             )
 
+        db.flush()
+        seed_permissions_and_roles(db, organization.id)
         db.commit()
         logger.info("Bootstrap concluído com sucesso.")
 

@@ -19,6 +19,7 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models.refresh_token import RefreshToken
+from app.models.access_control import PasswordHistory, UserSession
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -55,10 +56,20 @@ def _issue_tokens(db: Session, user: User) -> TokenPair:
         days=settings.refresh_token_expire_days
     )
 
+    refresh_hash = hash_token(refresh_token)
     db.add(
         RefreshToken(
             user_id=user.id,
-            token_hash=hash_token(refresh_token),
+            token_hash=refresh_hash,
+            expires_at=expires_at,
+        )
+    )
+    db.add(
+        UserSession(
+            organization_id=user.organization_id,
+            user_id=user.id,
+            refresh_token_hash=refresh_hash,
+            last_activity_at=datetime.now(timezone.utc),
             expires_at=expires_at,
         )
     )
@@ -233,8 +244,16 @@ def logout(
     )
 
     if stored and not stored.revoked:
+        now = datetime.now(timezone.utc)
         stored.revoked = True
-        stored.revoked_at = datetime.now(timezone.utc)
+        stored.revoked_at = now
+        session = db.scalar(
+            select(UserSession).where(
+                UserSession.refresh_token_hash == token_hash_value
+            )
+        )
+        if session and not session.revoked_at:
+            session.revoked_at = now
         db.commit()
 
     return None
@@ -283,8 +302,17 @@ def change_password(
             detail="A nova senha deve ser diferente",
         )
 
+    now = datetime.now(timezone.utc)
+    db.add(
+        PasswordHistory(
+            user_id=user.id,
+            password_hash=user.password_hash,
+            created_at=now,
+        )
+    )
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
+    user.password_changed_at = now
 
     db.execute(
         update(RefreshToken)

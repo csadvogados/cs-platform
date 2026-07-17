@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.3.0 — Enterprise User Management
+
+- RBAC persistente por organização.
+- Catálogo de permissões e perfis padrão.
+- Convites de usuários com token seguro e expiração.
+- Pesquisa, paginação, bloqueio, desbloqueio e exclusão lógica de usuários.
+- Estrutura de sessões e histórico de senhas.
+- Migration Alembic `0004_enterprise_user_management`.
+- Testes de regressão e integração.
+
 ## 5.2.0 — Enterprise Security & Multi-Tenant
 
 ### Adicionado
