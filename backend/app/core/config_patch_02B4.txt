@@ -1,0 +1,6 @@
+Adicionar dentro da classe Settings:
+
+    organization_api_enabled: bool = False
+
+A API de organizações só deverá ser ativada no Pacote 02A, após a integração
+com autenticação e permissões.

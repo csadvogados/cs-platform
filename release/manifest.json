@@ -1,9 +1,10 @@
 {
   "product": "CS Platform Enterprise",
-  "version": "5.0.0",
-  "release": "TITANIUM",
-  "package": "01D",
-  "name": "Security Foundation",
-  "requires_database_migration": false,
-  "replaces_existing_files": false
+  "version": "5.1.0",
+  "package": "02B.4",
+  "name": "Organization Engine Integration",
+  "migration_revision": "0002_organization_engine",
+  "migration_down_revision": "0001_sprint1",
+  "organization_api_registered": false,
+  "next_package": "02A Identity Integration"
 }

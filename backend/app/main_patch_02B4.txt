@@ -1,0 +1,14 @@
+1. Adicionar após "from app.models import *":
+
+    from app.models.organization_registry import *  # noqa: F401,F403
+
+2. NÃO registrar ainda o router organizations.
+
+No Pacote 02A, após autenticação/RBAC, será adicionado:
+
+    from app.api.routes import organizations
+    app.include_router(
+        organizations.router,
+        prefix=f"{settings.api_v1_prefix}/organizations",
+        tags=["Organizations"],
+    )
