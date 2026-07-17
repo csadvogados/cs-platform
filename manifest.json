@@ -1,9 +1,9 @@
 {
-  "product": "CS Platform",
-  "version": "5.4.1",
+  "product": "CS Platform Enterprise",
+  "version": "5.4.2",
   "release": "Enterprise Security & Multi-Tenant",
   "base_required": "02B.4 installed",
-  "database_migration": "0003_merge_auth_organization",
+  "database_migration": "none",
   "destructive_changes": false,
   "organization_router_default": false,
   "tests_added": [
@@ -11,7 +11,9 @@
     "test_rejects_token_with_wrong_organization_claim",
     "test_rejects_token_with_stale_role_claim"
   ],
-  "name": "CS Platform v5.4.1 CRM Stabilization",
+  "name": "CS Platform v5.4.2 Infrastructure & Deployment",
   "database_revision": "0006_crm_stabilization",
-  "base_version": "5.4.0"
+  "base_version": "5.4.1",
+  "deployment_entrypoint": "backend/docker-entrypoint.sh",
+  "healthcheck_path": "/api/v1/health"
 }

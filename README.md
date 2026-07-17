@@ -54,3 +54,9 @@ O pacote não implementa filtro SQL global implícito. Esse padrão pode ocultar
 ## Rollback
 
 A migration `0003_merge_auth_organization` é apenas de merge e não altera tabelas. O downgrade retorna a árvore para os dois heads anteriores, o que não é recomendado em produção após novas migrations dependerem dela.
+
+## Railway — v5.4.2
+
+A inicialização de produção é controlada por `backend/docker-entrypoint.sh`. No Railway, deixe os campos **Start Command** e **Pre-deploy Command** vazios. O entrypoint aguarda o banco, aplica `alembic upgrade head` e inicia o Uvicorn usando a variável dinâmica `PORT`.
+
+Consulte `CHECKLIST_DEPLOY_v5.4.2.md` antes da publicação.

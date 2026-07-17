@@ -1,12 +1,16 @@
 {
   "product": "CS Platform Enterprise",
-  "version": "5.4.1",
+  "version": "5.4.2",
   "package": "02B.4",
-  "name": "CS Platform v5.4.1 CRM Stabilization",
+  "name": "CS Platform v5.4.2 Infrastructure & Deployment",
   "migration_revision": "0002_organization_engine",
   "migration_down_revision": "0001_sprint1",
   "organization_api_registered": false,
   "next_package": "02A Identity Integration",
   "database_revision": "0006_crm_stabilization",
-  "base_version": "5.4.0"
+  "base_version": "5.4.1",
+  "database_migration": "none",
+  "destructive_changes": false,
+  "deployment_entrypoint": "backend/docker-entrypoint.sh",
+  "healthcheck_path": "/api/v1/health"
 }
