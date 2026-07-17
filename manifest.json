@@ -1,6 +1,6 @@
 {
   "product": "CS Platform Enterprise",
-  "version": "5.4.2",
+  "version": "5.4.2-revised",
   "release": "Enterprise Security & Multi-Tenant",
   "base_required": "02B.4 installed",
   "database_migration": "none",
@@ -15,5 +15,6 @@
   "database_revision": "0006_crm_stabilization",
   "base_version": "5.4.1",
   "deployment_entrypoint": "backend/docker-entrypoint.sh",
-  "healthcheck_path": "/api/v1/health"
+  "healthcheck_path": "/api/v1/health",
+  "release_name": "Infrastructure & Deployment — Revised"
 }

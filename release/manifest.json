@@ -1,6 +1,6 @@
 {
   "product": "CS Platform Enterprise",
-  "version": "5.4.2",
+  "version": "5.4.2-revised",
   "package": "02B.4",
   "name": "CS Platform v5.4.2 Infrastructure & Deployment",
   "migration_revision": "0002_organization_engine",
@@ -12,5 +12,6 @@
   "database_migration": "none",
   "destructive_changes": false,
   "deployment_entrypoint": "backend/docker-entrypoint.sh",
-  "healthcheck_path": "/api/v1/health"
+  "healthcheck_path": "/api/v1/health",
+  "release_name": "Infrastructure & Deployment — Revised"
 }

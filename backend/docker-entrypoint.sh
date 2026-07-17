@@ -8,31 +8,42 @@ MIGRATIONS_ENABLED="${MIGRATIONS_ENABLED:-true}"
 
 case "$PORT" in
   ''|*[!0-9]*)
-    echo "ERRO: PORT deve ser um número inteiro; valor recebido: '$PORT'" >&2
+    echo "[deploy][erro] PORT deve ser inteiro; recebido: '$PORT'" >&2
     exit 64
     ;;
 esac
 
-if [ "$MIGRATIONS_ENABLED" = "true" ] || [ "$MIGRATIONS_ENABLED" = "1" ]; then
-  echo "[deploy] Aguardando disponibilidade do banco..."
-  python scripts/wait_for_database.py
+cd /app
 
-  echo "[deploy] Revisões Alembic disponíveis na imagem:"
-  alembic heads
+echo "[deploy] CS Platform v5.4.2 revisada"
+echo "[deploy] Diretório atual: $(pwd)"
+echo "[deploy] Porta: $PORT"
+echo "[deploy] Arquivos de migration presentes:"
+find /app/alembic/versions -maxdepth 1 -type f -name '*.py' -print | sort
+
+if [ ! -f /app/alembic/versions/0006_crm_stabilization.py ]; then
+  echo "[deploy][erro] A imagem não contém 0006_crm_stabilization.py." >&2
+  echo "[deploy][erro] Confirme o commit implantado, Root Directory=/backend e Dockerfile Path=/backend/Dockerfile." >&2
+  exit 66
+fi
+
+if [ "$MIGRATIONS_ENABLED" = "true" ] || [ "$MIGRATIONS_ENABLED" = "1" ]; then
+  echo "[deploy] Aguardando banco..."
+  python /app/scripts/wait_for_database.py
+
+  echo "[deploy] Heads Alembic disponíveis:"
+  python -m alembic -c /app/alembic.ini heads
 
   echo "[deploy] Aplicando migrations até head..."
-  alembic upgrade head
+  python -m alembic -c /app/alembic.ini upgrade head
 
-  echo "[deploy] Revisão Alembic ativa:"
-  alembic current
+  echo "[deploy] Revisão ativa:"
+  python -m alembic -c /app/alembic.ini current
 else
-  echo "[deploy] Migrations desabilitadas por MIGRATIONS_ENABLED=$MIGRATIONS_ENABLED"
+  echo "[deploy] Migrations desabilitadas: MIGRATIONS_ENABLED=$MIGRATIONS_ENABLED"
 fi
 
-if [ "$#" -gt 0 ]; then
-  exec "$@"
-fi
-
+echo "[deploy] Iniciando Uvicorn..."
 exec python -m uvicorn app.main:app \
   --host "$HOST" \
   --port "$PORT" \
