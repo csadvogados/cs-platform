@@ -24,7 +24,7 @@ fi
 
 if [ "$MIGRATIONS_ENABLED" = "true" ] || [ "$MIGRATIONS_ENABLED" = "1" ]; then
   echo "[deploy] Aguardando o banco de dados..."
-  python /app/scripts/wait_for_database.py
+  python -m scripts.wait_for_database
 
   echo "[deploy] Validando a cabeça do Alembic..."
   heads="$(python -m alembic -c /app/alembic.ini heads)"
@@ -34,17 +34,4 @@ if [ "$MIGRATIONS_ENABLED" = "true" ] || [ "$MIGRATIONS_ENABLED" = "1" ]; then
     exit 67
   }
 
-  echo "[deploy] Aplicando migrations..."
-  python -m alembic -c /app/alembic.ini upgrade head
-  python -m alembic -c /app/alembic.ini current
-else
-  echo "[deploy] Migrations desabilitadas: MIGRATIONS_ENABLED=$MIGRATIONS_ENABLED"
-fi
-
-echo "[deploy] Iniciando Uvicorn na porta $PORT..."
-exec python -m uvicorn app.main:app \
-  --host "$HOST" \
-  --port "$PORT" \
-  --workers "$WEB_CONCURRENCY" \
-  --proxy-headers \
-  --forwarded-allow-ips="*"
+  echo "[deploy] Ap
