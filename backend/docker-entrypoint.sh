@@ -8,42 +8,40 @@ MIGRATIONS_ENABLED="${MIGRATIONS_ENABLED:-true}"
 
 case "$PORT" in
   ''|*[!0-9]*)
-    echo "[deploy][erro] PORT deve ser inteiro; recebido: '$PORT'" >&2
+    echo "[deploy][erro] PORT deve ser um número inteiro; recebido: '$PORT'" >&2
     exit 64
     ;;
 esac
 
 cd /app
 
-echo "[deploy] CS Platform v5.4.2 revisada"
-echo "[deploy] Diretório atual: $(pwd)"
-echo "[deploy] Porta: $PORT"
-echo "[deploy] Arquivos de migration presentes:"
-find /app/alembic/versions -maxdepth 1 -type f -name '*.py' -print | sort
+echo "[deploy] CS Platform v5.4.2"
 
 if [ ! -f /app/alembic/versions/0006_crm_stabilization.py ]; then
   echo "[deploy][erro] A imagem não contém 0006_crm_stabilization.py." >&2
-  echo "[deploy][erro] Confirme o commit implantado, Root Directory=/backend e Dockerfile Path=/backend/Dockerfile." >&2
   exit 66
 fi
 
 if [ "$MIGRATIONS_ENABLED" = "true" ] || [ "$MIGRATIONS_ENABLED" = "1" ]; then
-  echo "[deploy] Aguardando banco..."
+  echo "[deploy] Aguardando o banco de dados..."
   python /app/scripts/wait_for_database.py
 
-  echo "[deploy] Heads Alembic disponíveis:"
-  python -m alembic -c /app/alembic.ini heads
+  echo "[deploy] Validando a cabeça do Alembic..."
+  heads="$(python -m alembic -c /app/alembic.ini heads)"
+  printf '%s\n' "$heads"
+  printf '%s\n' "$heads" | grep -q "0006_crm_stabilization (head)" || {
+    echo "[deploy][erro] A cabeça esperada do Alembic não foi encontrada." >&2
+    exit 67
+  }
 
-  echo "[deploy] Aplicando migrations até head..."
+  echo "[deploy] Aplicando migrations..."
   python -m alembic -c /app/alembic.ini upgrade head
-
-  echo "[deploy] Revisão ativa:"
   python -m alembic -c /app/alembic.ini current
 else
   echo "[deploy] Migrations desabilitadas: MIGRATIONS_ENABLED=$MIGRATIONS_ENABLED"
 fi
 
-echo "[deploy] Iniciando Uvicorn..."
+echo "[deploy] Iniciando Uvicorn na porta $PORT..."
 exec python -m uvicorn app.main:app \
   --host "$HOST" \
   --port "$PORT" \

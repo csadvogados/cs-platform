@@ -18,14 +18,14 @@ RUN python -m pip install --upgrade pip \
 
 COPY --chown=app:app . .
 RUN chmod 0755 /app/docker-entrypoint.sh \
-    && test -f /app/alembic/versions/0006_crm_stabilization.py
+    && test -f /app/alembic/versions/0006_crm_stabilization.py \
+    && test -f /app/scripts/wait_for_database.py
 
 USER app
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
-  CMD-SHELL python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT','8000') + '/api/v1/health', timeout=4)" || exit 1
+  CMD-SHELL python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/api/v1/health', timeout=4)" || exit 1
 
-# Comando padrão compatível com substituição pelo Railway.
 CMD ["/app/docker-entrypoint.sh"]
