@@ -3,6 +3,12 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import (
+    get_swagger_ui_html,
+    get_swagger_ui_oauth2_redirect_html,
+)
+from fastapi.staticfiles import StaticFiles
+from swagger_ui_bundle import swagger_ui_path
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.routes import (
@@ -41,7 +47,7 @@ logger = logging.getLogger("cs_platform.startup")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
-        "Iniciando %s versão %s no ambiente %s.",
+        "Iniciando %s versao %s no ambiente %s.",
         settings.app_name,
         settings.app_version,
         settings.environment,
@@ -52,23 +58,47 @@ async def lifespan(app: FastAPI):
     with SessionLocal() as db:
         bootstrap(db)
 
-    logger.info("Inicialização concluída com sucesso.")
+    logger.info("Inicializacao concluida com sucesso.")
     yield
-    logger.info("Encerrando aplicação.")
+    logger.info("Encerrando aplicacao.")
 
 
 app = FastAPI(
     title="CS Platform API",
     version=settings.app_version,
     description=(
-        "CS Platform Enterprise: identidade, organizações, usuários, CRM, "
-        "gestão financeira, diagnóstico e observabilidade."
+        "CS Platform Enterprise: identidade, organizacoes, usuarios, CRM, "
+        "gestao financeira, diagnostico e observabilidade."
     ),
     lifespan=lifespan,
-    docs_url=settings.docs_url,
+    docs_url=None,
     redoc_url=settings.redoc_url,
     openapi_url=settings.openapi_url,
 )
+
+app.mount(
+    "/swagger-static",
+    StaticFiles(directory=swagger_ui_path),
+    name="swagger-static",
+)
+
+
+@app.get(settings.docs_url, include_in_schema=False)
+def local_swagger_ui():
+    return get_swagger_ui_html(
+        openapi_url=settings.openapi_url,
+        title=f"{app.title} - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        swagger_js_url="/swagger-static/swagger-ui-bundle.js",
+        swagger_css_url="/swagger-static/swagger-ui.css",
+        swagger_favicon_url="/swagger-static/favicon-32x32.png",
+    )
+
+
+@app.get(app.swagger_ui_oauth2_redirect_url, include_in_schema=False)
+def swagger_ui_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
+
 
 register_exception_handlers(app)
 
@@ -102,10 +132,26 @@ app.include_router(
     tags=["Users"],
 )
 
-app.include_router(access_control.roles_router, prefix=f"{settings.api_v1_prefix}/roles", tags=["Roles"])
-app.include_router(access_control.permissions_router, prefix=f"{settings.api_v1_prefix}/permissions", tags=["Permissions"])
-app.include_router(access_control.invitations_router, prefix=f"{settings.api_v1_prefix}/invitations", tags=["Invitations"])
-app.include_router(access_control.sessions_router, prefix=f"{settings.api_v1_prefix}/sessions", tags=["Sessions"])
+app.include_router(
+    access_control.roles_router,
+    prefix=f"{settings.api_v1_prefix}/roles",
+    tags=["Roles"],
+)
+app.include_router(
+    access_control.permissions_router,
+    prefix=f"{settings.api_v1_prefix}/permissions",
+    tags=["Permissions"],
+)
+app.include_router(
+    access_control.invitations_router,
+    prefix=f"{settings.api_v1_prefix}/invitations",
+    tags=["Invitations"],
+)
+app.include_router(
+    access_control.sessions_router,
+    prefix=f"{settings.api_v1_prefix}/sessions",
+    tags=["Sessions"],
+)
 
 if settings.organization_api_enabled:
     app.include_router(
