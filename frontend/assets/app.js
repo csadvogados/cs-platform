@@ -163,8 +163,16 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function openDialog(id) {
+  async function openDialog(id) {
     const dialog = document.getElementById(id);
+    if (["opportunity-dialog", "task-dialog"].includes(id)) {
+      try {
+        await loadClients();
+      } catch (error) {
+        toast(error.message || "Não foi possível carregar os clientes.", "error");
+        return;
+      }
+    }
     if (dialog?.showModal) dialog.showModal();
   }
 
@@ -393,11 +401,16 @@
     event.preventDefault();
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
+    const data = Object.fromEntries(new FormData(form));
+    data.cpf = normalizeCpf(data.cpf);
+    if (!/^\d{11}$/.test(data.cpf) || /^(\d)\1{10}$/.test(data.cpf)) {
+      toast("Informe um CPF com exatamente 11 dígitos válidos.", "error");
+      $('[name="cpf"]', form)?.focus();
+      return;
+    }
     const button = $('button[type="submit"]', form);
     setBusy(button, true, "Salvando…");
     try {
-      const data = Object.fromEntries(new FormData(form));
-      data.cpf = normalizeCpf(data.cpf);
       if (data.state) data.state = data.state.toUpperCase();
       await api("/api/v1/clients", { method: "POST", body: JSON.stringify(compactObject(data)) });
       form.reset();
@@ -507,6 +520,7 @@
     $$("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
     $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
+    $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
     $$(".crm-tab").forEach((button) => button.addEventListener("click", () => {
       $$(".crm-tab").forEach((tab) => tab.classList.toggle("active", tab === button));
       $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `crm-${button.dataset.crmTab}`));
