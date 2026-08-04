@@ -69,6 +69,13 @@
     return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== "" && value !== null && value !== undefined));
   }
 
+  function calculateWeightedPipeline(opportunities) {
+    const openStages = new Set(["lead", "qualified", "proposal", "negotiation"]);
+    return opportunities
+      .filter((item) => openStages.has(String(item.stage || "").toLowerCase()))
+      .reduce((total, item) => total + (Number(item.estimated_value || 0) * Number(item.probability || 0) / 100), 0);
+  }
+
   function getTokens() {
     return {
       access: sessionStorage.getItem("cs_access_token"),
@@ -302,16 +309,19 @@
   function renderDashboard() {
     const dashboard = state.dashboard || {};
     const summary = state.crm.summary || {};
+    const weightedFromOpportunities = calculateWeightedPipeline(state.crm.opportunities);
+    const weighted = state.crm.opportunities.length
+      ? weightedFromOpportunities
+      : Number(summary.weighted_pipeline_value || 0);
     $("#stat-clients").textContent = dashboard.clients ?? state.clients.length ?? "—";
     $("#stat-diagnoses").textContent = dashboard.diagnoses ?? "—";
     $("#stat-debts").textContent = dashboard.debts ?? "—";
     $("#stat-pipeline").textContent = formatCurrency(summary.open_pipeline_value);
     $("#stat-opportunities").textContent = `${summary.opportunities || 0} oportunidades registradas`;
-    $("#weighted-pipeline").textContent = formatCurrency(summary.weighted_pipeline_value);
+    $("#weighted-pipeline").textContent = formatCurrency(weighted);
     $("#pending-tasks").textContent = summary.pending_tasks ?? 0;
     $("#overdue-tasks").textContent = summary.overdue_tasks ?? 0;
     const open = Number(summary.open_pipeline_value || 0);
-    const weighted = Number(summary.weighted_pipeline_value || 0);
     $("#pipeline-meter").style.width = `${open ? Math.min(100, Math.max(8, (weighted / open) * 100)) : 0}%`;
 
     const tasks = state.crm.tasks
