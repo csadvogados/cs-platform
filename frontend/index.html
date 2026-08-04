@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.6.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -136,10 +136,14 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Cliente</th><th>Contato</th><th>Localização</th><th>Status</th><th>Cadastro</th></tr></thead>
-                <tbody id="clients-table"><tr><td colspan="5" class="empty-cell">Carregando clientes…</td></tr></tbody>
+                <thead><tr><th>Cliente</th><th>Contato</th><th>Localização</th><th>Status</th><th>Cadastro</th><th>Ações</th></tr></thead>
+                <tbody id="clients-table"><tr><td colspan="6" class="empty-cell">Carregando clientes…</td></tr></tbody>
               </table>
             </div>
+          </section>
+
+          <section id="view-clientDetail" class="page-view" aria-label="Detalhes do cliente">
+            <div id="client-detail-content"><div class="loading-row">Carregando dados do cliente…</div></div>
           </section>
 
           <section id="view-crm" class="page-view" aria-labelledby="crm-heading">
@@ -168,7 +172,7 @@
           <section id="view-settings" class="page-view" aria-labelledby="settings-heading">
             <div class="section-intro"><div><p class="eyebrow dark">AMBIENTE</p><h1 id="settings-heading">Configurações</h1><p>Informações desta instalação.</p></div></div>
             <div class="settings-grid">
-              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.5.6</dd></div></dl></section>
+              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.0</dd></div></dl></section>
               <section class="panel"><h3>Sessão atual</h3><dl class="definition-list"><div><dt>Usuário</dt><dd id="settings-user">—</dd></div><div><dt>E-mail</dt><dd id="settings-email">—</dd></div><div><dt>Perfil</dt><dd id="settings-role">—</dd></div></dl></section>
             </div>
           </section>
@@ -235,8 +239,50 @@
       </form>
     </dialog>
 
+    <dialog id="income-dialog" class="modal small-modal">
+      <form id="income-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">FINANCEIRO</p><h2>Nova receita</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid single">
+          <label><span>Tipo de receita *</span><select name="income_type" required><option value="Salário">Salário</option><option value="Aposentadoria">Aposentadoria</option><option value="Pensão">Pensão</option><option value="Trabalho autônomo">Trabalho autônomo</option><option value="Benefício">Benefício</option><option value="Outra">Outra</option></select></label>
+          <label><span>Descrição</span><input name="description" placeholder="Ex.: salário líquido" /></label>
+          <label><span>Valor líquido mensal *</span><input name="net_amount" type="number" min="0" step="0.01" required /></label>
+          <label class="check-field"><input name="recurring" type="checkbox" checked /><span>Receita recorrente</span></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar receita</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="expense-dialog" class="modal small-modal">
+      <form id="expense-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">FINANCEIRO</p><h2>Nova despesa</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid single">
+          <label><span>Categoria *</span><select name="category" required><option value="Moradia">Moradia</option><option value="Alimentação">Alimentação</option><option value="Saúde">Saúde</option><option value="Transporte">Transporte</option><option value="Educação">Educação</option><option value="Serviços essenciais">Serviços essenciais</option><option value="Impostos">Impostos</option><option value="Outra">Outra</option></select></label>
+          <label><span>Descrição</span><input name="description" placeholder="Ex.: aluguel, energia, mercado" /></label>
+          <label><span>Valor mensal *</span><input name="amount" type="number" min="0" step="0.01" required /></label>
+          <div class="check-row"><label class="check-field"><input name="essential" type="checkbox" checked /><span>Despesa essencial</span></label><label class="check-field"><input name="recurring" type="checkbox" checked /><span>Despesa recorrente</span></label></div>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar despesa</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="debt-dialog" class="modal">
+      <form id="debt-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">ENDIVIDAMENTO</p><h2>Nova dívida</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid">
+          <label class="wide"><span>Natureza da dívida *</span><select name="nature" required><option value="Cartão de crédito">Cartão de crédito</option><option value="Empréstimo pessoal">Empréstimo pessoal</option><option value="Financiamento">Financiamento</option><option value="Cheque especial">Cheque especial</option><option value="Dívida tributária">Dívida tributária</option><option value="Outra">Outra</option></select></label>
+          <label><span>Credor já cadastrado</span><select id="debt-creditor" name="creditor_id"><option value="">Sem credor cadastrado</option></select></label>
+          <label><span>Novo credor</span><input name="new_creditor" placeholder="Ex.: Banco ou financeira" /></label>
+          <label><span>Saldo atual *</span><input name="current_balance" type="number" min="0" step="0.01" required /></label>
+          <label><span>Parcela mensal</span><input name="monthly_installment" type="number" min="0" step="0.01" value="0" /></label>
+          <label class="check-field wide"><input name="overdue" type="checkbox" /><span>Dívida em atraso</span></label>
+        </div>
+        <p class="form-help">Se preencher “Novo credor”, ele será cadastrado e vinculado automaticamente a esta dívida.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar dívida</button></div>
+      </form>
+    </dialog>
+
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.5.6"></script>
+    <script src="./assets/app.js?v=5.6.0"></script>
   </body>
 </html>
