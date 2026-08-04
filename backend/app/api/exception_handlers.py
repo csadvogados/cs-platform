@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -42,6 +44,19 @@ def _application_status_code(exc: ApplicationException) -> int:
     return 400
 
 
+def _json_safe(value: Any) -> Any:
+    """Convert validation details into values accepted by JSONResponse."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Exception):
+        return str(value)
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(item) for item in value]
+    return str(value)
+
+
 async def application_exception_handler(
     request: Request,
     exc: ApplicationException,
@@ -77,7 +92,7 @@ async def validation_exception_handler(
         content=error_response(
             "REQUEST_VALIDATION_ERROR",
             "Os dados enviados são inválidos.",
-            details={"errors": exc.errors()},
+            details={"errors": _json_safe(exc.errors())},
         ),
     )
 
