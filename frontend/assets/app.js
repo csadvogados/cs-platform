@@ -38,6 +38,21 @@
 
   const priorityLabels = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
 
+  const debtNatureLabels = {
+    consumer: "Dívida de consumo",
+    credit_card: "Cartão de crédito",
+    overdraft: "Cheque especial",
+    personal_loan: "Empréstimo pessoal",
+    payroll_loan: "Empréstimo consignado",
+    essential_service: "Serviço essencial",
+    secured_debt: "Dívida com garantia",
+    real_estate_financing: "Financiamento imobiliário",
+    rural_credit: "Crédito rural",
+    tax: "Dívida tributária",
+    alimony: "Pensão alimentícia",
+    rent_condo: "Aluguel ou condomínio"
+  };
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -418,6 +433,10 @@
     return state.financial.creditors.find((creditor) => String(creditor.id) === String(id))?.legal_name || "Credor não informado";
   }
 
+  function debtNatureLabel(value) {
+    return debtNatureLabels[String(value || "").toLowerCase()] || value || "Não informada";
+  }
+
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
@@ -454,20 +473,20 @@
       <div class="detail-grid">
         <section class="panel detail-panel">
           <div class="panel-header"><div><p class="eyebrow dark">ENTRADAS</p><h3>Receitas</h3></div><button class="secondary-button" type="button" data-open-dialog="income-dialog">Nova receita</button></div>
-          <div class="detail-list">${incomes.length ? incomes.map((item) => `<article><span><strong>${escapeHtml(item.income_type)}</strong><small>${escapeHtml(item.description || (item.recurring ? "Receita recorrente" : "Receita eventual"))}</small></span><strong>${formatCurrency(item.net_amount)}</strong></article>`).join("") : '<div class="empty-state">Nenhuma receita cadastrada.</div>'}</div>
+          <div class="detail-list">${incomes.length ? incomes.map((item) => `<article><span><strong>${escapeHtml(item.income_type)}</strong><small>${escapeHtml(item.description || (item.recurring ? "Receita recorrente" : "Receita eventual"))}</small></span><div class="detail-item-actions"><strong>${formatCurrency(item.net_amount)}</strong><button class="delete-button" type="button" data-delete-financial="income" data-delete-id="${escapeHtml(item.id)}">Apagar</button></div></article>`).join("") : '<div class="empty-state">Nenhuma receita cadastrada.</div>'}</div>
         </section>
 
         <section class="panel detail-panel">
           <div class="panel-header"><div><p class="eyebrow dark">SAÍDAS</p><h3>Despesas</h3></div><button class="secondary-button" type="button" data-open-dialog="expense-dialog">Nova despesa</button></div>
-          <div class="detail-list">${expenses.length ? expenses.map((item) => `<article><span><strong>${escapeHtml(item.category)}</strong><small>${escapeHtml(item.description || (item.essential ? "Despesa essencial" : "Despesa não essencial"))}</small></span><strong>${formatCurrency(item.amount)}</strong></article>`).join("") : '<div class="empty-state">Nenhuma despesa cadastrada.</div>'}</div>
+          <div class="detail-list">${expenses.length ? expenses.map((item) => `<article><span><strong>${escapeHtml(item.category)}</strong><small>${escapeHtml(item.description || (item.essential ? "Despesa essencial" : "Despesa não essencial"))}</small></span><div class="detail-item-actions"><strong>${formatCurrency(item.amount)}</strong><button class="delete-button" type="button" data-delete-financial="expense" data-delete-id="${escapeHtml(item.id)}">Apagar</button></div></article>`).join("") : '<div class="empty-state">Nenhuma despesa cadastrada.</div>'}</div>
         </section>
       </div>
 
       <section class="panel debt-panel">
         <div class="panel-header"><div><p class="eyebrow dark">ENDIVIDAMENTO</p><h3>Dívidas</h3></div><button class="secondary-button" type="button" data-open-dialog="debt-dialog">Nova dívida</button></div>
         <div class="table-wrap compact-table">
-          <table><thead><tr><th>Natureza</th><th>Credor</th><th>Saldo atual</th><th>Parcela mensal</th><th>Situação</th></tr></thead>
-          <tbody>${debts.length ? debts.map((item) => `<tr><td>${escapeHtml(item.nature)}</td><td>${escapeHtml(creditorName(item.creditor_id))}</td><td>${formatCurrency(item.current_balance)}</td><td>${formatCurrency(item.monthly_installment)}</td><td><span class="badge ${item.overdue ? "danger" : ""}">${item.overdue ? "Em atraso" : "Em dia"}</span></td></tr>`).join("") : '<tr><td colspan="5" class="empty-cell">Nenhuma dívida cadastrada.</td></tr>'}</tbody></table>
+          <table><thead><tr><th>Natureza</th><th>Credor</th><th>Saldo atual</th><th>Parcela mensal</th><th>Situação</th><th>Ações</th></tr></thead>
+          <tbody>${debts.length ? debts.map((item) => `<tr><td>${escapeHtml(debtNatureLabel(item.nature))}</td><td>${escapeHtml(creditorName(item.creditor_id))}</td><td>${formatCurrency(item.current_balance)}</td><td>${formatCurrency(item.monthly_installment)}</td><td><span class="badge ${item.overdue ? "danger" : ""}">${item.overdue ? "Em atraso" : "Em dia"}</span></td><td><button class="delete-button" type="button" data-delete-financial="debt" data-delete-id="${escapeHtml(item.id)}">Apagar</button></td></tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhuma dívida cadastrada.</td></tr>'}</tbody></table>
         </div>
       </section>
 
@@ -482,6 +501,7 @@
 
     $("#back-to-clients").addEventListener("click", () => setView("clients"));
     $$("[data-open-dialog]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
+    $$("[data-delete-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => deleteFinancial(button.dataset.deleteFinancial, button.dataset.deleteId, button)));
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
     $("#save-diagnosis")?.addEventListener("click", saveDiagnosis);
   }
@@ -539,6 +559,28 @@
       <span>${escapeHtml(user.role || "equipe")}</span>
       <span class="badge ${user.status !== "active" ? "neutral" : ""}">${escapeHtml(user.status || "active")}</span>
     </article>`).join("") : '<div class="empty-state">Nenhum usuário encontrado.</div>';
+  }
+
+  async function deleteFinancial(kind, itemId, button) {
+    if (!state.selectedClient || !itemId) return;
+    const definitions = {
+      income: { path: "incomes", singular: "receita" },
+      expense: { path: "expenses", singular: "despesa" },
+      debt: { path: "debts", singular: "dívida" }
+    };
+    const definition = definitions[kind];
+    if (!definition) return;
+    const confirmed = window.confirm(`Deseja realmente apagar esta ${definition.singular}? Esta ação não pode ser desfeita.`);
+    if (!confirmed) return;
+
+    setBusy(button, true, "Apagando…");
+    try {
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/${definition.path}/${itemId}`, { method: "DELETE" });
+      await refreshFinancial(`${definition.singular.charAt(0).toUpperCase()}${definition.singular.slice(1)} apagada.`);
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
   }
 
   async function refreshFinancial(message = "Dados financeiros atualizados.") {
