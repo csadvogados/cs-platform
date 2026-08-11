@@ -9,7 +9,7 @@
     crm: { summary: null, contacts: [], opportunities: [], tasks: [] },
     selectedClient: null,
     editingClientId: null,
-    financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null },
+    financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null, history: [] },
     editingFinancial: null,
     users: [],
     currentView: "dashboard"
@@ -364,7 +364,8 @@
       `/api/v1/financial/clients/${client.id}/expenses`,
       `/api/v1/financial/clients/${client.id}/debts`,
       "/api/v1/financial/creditors",
-      `/api/v1/diagnoses/${client.id}/preview`
+      `/api/v1/diagnoses/${client.id}/preview`,
+      `/api/v1/diagnoses/${client.id}/history?limit=50`
     ];
     const results = await Promise.allSettled(paths.map((path) => api(path)));
     const valueAt = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
@@ -373,7 +374,8 @@
       expenses: Array.isArray(valueAt(1, [])) ? valueAt(1, []) : [],
       debts: Array.isArray(valueAt(2, [])) ? valueAt(2, []) : [],
       creditors: Array.isArray(valueAt(3, [])) ? valueAt(3, []) : [],
-      diagnosis: valueAt(4, null)
+      diagnosis: valueAt(4, null),
+      history: Array.isArray(valueAt(5, [])) ? valueAt(5, []) : []
     };
     fillCreditorSelect();
     renderClientDetail();
@@ -515,6 +517,11 @@
     return ["closed", "cancelled", "inactive"].includes(String(value || "").toLowerCase());
   }
 
+  function diagnosisAlerts(value) {
+    const alerts = Array.isArray(value) ? value : String(value || "").split(/\r?\n/);
+    return alerts.map((alert) => String(alert).trim()).filter(Boolean);
+  }
+
   function openClientEditor() {
     const client = state.selectedClient;
     const dialog = document.getElementById("client-dialog");
@@ -591,7 +598,7 @@
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
-    const { incomes, expenses, debts, diagnosis } = state.financial;
+    const { incomes, expenses, debts, diagnosis, history } = state.financial;
     const totalIncome = incomes.reduce((total, item) => total + Number(item.net_amount || 0), 0);
     const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount || 0), 0);
     const totalDebt = debts.reduce((total, item) => total + Number(item.current_balance || 0), 0);
@@ -646,8 +653,22 @@
         ${diagnosis ? `<div class="diagnosis-grid">
           <article class="diagnosis-score"><span>Pontuação</span><strong>${escapeHtml(diagnosis.eligibility_score)}</strong><small>${escapeHtml(diagnosis.eligibility_result)}</small></article>
           <dl class="definition-list"><div><dt>Renda total</dt><dd>${formatCurrency(diagnosis.total_income)}</dd></div><div><dt>Despesas</dt><dd>${formatCurrency(diagnosis.total_expenses)}</dd></div><div><dt>Parcelas mensais</dt><dd>${formatCurrency(diagnosis.total_installments)}</dd></div><div><dt>Comprometimento</dt><dd>${Number(diagnosis.commitment_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</dd></div></dl>
-          <div class="diagnosis-conclusion"><strong>Conclusão econômica</strong><p>${escapeHtml(diagnosis.economic_conclusion)}</p>${(diagnosis.legal_alerts || []).length ? `<ul>${diagnosis.legal_alerts.map((alert) => `<li>${escapeHtml(alert)}</li>`).join("")}</ul>` : '<p class="muted">Sem alertas jurídicos nesta prévia.</p>'}</div>
+          <div class="diagnosis-conclusion"><strong>Conclusão econômica</strong><p>${escapeHtml(diagnosis.economic_conclusion)}</p>${diagnosisAlerts(diagnosis.legal_alerts).length ? `<ul>${diagnosisAlerts(diagnosis.legal_alerts).map((alert) => `<li>${escapeHtml(alert)}</li>`).join("")}</ul>` : '<p class="muted">Sem alertas jurídicos nesta prévia.</p>'}</div>
         </div>` : '<div class="empty-state">Não foi possível gerar a prévia do diagnóstico.</div>'}
+      </section>
+
+      <section class="panel diagnosis-history-panel">
+        <div class="panel-header"><div><p class="eyebrow dark">REGISTROS SALVOS</p><h3>Histórico de diagnósticos</h3></div><span class="result-count">${history.length} ${history.length === 1 ? "versão" : "versões"}</span></div>
+        <div class="diagnosis-history-list">${history.length ? history.map((item) => {
+          const alerts = diagnosisAlerts(item.legal_alerts);
+          return `<details class="diagnosis-history-item">
+            <summary><span><strong>Versão ${escapeHtml(item.version)}</strong><small>${escapeHtml(formatDate(item.created_at, true))}</small></span><span class="history-result">${escapeHtml(item.eligibility_result)}</span><span class="history-score">${escapeHtml(item.eligibility_score)} pontos</span></summary>
+            <div class="diagnosis-history-content">
+              <dl class="definition-list"><div><dt>Renda total</dt><dd>${formatCurrency(item.total_income)}</dd></div><div><dt>Despesas</dt><dd>${formatCurrency(item.total_expenses)}</dd></div><div><dt>Saldo de dívidas</dt><dd>${formatCurrency(item.total_debt_balance)}</dd></div><div><dt>Parcelas</dt><dd>${formatCurrency(item.total_installments)}</dd></div><div><dt>Renda disponível</dt><dd>${formatCurrency(item.disposable_income)}</dd></div><div><dt>Comprometimento</dt><dd>${Number(item.commitment_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</dd></div></dl>
+              <div class="diagnosis-conclusion"><strong>Conclusão registrada</strong><p>${escapeHtml(item.economic_conclusion)}</p>${alerts.length ? `<ul>${alerts.map((alert) => `<li>${escapeHtml(alert)}</li>`).join("")}</ul>` : '<p class="muted">Sem alertas jurídicos nesta versão.</p>'}</div>
+            </div>
+          </details>`;
+        }).join("") : '<div class="empty-state">Nenhum diagnóstico foi salvo para este cliente.</div>'}</div>
       </section>`;
 
     $("#back-to-clients").addEventListener("click", () => setView("clients"));

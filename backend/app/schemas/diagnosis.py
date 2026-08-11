@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 class DiagnosisPreview(BaseModel):
@@ -33,3 +34,4 @@ class DiagnosisRead(BaseModel):
     eligibility_result: str
     economic_conclusion: str
     legal_alerts: str
+    created_at: datetime
