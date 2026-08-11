@@ -1,48 +1,44 @@
-# CS Platform v5.6.2 — edição financeira
+# CS Platform v5.6.3 — edição do cliente
 
-Este pacote mantém as correções financeiras da v5.6.1 e acrescenta o botão **Editar** em:
+Este pacote acrescenta **Editar cadastro** na página de detalhes do cliente.
 
-- receitas;
-- despesas;
-- dívidas.
+É possível alterar:
 
-Ao salvar uma alteração, os totais e a prévia do diagnóstico são recarregados automaticamente. A edição respeita o cliente, a organização e as permissões do usuário conectado.
+- nome;
+- profissão;
+- e-mail;
+- telefone;
+- cidade e estado;
+- observações;
+- status do atendimento.
+
+O CPF fica protegido durante a edição. Receitas, despesas, dívidas, CRM e diagnósticos não são apagados nem recriados.
 
 ## Como aplicar no GitHub
 
-Substitua exatamente estes cinco arquivos no repositório `csadvogados/cs-platform`:
+Esta é uma atualização incremental sobre a v5.6.2. Substitua somente estes dois arquivos no repositório `csadvogados/cs-platform`:
 
-1. `backend/app/api/routes/financial.py`
-2. `backend/app/services/diagnosis_engine.py`
-3. `frontend/index.html`
-4. `frontend/assets/app.js`
-5. `frontend/assets/styles.css`
+1. `frontend/index.html`
+2. `frontend/assets/app.js`
 
 Use este nome no commit:
 
-`feat: adicionar edição financeira v5.6.2`
+`feat: adicionar edição do cliente v5.6.3`
 
-O commit deverá gerar dois deployments no Railway:
+Somente o deployment `cs-platform-web` deverá ser iniciado no Railway. Aguarde-o ficar verde e pressione `Ctrl + F5` no sistema.
 
-- `cs-platform-api`;
-- `cs-platform-web`.
-
-Aguarde os dois ficarem verdes. Depois, abra o sistema e pressione `Ctrl + F5`.
-
-Não altere banco, migrations, variáveis, `railway.json`, `Dockerfile`, `docker-entrypoint.sh` ou `nginx.conf`. Esta versão não exige migration.
+Não altere backend, banco, migrations, variáveis, `railway.json`, `Dockerfile`, `docker-entrypoint.sh` ou `nginx.conf`.
 
 ## Teste depois do deploy
 
 1. Entre em **Clientes** e clique em **Ver detalhes**.
-2. Em uma receita, clique em **Editar**, altere o valor e salve.
-3. Confirme que o total de receitas e a prévia do diagnóstico mudaram.
-4. Repita o teste em uma despesa.
-5. Repita o teste em uma dívida, alterando a parcela mensal.
-6. Confira se os botões **Apagar** continuam funcionando.
-7. Se os dados estiverem corretos, clique em **Salvar diagnóstico** para registrar uma nova versão.
-
-Os diagnósticos já salvos permanecem no histórico.
+2. Clique em **Editar cadastro**.
+3. Confira se os campos aparecem preenchidos e se o CPF está bloqueado.
+4. Altere um campo, como profissão ou status, e clique em **Salvar alterações**.
+5. Confirme que o novo dado aparece na página.
+6. Confira se receitas, despesas, dívidas e diagnóstico continuam iguais.
+7. Abra a edição novamente e teste os botões **Cancelar** e **X**.
 
 ## Conferência
 
-O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos cinco arquivos do patch.
+O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos dois arquivos substituídos.

@@ -8,6 +8,7 @@
     clients: [],
     crm: { summary: null, contacts: [], opportunities: [], tasks: [] },
     selectedClient: null,
+    editingClientId: null,
     financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null },
     editingFinancial: null,
     users: [],
@@ -38,6 +39,21 @@
   };
 
   const priorityLabels = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
+
+  const clientStatusLabels = {
+    lead: "Potencial cliente",
+    triage: "Triagem",
+    proposal: "Proposta",
+    contracted: "Contratado",
+    documents_pending: "Documentos pendentes",
+    diagnosis: "Diagnóstico",
+    negotiation: "Negociação",
+    judicial_review: "Análise judicial",
+    judicial: "Judicial",
+    agreement: "Acordo",
+    closed: "Encerrado",
+    cancelled: "Cancelado"
+  };
 
   const debtNatureLabels = {
     consumer: "Dívida de consumo",
@@ -203,6 +219,7 @@
       return;
     }
     if (financialDefinition) resetFinancialDialog(id);
+    if (id === "client-dialog") resetClientDialog();
     if (["opportunity-dialog", "task-dialog"].includes(id)) {
       try {
         await loadClients();
@@ -216,6 +233,24 @@
 
   function closeDialog(dialog) {
     if (dialog?.open) dialog.close();
+  }
+
+  function resetClientDialog() {
+    const dialog = document.getElementById("client-dialog");
+    const form = document.getElementById("client-form");
+    if (!dialog || !form) return;
+    form.reset();
+    state.editingClientId = null;
+    form.elements.cpf.readOnly = false;
+    const eyebrow = $(".modal-header .eyebrow", dialog);
+    const title = $(".modal-header h2", dialog);
+    const submit = $('button[type="submit"]', form);
+    if (eyebrow) eyebrow.textContent = "NOVO REGISTRO";
+    if (title) title.textContent = "Cadastrar cliente";
+    if (submit) {
+      submit.textContent = "Salvar cliente";
+      delete submit.dataset.originalLabel;
+    }
   }
 
   function resetFinancialDialog(dialogId) {
@@ -436,7 +471,7 @@
         <td><strong>${escapeHtml(client.full_name)}</strong><br><small>${escapeHtml(client.cpf || "CPF não informado")}</small></td>
         <td>${escapeHtml(client.email || "—")}<br><small>${escapeHtml(client.phone || "")}</small></td>
         <td>${escapeHtml([client.city, client.state].filter(Boolean).join(" / ") || "—")}</td>
-        <td><span class="badge ${client.status === "inactive" ? "neutral" : ""}">${escapeHtml(client.status || "lead")}</span></td>
+        <td><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span></td>
         <td>${formatDate(client.created_at)}</td>
         <td><button class="text-link" type="button" data-client-detail="${escapeHtml(client.id)}">Ver detalhes</button></td>
       </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum cliente encontrado.</td></tr>';
@@ -470,6 +505,44 @@
       select.add(new Option(String(label || normalized), normalized));
     }
     select.value = normalized;
+  }
+
+  function clientStatusLabel(value) {
+    return clientStatusLabels[String(value || "").toLowerCase()] || value || "Potencial cliente";
+  }
+
+  function isClosedClientStatus(value) {
+    return ["closed", "cancelled", "inactive"].includes(String(value || "").toLowerCase());
+  }
+
+  function openClientEditor() {
+    const client = state.selectedClient;
+    const dialog = document.getElementById("client-dialog");
+    const form = document.getElementById("client-form");
+    if (!client || !dialog || !form) {
+      toast("Não foi possível abrir o cadastro do cliente.", "error");
+      return;
+    }
+
+    resetClientDialog();
+    state.editingClientId = client.id;
+    form.elements.full_name.value = client.full_name || "";
+    form.elements.cpf.value = client.cpf || "";
+    form.elements.cpf.readOnly = true;
+    form.elements.profession.value = client.profession || "";
+    form.elements.email.value = client.email || "";
+    form.elements.phone.value = client.phone || "";
+    form.elements.city.value = client.city || "";
+    form.elements.state.value = client.state || "";
+    form.elements.notes.value = client.notes || "";
+    setSelectValue(form.elements.status, client.status || "lead", clientStatusLabel(client.status));
+
+    $(".modal-header .eyebrow", dialog).textContent = "CADASTRO DO CLIENTE";
+    $(".modal-header h2", dialog).textContent = "Editar cliente";
+    const submit = $('button[type="submit"]', form);
+    submit.textContent = "Salvar alterações";
+    delete submit.dataset.originalLabel;
+    dialog.showModal();
   }
 
   function openFinancialEditor(kind, itemId) {
@@ -532,7 +605,7 @@
           <h1>${escapeHtml(client.full_name)}</h1>
           <p>${escapeHtml(client.cpf || "CPF não informado")} · ${escapeHtml(client.email || "E-mail não informado")} · ${escapeHtml(client.phone || "Telefone não informado")}</p>
         </div>
-        <span class="badge ${client.status === "inactive" ? "neutral" : ""}">${escapeHtml(client.status || "lead")}</span>
+        <div class="button-row"><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span><button id="edit-client-button" class="secondary-button" type="button">Editar cadastro</button></div>
       </div>
 
       <div class="client-profile-grid">
@@ -578,6 +651,7 @@
       </section>`;
 
     $("#back-to-clients").addEventListener("click", () => setView("clients"));
+    $("#edit-client-button").addEventListener("click", openClientEditor);
     $$("[data-open-dialog]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-edit-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openFinancialEditor(button.dataset.editFinancial, button.dataset.editId)));
     $$("[data-delete-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => deleteFinancial(button.dataset.deleteFinancial, button.dataset.deleteId, button)));
@@ -779,6 +853,7 @@
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
     const data = Object.fromEntries(new FormData(form));
+    const editingId = state.editingClientId;
     data.cpf = normalizeCpf(data.cpf);
     if (!/^\d{11}$/.test(data.cpf) || /^(\d)\1{10}$/.test(data.cpf)) {
       toast("Informe um CPF com exatamente 11 dígitos válidos.", "error");
@@ -789,12 +864,31 @@
     setBusy(button, true, "Salvando…");
     try {
       if (data.state) data.state = data.state.toUpperCase();
-      await api("/api/v1/clients", { method: "POST", body: JSON.stringify(compactObject(data)) });
-      form.reset();
+      let updatedClient = null;
+      if (editingId) {
+        const payload = {
+          full_name: data.full_name,
+          profession: data.profession || null,
+          email: data.email || null,
+          phone: data.phone || null,
+          city: data.city || null,
+          state: data.state || null,
+          status: data.status || "lead",
+          notes: data.notes || null
+        };
+        updatedClient = await api(`/api/v1/clients/${editingId}`, { method: "PATCH", body: JSON.stringify(payload) });
+      } else {
+        await api("/api/v1/clients", { method: "POST", body: JSON.stringify(compactObject(data)) });
+      }
       closeDialog(form.closest("dialog"));
       await loadClients();
       await loadDashboard();
-      toast("Cliente cadastrado.");
+      if (updatedClient) {
+        state.selectedClient = updatedClient;
+        renderClientDetail();
+        $("#view-title").textContent = updatedClient.full_name;
+      }
+      toast(editingId ? "Cadastro do cliente atualizado." : "Cliente cadastrado.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -906,6 +1000,7 @@
     $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
+    $("#client-dialog").addEventListener("close", resetClientDialog);
     Object.values(financialDefinitions).forEach((definition) => {
       document.getElementById(definition.dialogId)?.addEventListener("close", () => resetFinancialDialog(definition.dialogId));
     });
