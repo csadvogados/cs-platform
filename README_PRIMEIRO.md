@@ -1,11 +1,12 @@
-# CS Platform v5.6.1 — correção financeira
+# CS Platform v5.6.2 — edição financeira
 
-Este pacote corrige dois pontos da v5.6.0:
+Este pacote mantém as correções financeiras da v5.6.1 e acrescenta o botão **Editar** em:
 
-- reconhece corretamente as dívidas antigas cadastradas em português;
-- adiciona exclusão de receitas, despesas e dívidas, sempre com confirmação.
+- receitas;
+- despesas;
+- dívidas.
 
-Para os valores testados — renda de R$ 1.500, despesas de R$ 500 e parcelas de R$ 1.450 — a nova prévia reconhece duas dívidas de consumo, uma dívida de atenção específica e retorna 78 pontos: **Requer análise jurídica complementar**.
+Ao salvar uma alteração, os totais e a prévia do diagnóstico são recarregados automaticamente. A edição respeita o cliente, a organização e as permissões do usuário conectado.
 
 ## Como aplicar no GitHub
 
@@ -19,29 +20,29 @@ Substitua exatamente estes cinco arquivos no repositório `csadvogados/cs-platfo
 
 Use este nome no commit:
 
-`fix: corrigir diagnóstico e exclusão financeira v5.6.1`
+`feat: adicionar edição financeira v5.6.2`
 
 O commit deverá gerar dois deployments no Railway:
 
-- `cs-platform-api`
-- `cs-platform-web`
+- `cs-platform-api`;
+- `cs-platform-web`.
 
-Aguarde os dois ficarem verdes antes de testar. Depois, abra o sistema e pressione `Ctrl + F5`.
+Aguarde os dois ficarem verdes. Depois, abra o sistema e pressione `Ctrl + F5`.
 
-Não altere o banco, migrations, variáveis, `railway.json`, `Dockerfile` ou `nginx.conf`.
+Não altere banco, migrations, variáveis, `railway.json`, `Dockerfile`, `docker-entrypoint.sh` ou `nginx.conf`. Esta versão não exige migration.
 
 ## Teste depois do deploy
 
 1. Entre em **Clientes** e clique em **Ver detalhes**.
-2. Na parte de diagnóstico, clique em **Atualizar prévia**.
-3. Confira se a pontuação foi recalculada.
-4. Confira os botões **Apagar** nas receitas, despesas e dívidas.
-5. Clique em **Apagar** em um registro de teste e confirme a exclusão.
-6. Confira se os totais e a prévia foram atualizados automaticamente.
-7. Quando os dados estiverem corretos, clique em **Salvar diagnóstico** para criar uma nova versão.
+2. Em uma receita, clique em **Editar**, altere o valor e salve.
+3. Confirme que o total de receitas e a prévia do diagnóstico mudaram.
+4. Repita o teste em uma despesa.
+5. Repita o teste em uma dívida, alterando a parcela mensal.
+6. Confira se os botões **Apagar** continuam funcionando.
+7. Se os dados estiverem corretos, clique em **Salvar diagnóstico** para registrar uma nova versão.
 
-Os diagnósticos já salvos permanecem no histórico; eles não são apagados automaticamente.
+Os diagnósticos já salvos permanecem no histórico.
 
 ## Conferência
 
-O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos cinco arquivos substituídos.
+O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos cinco arquivos do patch.

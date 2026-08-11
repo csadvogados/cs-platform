@@ -9,6 +9,7 @@
     crm: { summary: null, contacts: [], opportunities: [], tasks: [] },
     selectedClient: null,
     financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null },
+    editingFinancial: null,
     users: [],
     currentView: "dashboard"
   };
@@ -51,6 +52,12 @@
     tax: "Dívida tributária",
     alimony: "Pensão alimentícia",
     rent_condo: "Aluguel ou condomínio"
+  };
+
+  const financialDefinitions = {
+    income: { path: "incomes", collection: "incomes", dialogId: "income-dialog", formId: "income-form", singular: "receita", createTitle: "Nova receita", editTitle: "Editar receita", createButton: "Salvar receita" },
+    expense: { path: "expenses", collection: "expenses", dialogId: "expense-dialog", formId: "expense-form", singular: "despesa", createTitle: "Nova despesa", editTitle: "Editar despesa", createButton: "Salvar despesa" },
+    debt: { path: "debts", collection: "debts", dialogId: "debt-dialog", formId: "debt-form", singular: "dívida", createTitle: "Nova dívida", editTitle: "Editar dívida", createButton: "Salvar dívida" }
   };
 
   function escapeHtml(value) {
@@ -190,10 +197,12 @@
 
   async function openDialog(id) {
     const dialog = document.getElementById(id);
-    if (["income-dialog", "expense-dialog", "debt-dialog"].includes(id) && !state.selectedClient) {
+    const financialDefinition = Object.values(financialDefinitions).find((definition) => definition.dialogId === id);
+    if (financialDefinition && !state.selectedClient) {
       toast("Selecione um cliente antes de registrar dados financeiros.", "error");
       return;
     }
+    if (financialDefinition) resetFinancialDialog(id);
     if (["opportunity-dialog", "task-dialog"].includes(id)) {
       try {
         await loadClients();
@@ -207,6 +216,23 @@
 
   function closeDialog(dialog) {
     if (dialog?.open) dialog.close();
+  }
+
+  function resetFinancialDialog(dialogId) {
+    const definition = Object.values(financialDefinitions).find((item) => item.dialogId === dialogId);
+    if (!definition) return;
+    const dialog = document.getElementById(definition.dialogId);
+    const form = document.getElementById(definition.formId);
+    if (!dialog || !form) return;
+    form.reset();
+    state.editingFinancial = null;
+    const title = $(".modal-header h2", dialog);
+    const submit = $('button[type="submit"]', form);
+    if (title) title.textContent = definition.createTitle;
+    if (submit) {
+      submit.textContent = definition.createButton;
+      delete submit.dataset.originalLabel;
+    }
   }
 
   function openSidebar() {
@@ -437,6 +463,58 @@
     return debtNatureLabels[String(value || "").toLowerCase()] || value || "Não informada";
   }
 
+  function setSelectValue(select, value, label = value) {
+    if (!select) return;
+    const normalized = value == null ? "" : String(value);
+    if (normalized && !Array.from(select.options).some((option) => option.value === normalized)) {
+      select.add(new Option(String(label || normalized), normalized));
+    }
+    select.value = normalized;
+  }
+
+  function openFinancialEditor(kind, itemId) {
+    const definition = financialDefinitions[kind];
+    if (!definition || !state.selectedClient) return;
+    const item = state.financial[definition.collection].find((entry) => String(entry.id) === String(itemId));
+    const dialog = document.getElementById(definition.dialogId);
+    const form = document.getElementById(definition.formId);
+    if (!item || !dialog || !form) {
+      toast("Não foi possível localizar o registro para edição.", "error");
+      return;
+    }
+
+    resetFinancialDialog(definition.dialogId);
+    state.editingFinancial = { kind, id: item.id };
+    const title = $(".modal-header h2", dialog);
+    const submit = $('button[type="submit"]', form);
+    if (title) title.textContent = definition.editTitle;
+    if (submit) {
+      submit.textContent = "Salvar alterações";
+      delete submit.dataset.originalLabel;
+    }
+
+    if (kind === "income") {
+      setSelectValue(form.elements.income_type, item.income_type);
+      form.elements.description.value = item.description || "";
+      form.elements.net_amount.value = item.net_amount ?? "";
+      form.elements.recurring.checked = Boolean(item.recurring);
+    } else if (kind === "expense") {
+      setSelectValue(form.elements.category, item.category);
+      form.elements.description.value = item.description || "";
+      form.elements.amount.value = item.amount ?? "";
+      form.elements.essential.checked = Boolean(item.essential);
+      form.elements.recurring.checked = Boolean(item.recurring);
+    } else if (kind === "debt") {
+      setSelectValue(form.elements.nature, item.nature, debtNatureLabel(item.nature));
+      setSelectValue(form.elements.creditor_id, item.creditor_id || "");
+      form.elements.new_creditor.value = "";
+      form.elements.current_balance.value = item.current_balance ?? "";
+      form.elements.monthly_installment.value = item.monthly_installment ?? 0;
+      form.elements.overdue.checked = Boolean(item.overdue);
+    }
+    dialog.showModal();
+  }
+
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
@@ -473,12 +551,12 @@
       <div class="detail-grid">
         <section class="panel detail-panel">
           <div class="panel-header"><div><p class="eyebrow dark">ENTRADAS</p><h3>Receitas</h3></div><button class="secondary-button" type="button" data-open-dialog="income-dialog">Nova receita</button></div>
-          <div class="detail-list">${incomes.length ? incomes.map((item) => `<article><span><strong>${escapeHtml(item.income_type)}</strong><small>${escapeHtml(item.description || (item.recurring ? "Receita recorrente" : "Receita eventual"))}</small></span><div class="detail-item-actions"><strong>${formatCurrency(item.net_amount)}</strong><button class="delete-button" type="button" data-delete-financial="income" data-delete-id="${escapeHtml(item.id)}">Apagar</button></div></article>`).join("") : '<div class="empty-state">Nenhuma receita cadastrada.</div>'}</div>
+          <div class="detail-list">${incomes.length ? incomes.map((item) => `<article><span><strong>${escapeHtml(item.income_type)}</strong><small>${escapeHtml(item.description || (item.recurring ? "Receita recorrente" : "Receita eventual"))}</small></span><div class="detail-item-actions"><strong>${formatCurrency(item.net_amount)}</strong><span class="financial-actions"><button class="edit-button" type="button" data-edit-financial="income" data-edit-id="${escapeHtml(item.id)}">Editar</button><button class="delete-button" type="button" data-delete-financial="income" data-delete-id="${escapeHtml(item.id)}">Apagar</button></span></div></article>`).join("") : '<div class="empty-state">Nenhuma receita cadastrada.</div>'}</div>
         </section>
 
         <section class="panel detail-panel">
           <div class="panel-header"><div><p class="eyebrow dark">SAÍDAS</p><h3>Despesas</h3></div><button class="secondary-button" type="button" data-open-dialog="expense-dialog">Nova despesa</button></div>
-          <div class="detail-list">${expenses.length ? expenses.map((item) => `<article><span><strong>${escapeHtml(item.category)}</strong><small>${escapeHtml(item.description || (item.essential ? "Despesa essencial" : "Despesa não essencial"))}</small></span><div class="detail-item-actions"><strong>${formatCurrency(item.amount)}</strong><button class="delete-button" type="button" data-delete-financial="expense" data-delete-id="${escapeHtml(item.id)}">Apagar</button></div></article>`).join("") : '<div class="empty-state">Nenhuma despesa cadastrada.</div>'}</div>
+          <div class="detail-list">${expenses.length ? expenses.map((item) => `<article><span><strong>${escapeHtml(item.category)}</strong><small>${escapeHtml(item.description || (item.essential ? "Despesa essencial" : "Despesa não essencial"))}</small></span><div class="detail-item-actions"><strong>${formatCurrency(item.amount)}</strong><span class="financial-actions"><button class="edit-button" type="button" data-edit-financial="expense" data-edit-id="${escapeHtml(item.id)}">Editar</button><button class="delete-button" type="button" data-delete-financial="expense" data-delete-id="${escapeHtml(item.id)}">Apagar</button></span></div></article>`).join("") : '<div class="empty-state">Nenhuma despesa cadastrada.</div>'}</div>
         </section>
       </div>
 
@@ -486,7 +564,7 @@
         <div class="panel-header"><div><p class="eyebrow dark">ENDIVIDAMENTO</p><h3>Dívidas</h3></div><button class="secondary-button" type="button" data-open-dialog="debt-dialog">Nova dívida</button></div>
         <div class="table-wrap compact-table">
           <table><thead><tr><th>Natureza</th><th>Credor</th><th>Saldo atual</th><th>Parcela mensal</th><th>Situação</th><th>Ações</th></tr></thead>
-          <tbody>${debts.length ? debts.map((item) => `<tr><td>${escapeHtml(debtNatureLabel(item.nature))}</td><td>${escapeHtml(creditorName(item.creditor_id))}</td><td>${formatCurrency(item.current_balance)}</td><td>${formatCurrency(item.monthly_installment)}</td><td><span class="badge ${item.overdue ? "danger" : ""}">${item.overdue ? "Em atraso" : "Em dia"}</span></td><td><button class="delete-button" type="button" data-delete-financial="debt" data-delete-id="${escapeHtml(item.id)}">Apagar</button></td></tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhuma dívida cadastrada.</td></tr>'}</tbody></table>
+          <tbody>${debts.length ? debts.map((item) => `<tr><td>${escapeHtml(debtNatureLabel(item.nature))}</td><td>${escapeHtml(creditorName(item.creditor_id))}</td><td>${formatCurrency(item.current_balance)}</td><td>${formatCurrency(item.monthly_installment)}</td><td><span class="badge ${item.overdue ? "danger" : ""}">${item.overdue ? "Em atraso" : "Em dia"}</span></td><td><span class="financial-actions"><button class="edit-button" type="button" data-edit-financial="debt" data-edit-id="${escapeHtml(item.id)}">Editar</button><button class="delete-button" type="button" data-delete-financial="debt" data-delete-id="${escapeHtml(item.id)}">Apagar</button></span></td></tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhuma dívida cadastrada.</td></tr>'}</tbody></table>
         </div>
       </section>
 
@@ -501,6 +579,7 @@
 
     $("#back-to-clients").addEventListener("click", () => setView("clients"));
     $$("[data-open-dialog]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
+    $$("[data-edit-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openFinancialEditor(button.dataset.editFinancial, button.dataset.editId)));
     $$("[data-delete-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => deleteFinancial(button.dataset.deleteFinancial, button.dataset.deleteId, button)));
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
     $("#save-diagnosis")?.addEventListener("click", saveDiagnosis);
@@ -563,12 +642,7 @@
 
   async function deleteFinancial(kind, itemId, button) {
     if (!state.selectedClient || !itemId) return;
-    const definitions = {
-      income: { path: "incomes", singular: "receita" },
-      expense: { path: "expenses", singular: "despesa" },
-      debt: { path: "debts", singular: "dívida" }
-    };
-    const definition = definitions[kind];
+    const definition = financialDefinitions[kind];
     if (!definition) return;
     const confirmed = window.confirm(`Deseja realmente apagar esta ${definition.singular}? Esta ação não pode ser desfeita.`);
     if (!confirmed) return;
@@ -600,10 +674,11 @@
       const data = compactObject(Object.fromEntries(new FormData(form)));
       data.net_amount = Number(data.net_amount);
       data.recurring = form.elements.recurring.checked;
-      await api(`/api/v1/financial/clients/${state.selectedClient.id}/incomes`, { method: "POST", body: JSON.stringify(data) });
-      form.reset();
+      const editing = state.editingFinancial?.kind === "income" ? state.editingFinancial : null;
+      const suffix = editing ? `/${editing.id}` : "";
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/incomes${suffix}`, { method: editing ? "PUT" : "POST", body: JSON.stringify(data) });
       closeDialog(form.closest("dialog"));
-      await refreshFinancial("Receita cadastrada.");
+      await refreshFinancial(editing ? "Receita atualizada." : "Receita cadastrada.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -622,10 +697,11 @@
       data.amount = Number(data.amount);
       data.essential = form.elements.essential.checked;
       data.recurring = form.elements.recurring.checked;
-      await api(`/api/v1/financial/clients/${state.selectedClient.id}/expenses`, { method: "POST", body: JSON.stringify(data) });
-      form.reset();
+      const editing = state.editingFinancial?.kind === "expense" ? state.editingFinancial : null;
+      const suffix = editing ? `/${editing.id}` : "";
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/expenses${suffix}`, { method: editing ? "PUT" : "POST", body: JSON.stringify(data) });
       closeDialog(form.closest("dialog"));
-      await refreshFinancial("Despesa cadastrada.");
+      await refreshFinancial(editing ? "Despesa atualizada." : "Despesa cadastrada.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -656,10 +732,11 @@
         monthly_installment: Number(raw.monthly_installment || 0),
         overdue: form.elements.overdue.checked
       };
-      await api(`/api/v1/financial/clients/${state.selectedClient.id}/debts`, { method: "POST", body: JSON.stringify(data) });
-      form.reset();
+      const editing = state.editingFinancial?.kind === "debt" ? state.editingFinancial : null;
+      const suffix = editing ? `/${editing.id}` : "";
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/debts${suffix}`, { method: editing ? "PUT" : "POST", body: JSON.stringify(data) });
       closeDialog(form.closest("dialog"));
-      await refreshFinancial("Dívida cadastrada.");
+      await refreshFinancial(editing ? "Dívida atualizada." : "Dívida cadastrada.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -829,6 +906,9 @@
     $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
+    Object.values(financialDefinitions).forEach((definition) => {
+      document.getElementById(definition.dialogId)?.addEventListener("close", () => resetFinancialDialog(definition.dialogId));
+    });
     $$(".crm-tab").forEach((button) => button.addEventListener("click", () => {
       $$(".crm-tab").forEach((tab) => tab.classList.toggle("active", tab === button));
       $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `crm-${button.dataset.crmTab}`));

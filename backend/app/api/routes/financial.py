@@ -71,6 +71,39 @@ def list_incomes(
     return list(db.scalars(select(Income).where(Income.client_id == client_id)))
 
 
+@router.put("/clients/{client_id}/incomes/{income_id}", response_model=IncomeRead)
+def update_income(
+    client_id: uuid.UUID,
+    income_id: uuid.UUID,
+    payload: IncomeCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    income = db.scalar(
+        select(Income).where(
+            Income.id == income_id,
+            Income.client_id == client_id,
+        )
+    )
+    if not income:
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
+    for field, value in payload.model_dump().items():
+        setattr(income, field, value)
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="income",
+        entity_id=income.id,
+        action="update",
+        new_values={"amount": str(income.net_amount)},
+    )
+    db.commit()
+    db.refresh(income)
+    return income
+
+
 @router.delete(
     "/clients/{client_id}/incomes/{income_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -127,6 +160,39 @@ def list_expenses(
 ):
     owned_client(db, client_id, actor.organization_id)
     return list(db.scalars(select(Expense).where(Expense.client_id == client_id)))
+
+
+@router.put("/clients/{client_id}/expenses/{expense_id}", response_model=ExpenseRead)
+def update_expense(
+    client_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    payload: ExpenseCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    expense = db.scalar(
+        select(Expense).where(
+            Expense.id == expense_id,
+            Expense.client_id == client_id,
+        )
+    )
+    if not expense:
+        raise HTTPException(status_code=404, detail="Despesa não encontrada")
+    for field, value in payload.model_dump().items():
+        setattr(expense, field, value)
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="expense",
+        entity_id=expense.id,
+        action="update",
+        new_values={"amount": str(expense.amount)},
+    )
+    db.commit()
+    db.refresh(expense)
+    return expense
 
 
 @router.delete(
@@ -233,6 +299,51 @@ def list_debts(
             )
         )
     )
+
+
+@router.put("/clients/{client_id}/debts/{debt_id}", response_model=DebtRead)
+def update_debt(
+    client_id: uuid.UUID,
+    debt_id: uuid.UUID,
+    payload: DebtCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    debt = db.scalar(
+        select(Debt).where(
+            Debt.id == debt_id,
+            Debt.client_id == client_id,
+            Debt.organization_id == actor.organization_id,
+        )
+    )
+    if not debt:
+        raise HTTPException(status_code=404, detail="Dívida não encontrada")
+    if payload.creditor_id and not db.scalar(
+        select(Creditor).where(
+            Creditor.id == payload.creditor_id,
+            Creditor.organization_id == actor.organization_id,
+        )
+    ):
+        raise HTTPException(status_code=404, detail="Credor não encontrado")
+    for field, value in payload.model_dump().items():
+        setattr(debt, field, value)
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="debt",
+        entity_id=debt.id,
+        action="update",
+        new_values={
+            "nature": debt.nature,
+            "current_balance": str(debt.current_balance),
+            "monthly_installment": str(debt.monthly_installment),
+        },
+    )
+    db.commit()
+    db.refresh(debt)
+    return debt
 
 
 @router.delete(

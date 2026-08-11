@@ -275,6 +275,9 @@ tr:last-child td { border-bottom: 0; }
 .detail-list small { color: #7b847f; font-size: 11px; overflow-wrap: anywhere; }
 .detail-item-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
 .detail-item-actions > strong { color: var(--forest-2); font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
+.financial-actions { display: inline-flex; align-items: center; gap: 6px; }
+.edit-button { min-height: 31px; border: 1px solid #b9c9c2; border-radius: 7px; padding: 6px 10px; color: var(--forest-2); background: #f7fbf9; font-size: 10px; font-weight: 800; }
+.edit-button:hover { color: #fff; background: var(--forest-2); border-color: var(--forest-2); }
 .delete-button { min-height: 31px; border: 1px solid #ddb9b5; border-radius: 7px; padding: 6px 10px; color: var(--danger); background: #fff8f7; font-size: 10px; font-weight: 800; }
 .delete-button:hover { color: #fff; background: var(--danger); border-color: var(--danger); }
 .delete-button:disabled { cursor: wait; }
