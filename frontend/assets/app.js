@@ -163,6 +163,44 @@
     return response.json();
   }
 
+  async function openDiagnosisReport(path, button) {
+    const popup = window.open("", "_blank");
+    if (!popup) {
+      toast("O navegador bloqueou a nova janela. Permita pop-ups para abrir o relatório.", "error");
+      return;
+    }
+    popup.opener = null;
+    popup.document.write('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Preparando relatório</title><body style="font-family:Arial;padding:32px">Preparando relatório…</body></html>');
+    popup.document.close();
+    setBusy(button, true, "Abrindo…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const response = await fetch(`${API_BASE}${path}`, { headers });
+      if (response.status === 401) {
+        clearSession();
+        showLogin("Sua sessão expirou. Entre novamente.");
+        throw new Error("Sessão expirada.");
+      }
+      if (!response.ok) throw new Error(await readError(response));
+      const html = await response.text();
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+    } catch (error) {
+      if (!popup.closed) {
+        popup.document.open();
+        popup.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Erro</title><body style="font-family:Arial;padding:32px"><h1>Não foi possível abrir o relatório</h1><p>${escapeHtml(error.message)}</p></body></html>`);
+        popup.document.close();
+      }
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   function toast(message, type = "success") {
     const element = document.createElement("div");
     element.className = `toast ${type === "error" ? "error" : ""}`;
@@ -649,7 +687,7 @@
       </section>
 
       <section class="panel diagnosis-panel">
-        <div class="panel-header"><div><p class="eyebrow dark">ANÁLISE ECONÔMICA</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
+        <div class="panel-header"><div><p class="eyebrow dark">ANÁLISE ECONÔMICA</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir relatório</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
         ${diagnosis ? `<div class="diagnosis-grid">
           <article class="diagnosis-score"><span>Pontuação</span><strong>${escapeHtml(diagnosis.eligibility_score)}</strong><small>${escapeHtml(diagnosis.eligibility_result)}</small></article>
           <dl class="definition-list"><div><dt>Renda total</dt><dd>${formatCurrency(diagnosis.total_income)}</dd></div><div><dt>Despesas</dt><dd>${formatCurrency(diagnosis.total_expenses)}</dd></div><div><dt>Parcelas mensais</dt><dd>${formatCurrency(diagnosis.total_installments)}</dd></div><div><dt>Comprometimento</dt><dd>${Number(diagnosis.commitment_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</dd></div></dl>
@@ -666,6 +704,7 @@
             <div class="diagnosis-history-content">
               <dl class="definition-list"><div><dt>Renda total</dt><dd>${formatCurrency(item.total_income)}</dd></div><div><dt>Despesas</dt><dd>${formatCurrency(item.total_expenses)}</dd></div><div><dt>Saldo de dívidas</dt><dd>${formatCurrency(item.total_debt_balance)}</dd></div><div><dt>Parcelas</dt><dd>${formatCurrency(item.total_installments)}</dd></div><div><dt>Renda disponível</dt><dd>${formatCurrency(item.disposable_income)}</dd></div><div><dt>Comprometimento</dt><dd>${Number(item.commitment_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</dd></div></dl>
               <div class="diagnosis-conclusion"><strong>Conclusão registrada</strong><p>${escapeHtml(item.economic_conclusion)}</p>${alerts.length ? `<ul>${alerts.map((alert) => `<li>${escapeHtml(alert)}</li>`).join("")}</ul>` : '<p class="muted">Sem alertas jurídicos nesta versão.</p>'}</div>
+              <div class="history-report-row"><button class="secondary-button" type="button" data-open-saved-report="${escapeHtml(item.id)}">Abrir relatório desta versão</button></div>
             </div>
           </details>`;
         }).join("") : '<div class="empty-state">Nenhum diagnóstico foi salvo para este cliente.</div>'}</div>
@@ -676,6 +715,8 @@
     $$("[data-open-dialog]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-edit-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openFinancialEditor(button.dataset.editFinancial, button.dataset.editId)));
     $$("[data-delete-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => deleteFinancial(button.dataset.deleteFinancial, button.dataset.deleteId, button)));
+    $("#open-current-report")?.addEventListener("click", (event) => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/report`, event.currentTarget));
+    $$("[data-open-saved-report]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/history/${button.dataset.openSavedReport}/report`, button)));
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
     $("#save-diagnosis")?.addEventListener("click", saveDiagnosis);
   }

@@ -306,6 +306,7 @@ tr:last-child td { border-bottom: 0; }
 .history-score { border-radius: 999px; padding: 7px 10px; color: var(--forest-2); background: #e2efe8; font-size: 11px; font-weight: 800; white-space: nowrap; }
 .diagnosis-history-content { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(320px, 1.2fr); gap: 24px; padding: 20px 18px; border-top: 1px solid var(--line); }
 .diagnosis-history-content .definition-list { margin: 0; }
+.history-report-row { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: 2px; }
 .danger-text { color: var(--danger) !important; }
 .check-field { min-height: 42px; display: flex !important; grid-template-columns: none !important; flex-direction: row !important; align-items: center; gap: 10px !important; font-weight: 650 !important; }
 .check-field input { width: 18px !important; min-height: 18px !important; padding: 0 !important; accent-color: var(--forest-2); }
@@ -392,6 +393,8 @@ tr:last-child td { border-bottom: 0; }
   .history-result { grid-column: 1; }
   .history-score { grid-column: 1; justify-self: start; }
   .diagnosis-history-content { grid-template-columns: 1fr; }
+  .history-report-row { grid-column: auto; justify-content: stretch; }
+  .history-report-row .secondary-button { width: 100%; }
   .check-row { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }

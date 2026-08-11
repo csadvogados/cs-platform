@@ -11,7 +11,7 @@ from app.models.financial import Diagnosis
 from app.models.user import User
 from app.schemas.diagnosis import DiagnosisPreview, DiagnosisRead
 from app.services.diagnosis_engine import calculate
-from app.services.report_service import economic_report
+from app.services.report_service import economic_report, saved_economic_report
 router=APIRouter()
 def loaded(db,client_id,org_id):
     c=db.scalar(select(Client).where(Client.id==client_id,Client.organization_id==org_id).options(selectinload(Client.incomes),selectinload(Client.expenses),selectinload(Client.debts)))
@@ -31,4 +31,10 @@ def history(client_id:uuid.UUID,limit:int=Query(20,ge=1,le=100),db:Session=Depen
     return list(db.scalars(select(Diagnosis).where(Diagnosis.client_id==client_id,Diagnosis.organization_id==actor.organization_id).order_by(Diagnosis.version.desc(),Diagnosis.created_at.desc()).limit(limit)))
 @router.get('/{client_id}/report',response_class=Response)
 def report(client_id:uuid.UUID,db:Session=Depends(get_db),actor:User=Depends(get_current_user)):
-    c=loaded(db,client_id,actor.organization_id); return Response(economic_report(c,calculate(c,Decimal(str(settings.minimum_existential_reference)))),media_type='text/html')
+    c=loaded(db,client_id,actor.organization_id); return Response(economic_report(c,calculate(c,Decimal(str(settings.minimum_existential_reference)))),media_type='text/html',headers={'Content-Disposition':f'inline; filename="diagnostico-atual-{client_id}.html"'})
+@router.get('/{client_id}/history/{diagnosis_id}/report',response_class=Response)
+def saved_report(client_id:uuid.UUID,diagnosis_id:uuid.UUID,db:Session=Depends(get_db),actor:User=Depends(get_current_user)):
+    c=loaded(db,client_id,actor.organization_id)
+    diagnosis=db.scalar(select(Diagnosis).where(Diagnosis.id==diagnosis_id,Diagnosis.client_id==client_id,Diagnosis.organization_id==actor.organization_id))
+    if not diagnosis: raise HTTPException(404,'Diagnóstico não encontrado')
+    return Response(saved_economic_report(c,diagnosis),media_type='text/html',headers={'Content-Disposition':f'inline; filename="diagnostico-v{diagnosis.version}-{client_id}.html"'})

@@ -1,31 +1,27 @@
-# CS Platform v5.6.4 — histórico de diagnósticos
+# CS Platform v5.6.5 — relatório do diagnóstico
 
-Este pacote acrescenta o histórico dos diagnósticos salvos de cada cliente.
+Este pacote acrescenta relatórios profissionais, prontos para impressão ou para salvar em PDF.
 
-O histórico mostra:
+Existem dois tipos de relatório:
 
-- número da versão;
-- data e hora em que foi salva;
-- pontuação e resultado;
-- renda, despesas, dívidas e parcelas;
-- renda disponível e comprometimento;
-- conclusão e alertas registrados naquela versão.
+- **Relatório atual:** usa os dados financeiros existentes no momento da abertura;
+- **Relatório de uma versão salva:** reproduz os valores, a pontuação, a conclusão e os alertas registrados naquela versão do histórico.
 
-As versões aparecem da mais recente para a mais antiga. Ao salvar um novo diagnóstico, a nova versão aparece automaticamente no início do histórico. São exibidas até 50 versões por cliente.
+O relatório inclui identidade da CS Platform, cliente e CPF, valores em formato brasileiro, comprometimento, pontuação, conclusão, alertas, aviso técnico e campos de assinatura.
 
 ## Como aplicar no GitHub
 
 Substitua exatamente estes cinco arquivos no repositório `csadvogados/cs-platform`:
 
 1. `backend/app/api/routes/diagnoses.py`
-2. `backend/app/schemas/diagnosis.py`
+2. `backend/app/services/report_service.py`
 3. `frontend/index.html`
 4. `frontend/assets/app.js`
 5. `frontend/assets/styles.css`
 
 Use este nome no commit:
 
-`feat: adicionar histórico de diagnósticos v5.6.4`
+`feat: adicionar relatório imprimível v5.6.5`
 
 O commit deverá gerar dois deployments no Railway:
 
@@ -39,12 +35,14 @@ Não altere banco, migrations, variáveis, `railway.json`, `Dockerfile`, `docker
 ## Teste depois do deploy
 
 1. Entre em **Clientes** e clique em **Ver detalhes**.
-2. Role até **Histórico de diagnósticos**.
-3. Confira se aparece pelo menos a versão salva anteriormente.
-4. Clique em uma versão para abrir os valores, a conclusão e os alertas.
-5. Clique em **Salvar diagnóstico**.
-6. Confirme se uma nova versão aparece imediatamente no início do histórico.
-7. Abra a versão anterior e confirme que seus valores não foram alterados.
+2. Na área **Diagnóstico financeiro**, clique em **Abrir relatório**.
+3. Se o navegador bloquear a janela, autorize pop-ups para o endereço do sistema e tente novamente.
+4. No relatório, clique em **Imprimir / Salvar como PDF**.
+5. Na janela de impressão, selecione **Salvar como PDF**.
+6. Volte ao sistema e abra uma versão em **Histórico de diagnósticos**.
+7. Clique em **Abrir relatório desta versão** e confirme se o número da versão e os valores estão corretos.
+
+O acesso continua autenticado. O token não é colocado no endereço do relatório.
 
 ## Conferência
 
