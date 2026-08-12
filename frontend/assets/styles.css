@@ -194,6 +194,9 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; }
 .search-field { width: min(460px, 100%); display: flex; align-items: center; gap: 8px; border: 1px solid #cbc7bd; border-radius: 10px; padding-left: 14px; background: var(--surface); }
 .search-field input { min-height: 44px; border: 0; padding-left: 0; background: transparent; }
 .search-field input:focus { box-shadow: none; }
+.client-status-filter { display: grid; gap: 5px; min-width: 210px; color: #66716b; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.client-status-filter select { min-height: 44px; border: 1px solid #cbc7bd; border-radius: 10px; padding: 0 38px 0 13px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; letter-spacing: normal; text-transform: none; }
+.client-status-filter select:focus { border-color: var(--forest-2); box-shadow: 0 0 0 3px rgba(29,73,60,.12); outline: 0; }
 .result-count { margin-left: auto; color: #67716b; font-size: 12px; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 12px 35px rgba(24,38,31,.05); }
 table { width: 100%; border-collapse: collapse; }

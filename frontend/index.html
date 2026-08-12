@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.7.1" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.7.2" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -130,9 +130,10 @@
           </section>
 
           <section id="view-clients" class="page-view" aria-labelledby="clients-heading">
-            <div class="section-intro"><div><p class="eyebrow dark">RELACIONAMENTO</p><h1 id="clients-heading">Clientes</h1><p>Consulte a base e registre novos atendimentos.</p></div><button class="primary-button" data-open-dialog="client-dialog">Novo cliente</button></div>
+            <div class="section-intro"><div><p class="eyebrow dark">RELACIONAMENTO</p><h1 id="clients-heading">Clientes</h1><p>Consulte a base e registre novos atendimentos.</p></div><div class="button-row"><button id="export-clients-button" class="secondary-button" type="button" hidden>Exportar CSV</button><button class="primary-button" data-open-dialog="client-dialog">Novo cliente</button></div></div>
             <div class="toolbar">
-              <label class="search-field"><span aria-hidden="true">⌕</span><input id="client-search" type="search" placeholder="Buscar por nome, CPF ou cidade" /></label>
+              <label class="search-field"><span aria-hidden="true">⌕</span><input id="client-search" type="search" placeholder="Buscar por nome, CPF, cidade ou e-mail" /></label>
+              <label class="client-status-filter"><span>Status</span><select id="client-status-filter"><option value="all">Todos</option><option value="lead">Potencial cliente</option><option value="triage">Triagem</option><option value="proposal">Proposta</option><option value="contracted">Contratado</option><option value="documents_pending">Documentos pendentes</option><option value="diagnosis">Diagnóstico</option><option value="negotiation">Negociação</option><option value="judicial_review">Análise judicial</option><option value="judicial">Judicial</option><option value="agreement">Acordo</option><option value="closed">Encerrado</option><option value="cancelled">Cancelado</option></select></label>
               <span id="client-count" class="result-count">0 clientes</span>
             </div>
             <div class="table-wrap">
@@ -241,7 +242,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.1</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.2</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -383,6 +384,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.7.1"></script>
+    <script src="./assets/app.js?v=5.7.2"></script>
   </body>
 </html>

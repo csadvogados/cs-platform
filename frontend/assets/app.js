@@ -107,6 +107,7 @@
     create: "Criou",
     update: "Atualizou",
     delete: "Apagou",
+    export: "Exportou",
     block: "Desativou",
     unblock: "Reativou",
     complete: "Concluiu",
@@ -255,6 +256,11 @@
       || (state.user?.permissions || []).includes("audit.read");
   }
 
+  function canExportClients() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("client.export");
+  }
+
   function calculateWeightedPipeline(opportunities) {
     const openStages = new Set(["lead", "qualified", "proposal", "negotiation"]);
     return opportunities
@@ -382,6 +388,7 @@
     $("#settings-role").textContent = userRoleLabels[state.user.role] || state.user.role || "—";
     $("#password-security-warning").hidden = !state.user.must_change_password;
     $("#audit-nav-item").hidden = !canViewAudit();
+    $("#export-clients-button").hidden = !canExportClients();
   }
 
   function setView(view) {
@@ -750,8 +757,13 @@
 
   function renderClients() {
     const term = $("#client-search").value.trim().toLocaleLowerCase("pt-BR");
-    const clients = state.clients.filter((client) => [client.full_name, client.cpf, client.city, client.email]
-      .some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(term)));
+    const status = $("#client-status-filter").value;
+    const clients = state.clients.filter((client) => {
+      const matchesTerm = [client.full_name, client.cpf, client.city, client.email]
+        .some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(term));
+      const matchesStatus = status === "all" || String(client.status || "") === status;
+      return matchesTerm && matchesStatus;
+    });
     $("#client-count").textContent = `${clients.length} ${clients.length === 1 ? "cliente" : "clientes"}`;
     $("#clients-table").innerHTML = clients.length ? clients.map((client) => `
       <tr class="client-row" data-client-id="${escapeHtml(client.id)}">
@@ -762,6 +774,57 @@
         <td>${formatDate(client.created_at)}</td>
         <td><button class="text-link" type="button" data-client-detail="${escapeHtml(client.id)}">Ver detalhes</button></td>
       </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum cliente encontrado.</td></tr>';
+  }
+
+  async function downloadClientsCsv() {
+    if (!canExportClients()) {
+      toast("Seu perfil não possui permissão para exportar clientes.", "error");
+      return;
+    }
+
+    const button = $("#export-clients-button");
+    const params = new URLSearchParams();
+    const query = $("#client-search").value.trim();
+    const status = $("#client-status-filter").value;
+    if (query) params.set("q", query);
+    if (status !== "all") params.set("status", status);
+
+    setBusy(button, true, "Gerando…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      const response = await fetch(`${API_BASE}/api/v1/clients/export.csv${suffix}`, { headers });
+      if (response.status === 401) {
+        clearSession();
+        showLogin("Sua sessão expirou. Entre novamente.");
+        throw new Error("Sessão expirada.");
+      }
+      if (!response.ok) throw new Error(await readError(response));
+
+      const blob = await response.blob();
+      const today = new Date();
+      const date = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, "0"),
+        String(today.getDate()).padStart(2, "0")
+      ].join("-");
+      const link = document.createElement("a");
+      const objectUrl = URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.download = `clientes_${date}.csv`;
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      toast("Lista de clientes exportada em CSV.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function fillClientSelects() {
@@ -1758,6 +1821,8 @@
     $("#menu-button").addEventListener("click", openSidebar);
     $("#sidebar-scrim").addEventListener("click", closeSidebar);
     $("#client-search").addEventListener("input", renderClients);
+    $("#client-status-filter").addEventListener("change", renderClients);
+    $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#crm-search").addEventListener("input", (event) => {
       state.crmFilters.search = event.currentTarget.value;
       renderCrm();
