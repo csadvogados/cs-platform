@@ -13,6 +13,7 @@
     editingClientId: null,
     financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null, history: [] },
     editingFinancial: null,
+    editingUserId: null,
     users: [],
     currentView: "dashboard"
   };
@@ -57,6 +58,17 @@
     note: "Observação",
     other: "Outro atendimento"
   };
+
+  const userRoleLabels = {
+    admin: "Administrador",
+    supervisor: "Supervisor",
+    advogado: "Advogado",
+    negociador: "Negociador",
+    financeiro: "Financeiro",
+    atendimento: "Atendimento"
+  };
+
+  const userStatusLabels = { active: "Ativo", inactive: "Inativo" };
 
   const crmDefinitions = {
     contact: { collection: "contacts", dialogId: "contact-dialog", formId: "contact-form", singular: "contato", createTitle: "Novo contato", editTitle: "Editar contato", createButton: "Salvar contato" },
@@ -139,6 +151,10 @@
     const term = state.crmFilters.search.trim().toLocaleLowerCase("pt-BR");
     if (!term) return true;
     return values.some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(term));
+  }
+
+  function canManageUsers() {
+    return String(state.user?.role || "").toLowerCase() === "admin";
   }
 
   function calculateWeightedPipeline(opportunities) {
@@ -282,6 +298,10 @@
 
   async function openDialog(id) {
     const dialog = document.getElementById(id);
+    if (id === "user-dialog" && !canManageUsers()) {
+      toast("Somente administradores podem cadastrar membros.", "error");
+      return;
+    }
     const financialDefinition = Object.values(financialDefinitions).find((definition) => definition.dialogId === id);
     const crmDefinition = Object.values(crmDefinitions).find((definition) => definition.dialogId === id);
     if (financialDefinition && !state.selectedClient) {
@@ -291,6 +311,7 @@
     if (financialDefinition) resetFinancialDialog(id);
     if (crmDefinition) resetCrmDialog(id);
     if (id === "client-dialog") resetClientDialog();
+    if (id === "user-dialog") resetUserDialog();
     if (["opportunity-dialog", "task-dialog", "interaction-dialog"].includes(id)) {
       try {
         await loadClients();
@@ -325,6 +346,24 @@
       submit.textContent = "Salvar cliente";
       delete submit.dataset.originalLabel;
     }
+  }
+
+  function resetUserDialog() {
+    const dialog = document.getElementById("user-dialog");
+    const form = document.getElementById("user-form");
+    if (!dialog || !form) return;
+    form.reset();
+    state.editingUserId = null;
+    form.elements.email.readOnly = false;
+    form.elements.email.required = true;
+    form.elements.password.required = true;
+    $("#user-email-field").hidden = false;
+    $("#user-password-field").hidden = false;
+    $("#user-password-help").hidden = false;
+    $(".modal-header h2", dialog).textContent = "Novo membro";
+    const submit = $('button[type="submit"]', form);
+    submit.textContent = "Cadastrar membro";
+    delete submit.dataset.originalLabel;
   }
 
   function resetFinancialDialog(dialogId) {
@@ -1003,12 +1042,98 @@
   }
 
   function renderUsers() {
-    $("#user-list").innerHTML = state.users.length ? state.users.map((user) => `<article class="person-row">
-      <span class="avatar">${escapeHtml(initials(user.full_name))}</span>
-      <div><h4>${escapeHtml(user.full_name)}</h4><p>${escapeHtml(user.email)}</p></div>
-      <span>${escapeHtml(user.role || "equipe")}</span>
-      <span class="badge ${user.status !== "active" ? "neutral" : ""}">${escapeHtml(user.status || "active")}</span>
-    </article>`).join("") : '<div class="empty-state">Nenhum usuário encontrado.</div>';
+    const administrator = canManageUsers();
+    $("#new-user-button").hidden = !administrator;
+    $("#user-count").textContent = `${state.users.length} ${state.users.length === 1 ? "membro" : "membros"}`;
+    $("#user-list").innerHTML = state.users.length ? state.users.map((user) => {
+      const currentAccount = String(user.id) === String(state.user?.id);
+      const active = String(user.status || "active") === "active";
+      return `<article class="person-row">
+        <span class="avatar">${escapeHtml(initials(user.full_name))}</span>
+        <div><h4>${escapeHtml(user.full_name)}</h4><p>${escapeHtml(user.email)}</p>${user.must_change_password ? '<small class="password-pending">Troca de senha pendente</small>' : ""}</div>
+        <span>${escapeHtml(userRoleLabels[user.role] || user.role || "Equipe")}</span>
+        <span class="badge ${active ? "" : "neutral"}">${escapeHtml(userStatusLabels[user.status] || user.status || "Ativo")}</span>
+        <span class="team-actions">${currentAccount
+          ? '<span class="current-account">Conta atual</span>'
+          : administrator
+            ? `<button class="edit-button" type="button" data-edit-user="${escapeHtml(user.id)}">Editar</button><button class="${active ? "delete-button" : "complete-button"}" type="button" data-toggle-user="${escapeHtml(user.id)}" data-user-action="${active ? "block" : "unblock"}">${active ? "Desativar" : "Ativar"}</button>`
+            : ""}</span>
+      </article>`;
+    }).join("") : '<div class="empty-state">Nenhum usuário encontrado.</div>';
+  }
+
+  function openUserEditor(userId) {
+    if (!canManageUsers()) {
+      toast("Somente administradores podem alterar a equipe.", "error");
+      return;
+    }
+    const user = state.users.find((item) => String(item.id) === String(userId));
+    if (!user || String(user.id) === String(state.user?.id)) {
+      toast("A conta atualmente conectada não pode ser alterada nesta tela.", "error");
+      return;
+    }
+    resetUserDialog();
+    state.editingUserId = user.id;
+    const dialog = document.getElementById("user-dialog");
+    const form = document.getElementById("user-form");
+    form.elements.full_name.value = user.full_name || "";
+    setSelectValue(form.elements.role, user.role || "atendimento", userRoleLabels[user.role]);
+    form.elements.password.required = false;
+    form.elements.email.required = false;
+    $("#user-email-field").hidden = true;
+    $("#user-password-field").hidden = true;
+    $("#user-password-help").hidden = true;
+    $(".modal-header h2", dialog).textContent = "Editar membro";
+    const submit = $('button[type="submit"]', form);
+    submit.textContent = "Salvar alterações";
+    delete submit.dataset.originalLabel;
+    dialog.showModal();
+  }
+
+  async function submitUser(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !canManageUsers()) return;
+    const button = $('button[type="submit"]', form);
+    const editingId = state.editingUserId;
+    setBusy(button, true, "Salvando…");
+    try {
+      const data = compactObject(Object.fromEntries(new FormData(form)));
+      const payload = editingId
+        ? { full_name: data.full_name, role: data.role }
+        : { full_name: data.full_name, email: data.email, password: data.password, role: data.role || "atendimento" };
+      const path = editingId ? `/api/v1/users/${editingId}` : "/api/v1/users";
+      await api(path, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(payload) });
+      closeDialog(form.closest("dialog"));
+      await loadUsers();
+      toast(editingId ? "Membro atualizado." : "Membro cadastrado. A senha deverá ser trocada no primeiro acesso.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function toggleUserStatus(userId, action, button) {
+    if (!canManageUsers()) {
+      toast("Somente administradores podem alterar a equipe.", "error");
+      return;
+    }
+    const user = state.users.find((item) => String(item.id) === String(userId));
+    if (!user || String(user.id) === String(state.user?.id)) {
+      toast("Não é possível desativar a conta atualmente conectada.", "error");
+      return;
+    }
+    if (action === "block" && !window.confirm(`Deseja desativar o acesso de ${user.full_name}? As sessões abertas serão encerradas.`)) return;
+    setBusy(button, true, action === "block" ? "Desativando…" : "Ativando…");
+    try {
+      await api(`/api/v1/users/${user.id}/${action}`, { method: "POST" });
+      await loadUsers();
+      toast(action === "block" ? "Acesso desativado." : "Acesso reativado.");
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
   }
 
   async function deleteFinancial(kind, itemId, button) {
@@ -1347,6 +1472,7 @@
       renderCrm();
     });
     $("#client-form").addEventListener("submit", submitClient);
+    $("#user-form").addEventListener("submit", submitUser);
     $("#contact-form").addEventListener("submit", submitContact);
     $("#opportunity-form").addEventListener("submit", submitOpportunity);
     $("#task-form").addEventListener("submit", submitTask);
@@ -1357,6 +1483,13 @@
     $("#clients-table").addEventListener("click", (event) => {
       const button = event.target.closest("[data-client-detail]");
       if (button) openClientDetail(button.dataset.clientDetail);
+    });
+    $("#new-user-button").addEventListener("click", () => openDialog("user-dialog"));
+    $("#user-list").addEventListener("click", (event) => {
+      const editButton = event.target.closest("[data-edit-user]");
+      const toggleButton = event.target.closest("[data-toggle-user]");
+      if (editButton) openUserEditor(editButton.dataset.editUser);
+      else if (toggleButton) toggleUserStatus(toggleButton.dataset.toggleUser, toggleButton.dataset.userAction, toggleButton);
     });
     $("#view-crm").addEventListener("click", (event) => {
       const editContact = event.target.closest("[data-edit-contact]");
@@ -1391,6 +1524,7 @@
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
     $("#client-dialog").addEventListener("close", resetClientDialog);
+    $("#user-dialog").addEventListener("close", resetUserDialog);
     Object.values(financialDefinitions).forEach((definition) => {
       document.getElementById(definition.dialogId)?.addEventListener("close", () => resetFinancialDialog(definition.dialogId));
     });

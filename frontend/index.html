@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.6.8" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.6.9" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -175,14 +175,15 @@
           </section>
 
           <section id="view-users" class="page-view" aria-labelledby="users-heading">
-            <div class="section-intro"><div><p class="eyebrow dark">ORGANIZAÇÃO</p><h1 id="users-heading">Equipe</h1><p>Pessoas com acesso à plataforma.</p></div></div>
+            <div class="section-intro"><div><p class="eyebrow dark">ORGANIZAÇÃO</p><h1 id="users-heading">Equipe</h1><p>Pessoas com acesso à plataforma.</p></div><button id="new-user-button" class="primary-button" type="button" hidden>Novo membro</button></div>
+            <div class="team-toolbar"><span id="user-count">0 membros</span><p>Somente administradores podem cadastrar ou alterar acessos.</p></div>
             <div id="user-list" class="people-list"><div class="loading-row">Carregando equipe…</div></div>
           </section>
 
           <section id="view-settings" class="page-view" aria-labelledby="settings-heading">
             <div class="section-intro"><div><p class="eyebrow dark">AMBIENTE</p><h1 id="settings-heading">Configurações</h1><p>Informações desta instalação.</p></div></div>
             <div class="settings-grid">
-              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.8</dd></div></dl></section>
+              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.9</dd></div></dl></section>
               <section class="panel"><h3>Sessão atual</h3><dl class="definition-list"><div><dt>Usuário</dt><dd id="settings-user">—</dd></div><div><dt>E-mail</dt><dd id="settings-email">—</dd></div><div><dt>Perfil</dt><dd id="settings-role">—</dd></div></dl></section>
             </div>
           </section>
@@ -205,6 +206,20 @@
           <label class="wide"><span>Observações</span><textarea name="notes" rows="3"></textarea></label>
         </div>
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar cliente</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="user-dialog" class="modal small-modal">
+      <form id="user-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">GESTÃO DA EQUIPE</p><h2>Novo membro</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid single">
+          <label><span>Nome completo *</span><input name="full_name" required minlength="3" maxlength="200" /></label>
+          <label id="user-email-field"><span>E-mail *</span><input name="email" type="email" required autocomplete="off" /></label>
+          <label id="user-password-field"><span>Senha temporária *</span><input name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+          <label><span>Perfil de acesso *</span><select name="role" required><option value="atendimento">Atendimento</option><option value="negociador">Negociador</option><option value="financeiro">Financeiro</option><option value="advogado">Advogado</option><option value="supervisor">Supervisor</option><option value="admin">Administrador</option></select></label>
+        </div>
+        <p id="user-password-help" class="form-help">Use pelo menos 12 caracteres. O novo membro deverá trocar essa senha no primeiro acesso.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Cadastrar membro</button></div>
       </form>
     </dialog>
 
@@ -311,6 +326,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.6.8"></script>
+    <script src="./assets/app.js?v=5.6.9"></script>
   </body>
 </html>
