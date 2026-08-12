@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.7.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.7.1" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -69,6 +69,7 @@
             <button class="nav-item" data-view="clients"><span aria-hidden="true">◎</span> Clientes</button>
             <button class="nav-item" data-view="crm"><span aria-hidden="true">◇</span> CRM</button>
             <button class="nav-item" data-view="users"><span aria-hidden="true">♙</span> Equipe</button>
+            <button id="audit-nav-item" class="nav-item" data-view="audit" hidden><span aria-hidden="true">◷</span> Histórico</button>
             <button class="nav-item" data-view="settings"><span aria-hidden="true">⚙</span> Configurações</button>
           </nav>
         </div>
@@ -180,6 +181,29 @@
             <div id="user-list" class="people-list"><div class="loading-row">Carregando equipe…</div></div>
           </section>
 
+          <section id="view-audit" class="page-view" aria-labelledby="audit-heading">
+            <div class="section-intro">
+              <div><p class="eyebrow dark">CONTROLE E SEGURANÇA</p><h1 id="audit-heading">Histórico de atividades</h1><p>Acompanhe as ações realizadas na organização.</p></div>
+              <span class="audit-protected-note">Visível apenas para administradores e supervisores</span>
+            </div>
+            <form id="audit-filter-form" class="audit-filter-bar">
+              <label class="audit-search-field"><span>Buscar no histórico</span><input id="audit-search" name="search" type="search" placeholder="Pessoa, e-mail, área ou ação" autocomplete="off" /></label>
+              <label><span>Área</span><select id="audit-entity-filter" name="entity_type"><option value="all">Todas</option><option value="auth">Acesso</option><option value="user">Equipe</option><option value="role">Perfil de acesso</option><option value="invitation">Convite</option><option value="session">Sessão</option><option value="organization">Organização</option><option value="client">Cliente</option><option value="income">Receita</option><option value="expense">Despesa</option><option value="creditor">Credor</option><option value="debt">Dívida</option><option value="diagnosis">Diagnóstico</option><option value="crm_contact">Contato CRM</option><option value="crm_interaction">Atendimento</option><option value="crm_opportunity">Oportunidade</option><option value="crm_task">Tarefa</option></select></label>
+              <label><span>Ação</span><select id="audit-action-filter" name="action"><option value="all">Todas</option><option value="login">Entrou</option><option value="logout">Saiu</option><option value="create">Criou</option><option value="update">Atualizou</option><option value="delete">Apagou</option><option value="complete">Concluiu</option><option value="change_password">Alterou a senha</option><option value="block">Desativou</option><option value="unblock">Reativou</option><option value="revoke">Encerrou sessão</option><option value="revoke_all">Encerrou todas as sessões</option><option value="accept">Aceitou convite</option></select></label>
+              <label><span>Responsável</span><select id="audit-user-filter" name="user_id"><option value="all">Todos</option></select></label>
+              <label><span>De</span><input id="audit-date-from" name="date_from" type="date" /></label>
+              <label><span>Até</span><input id="audit-date-to" name="date_to" type="date" /></label>
+              <div class="audit-filter-actions"><button class="primary-button" type="submit">Aplicar filtros</button><button id="clear-audit-filters" class="secondary-button" type="button">Limpar</button></div>
+            </form>
+            <div class="audit-list-header"><span id="audit-count">0 atividades</span><p>Dados sigilosos, como senhas e documentos, não são exibidos.</p></div>
+            <div id="audit-list" class="audit-list" aria-live="polite"><div class="loading-row">Abra o histórico para carregar as atividades.</div></div>
+            <div class="audit-pagination" aria-label="Paginação do histórico">
+              <button id="audit-previous-page" class="secondary-button" type="button">Página anterior</button>
+              <span id="audit-page-label">Página 1 de 1</span>
+              <button id="audit-next-page" class="secondary-button" type="button">Próxima página</button>
+            </div>
+          </section>
+
           <section id="view-settings" class="page-view" aria-labelledby="settings-heading">
             <div class="section-intro"><div><p class="eyebrow dark">SEGURANÇA E CONTA</p><h1 id="settings-heading">Configurações</h1><p>Gerencie a organização, a senha e os acessos conectados.</p></div></div>
             <div id="password-security-warning" class="security-warning" hidden>
@@ -217,7 +241,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.1</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -359,6 +383,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.7.0"></script>
+    <script src="./assets/app.js?v=5.7.1"></script>
   </body>
 </html>

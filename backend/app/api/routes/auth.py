@@ -181,6 +181,15 @@ def login_oauth(
     )
 
     tokens = _issue_tokens(db, user, request)
+    record_audit(
+        db,
+        organization_id=user.organization_id,
+        user_id=user.id,
+        entity_type="auth",
+        entity_id=user.id,
+        action="login",
+        new_values={"email": user.email},
+    )
     db.commit()
     return tokens
 
@@ -257,6 +266,7 @@ def logout(
 
     if stored and not stored.revoked:
         now = datetime.now(timezone.utc)
+        user = db.get(User, stored.user_id)
         stored.revoked = True
         stored.revoked_at = now
         session = db.scalar(
@@ -266,6 +276,15 @@ def logout(
         )
         if session and not session.revoked_at:
             session.revoked_at = now
+        if user:
+            record_audit(
+                db,
+                organization_id=user.organization_id,
+                user_id=user.id,
+                entity_type="auth",
+                entity_id=user.id,
+                action="logout",
+            )
         db.commit()
 
     return None

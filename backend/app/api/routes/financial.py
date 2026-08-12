@@ -147,6 +147,16 @@ def add_expense(
     owned_client(db, client_id, actor.organization_id)
     expense = Expense(client_id=client_id, **payload.model_dump())
     db.add(expense)
+    db.flush()
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="expense",
+        entity_id=expense.id,
+        action="create",
+        new_values={"amount": str(expense.amount)},
+    )
     db.commit()
     db.refresh(expense)
     return expense
@@ -239,6 +249,16 @@ def add_creditor(
         **payload.model_dump(),
     )
     db.add(creditor)
+    db.flush()
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="creditor",
+        entity_id=creditor.id,
+        action="create",
+        new_values={"legal_name": creditor.legal_name},
+    )
     db.commit()
     db.refresh(creditor)
     return creditor
@@ -279,6 +299,20 @@ def add_debt(
         **payload.model_dump(),
     )
     db.add(debt)
+    db.flush()
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="debt",
+        entity_id=debt.id,
+        action="create",
+        new_values={
+            "nature": debt.nature,
+            "current_balance": str(debt.current_balance),
+            "monthly_installment": str(debt.monthly_installment),
+        },
+    )
     db.commit()
     db.refresh(debt)
     return debt

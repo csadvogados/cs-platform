@@ -17,6 +17,14 @@
     users: [],
     organization: null,
     sessions: [],
+    audit: {
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+      pages: 0,
+      filters: { search: "", entityType: "all", action: "all", userId: "all", dateFrom: "", dateTo: "" }
+    },
     currentView: "dashboard"
   };
 
@@ -31,6 +39,7 @@
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
     crm: ["DESENVOLVIMENTO DE NEGÓCIOS", "CRM", "Nova oportunidade"],
     users: ["ORGANIZAÇÃO", "Equipe", "Atualizar"],
+    audit: ["CONTROLE E SEGURANÇA", "Histórico de atividades", "Atualizar"],
     settings: ["SEGURANÇA E CONTA", "Configurações", "Atualizar"]
   };
 
@@ -71,6 +80,62 @@
   };
 
   const userStatusLabels = { active: "Ativo", inactive: "Inativo" };
+
+  const auditEntityLabels = {
+    auth: "Acesso",
+    user: "Equipe",
+    role: "Perfil de acesso",
+    invitation: "Convite",
+    session: "Sessão",
+    organization: "Organização",
+    client: "Cliente",
+    income: "Receita",
+    expense: "Despesa",
+    creditor: "Credor",
+    debt: "Dívida",
+    diagnosis: "Diagnóstico",
+    crm_contact: "Contato CRM",
+    crm_interaction: "Atendimento",
+    crm_opportunity: "Oportunidade",
+    crm_task: "Tarefa"
+  };
+
+  const auditActionLabels = {
+    login: "Entrou",
+    logout: "Saiu",
+    change_password: "Alterou a senha",
+    create: "Criou",
+    update: "Atualizou",
+    delete: "Apagou",
+    block: "Desativou",
+    unblock: "Reativou",
+    complete: "Concluiu",
+    revoke: "Encerrou sessão",
+    revoke_all: "Encerrou todas as sessões",
+    accept: "Aceitou convite"
+  };
+
+  const auditDetailLabels = {
+    name: "Nome",
+    full_name: "Nome",
+    email: "E-mail",
+    title: "Título",
+    subject: "Assunto",
+    role: "Perfil",
+    status: "Status",
+    stage: "Etapa",
+    priority: "Prioridade",
+    amount: "Valor",
+    estimated_value: "Valor estimado",
+    current_balance: "Saldo atual",
+    monthly_installment: "Parcela mensal",
+    nature: "Natureza",
+    legal_name: "Razão social",
+    trade_name: "Nome de apresentação",
+    version: "Versão",
+    eligibility_score: "Pontuação",
+    eligibility_result: "Resultado"
+  };
 
   const crmDefinitions = {
     contact: { collection: "contacts", dialogId: "contact-dialog", formId: "contact-form", singular: "contato", createTitle: "Novo contato", editTitle: "Editar contato", createButton: "Salvar contato" },
@@ -183,6 +248,11 @@
   function canUpdateOrganization() {
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("organization.update");
+  }
+
+  function canViewAudit() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("audit.read");
   }
 
   function calculateWeightedPipeline(opportunities) {
@@ -311,9 +381,11 @@
     $("#settings-email").textContent = state.user.email || "—";
     $("#settings-role").textContent = userRoleLabels[state.user.role] || state.user.role || "—";
     $("#password-security-warning").hidden = !state.user.must_change_password;
+    $("#audit-nav-item").hidden = !canViewAudit();
   }
 
   function setView(view) {
+    if (view === "audit" && !canViewAudit()) view = "dashboard";
     if (!viewMeta[view]) return;
     state.currentView = view;
     $$(".page-view").forEach((section) => section.classList.toggle("active-view", section.id === `view-${view}`));
@@ -321,6 +393,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
+    $("#top-action-button").hidden = view === "audit";
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -502,6 +575,9 @@
     if (state.currentView === "clientDetail" && state.selectedClient) {
       loaders.push(loadClientDetail(state.selectedClient.id));
     }
+    if (state.currentView === "audit" && canViewAudit()) {
+      loaders.push(loadAudit(state.audit.page));
+    }
     const requests = await Promise.allSettled(loaders);
     setBusy(button, false);
     const failed = requests.filter((request) => request.status === "rejected");
@@ -589,6 +665,36 @@
     const response = await api("/api/v1/users?page=1&page_size=50");
     state.users = Array.isArray(response) ? response : response.items || [];
     renderUsers();
+    fillAuditUserFilter();
+  }
+
+  function fillAuditUserFilter() {
+    const select = $("#audit-user-filter");
+    if (!select) return;
+    const selected = state.audit.filters.userId || "all";
+    select.innerHTML = '<option value="all">Todos</option>' + state.users.map((user) =>
+      `<option value="${escapeHtml(user.id)}">${escapeHtml(user.full_name || user.email)}</option>`
+    ).join("");
+    select.value = Array.from(select.options).some((option) => option.value === selected) ? selected : "all";
+  }
+
+  async function loadAudit(page = 1) {
+    if (!canViewAudit()) return;
+    const filters = state.audit.filters;
+    const params = new URLSearchParams({ page: String(page), page_size: String(state.audit.pageSize) });
+    if (filters.search.trim()) params.set("q", filters.search.trim());
+    if (filters.entityType !== "all") params.set("entity_type", filters.entityType);
+    if (filters.action !== "all") params.set("action", filters.action);
+    if (filters.userId !== "all") params.set("user_id", filters.userId);
+    if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+    if (filters.dateTo) params.set("date_to", filters.dateTo);
+    $("#audit-list").innerHTML = '<div class="loading-row">Carregando atividades…</div>';
+    const response = await api(`/api/v1/audit?${params.toString()}`);
+    state.audit.items = Array.isArray(response.items) ? response.items : [];
+    state.audit.total = Number(response.total || 0);
+    state.audit.page = Number(response.page || page);
+    state.audit.pages = Number(response.pages || 0);
+    renderAudit();
   }
 
   async function loadSettings() {
@@ -1108,6 +1214,43 @@
     }).join("") : '<div class="empty-state">Nenhum usuário encontrado.</div>';
   }
 
+  function auditDetailValue(key, value) {
+    if (value === null || value === undefined || value === "") return "—";
+    if (["amount", "estimated_value", "current_balance", "monthly_installment"].includes(key)) {
+      return formatCurrency(value);
+    }
+    if (typeof value === "boolean") return value ? "Sim" : "Não";
+    if (key === "stage") return stageLabels[value] || value;
+    if (key === "priority") return priorityLabels[value] || value;
+    if (key === "nature") return debtNatureLabels[value] || value;
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
+  function renderAudit() {
+    const total = state.audit.total;
+    const pages = Math.max(state.audit.pages, 1);
+    $("#audit-count").textContent = `${total} ${total === 1 ? "atividade" : "atividades"}`;
+    $("#audit-page-label").textContent = `Página ${state.audit.page} de ${pages}`;
+    $("#audit-previous-page").disabled = state.audit.page <= 1;
+    $("#audit-next-page").disabled = state.audit.page >= pages || total === 0;
+    $("#audit-list").innerHTML = state.audit.items.length ? state.audit.items.map((event) => {
+      const entity = auditEntityLabels[event.entity_type] || event.entity_type || "Registro";
+      const action = auditActionLabels[event.action] || event.action || "Realizou uma ação";
+      const details = Object.entries(event.details || {}).slice(0, 8).map(([key, value]) =>
+        `<span><strong>${escapeHtml(auditDetailLabels[key] || key)}:</strong> ${escapeHtml(auditDetailValue(key, value))}</span>`
+      ).join("");
+      return `<article class="audit-item">
+        <span class="audit-marker" aria-hidden="true"></span>
+        <div class="audit-content">
+          <div class="audit-item-heading"><div><strong>${escapeHtml(event.actor_name || "Sistema")}</strong>${event.actor_email ? `<small>${escapeHtml(event.actor_email)}</small>` : ""}</div><time>${escapeHtml(formatDate(event.occurred_at, true))}</time></div>
+          <p><span class="audit-action-badge action-${escapeHtml(event.action || "other")}">${escapeHtml(action)}</span><span class="audit-entity-label">${escapeHtml(entity)}</span></p>
+          ${details ? `<div class="audit-details">${details}</div>` : ""}
+        </div>
+      </article>`;
+    }).join("") : '<div class="empty-state">Nenhuma atividade encontrada com os filtros atuais.</div>';
+  }
+
   function renderSettings() {
     const organization = state.organization || state.user?.organization || {};
     const organizationForm = $("#organization-form");
@@ -1595,6 +1738,10 @@
       clientDetail: () => openDialog("income-dialog"),
       crm: () => openDialog("opportunity-dialog"),
       users: () => refreshAll(true),
+      audit: async () => {
+        await loadAudit(state.audit.page);
+        toast("Histórico atualizado.");
+      },
       settings: async () => {
         await Promise.all([checkHealth(), loadSettings()]);
         toast("Configurações atualizadas.");
@@ -1634,6 +1781,42 @@
       $("#crm-priority-filter").value = "all";
       $("#crm-interaction-type-filter").value = "all";
       renderCrm();
+    });
+    $("#audit-filter-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(event.currentTarget));
+      if (values.date_from && values.date_to && values.date_from > values.date_to) {
+        toast("A data inicial não pode ser posterior à data final.", "error");
+        return;
+      }
+      state.audit.filters = {
+        search: String(values.search || ""),
+        entityType: String(values.entity_type || "all"),
+        action: String(values.action || "all"),
+        userId: String(values.user_id || "all"),
+        dateFrom: String(values.date_from || ""),
+        dateTo: String(values.date_to || "")
+      };
+      try {
+        await loadAudit(1);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    });
+    $("#clear-audit-filters").addEventListener("click", async () => {
+      $("#audit-filter-form").reset();
+      state.audit.filters = { search: "", entityType: "all", action: "all", userId: "all", dateFrom: "", dateTo: "" };
+      try {
+        await loadAudit(1);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    });
+    $("#audit-previous-page").addEventListener("click", () => {
+      if (state.audit.page > 1) loadAudit(state.audit.page - 1).catch((error) => toast(error.message, "error"));
+    });
+    $("#audit-next-page").addEventListener("click", () => {
+      if (state.audit.page < state.audit.pages) loadAudit(state.audit.page + 1).catch((error) => toast(error.message, "error"));
     });
     $("#client-form").addEventListener("submit", submitClient);
     $("#user-form").addEventListener("submit", submitUser);
@@ -1693,6 +1876,7 @@
     $$("[data-view]").forEach((button) => button.addEventListener("click", () => {
       setView(button.dataset.view);
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
+      if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));
     $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));

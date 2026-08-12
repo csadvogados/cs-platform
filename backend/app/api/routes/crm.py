@@ -109,10 +109,10 @@ def create_contact(payload: ContactCreate, db: Session = Depends(get_db), ident:
     validate_client(db, ident, payload.client_id)
     obj = CRMContact(organization_id=ident.organization_id, **payload.model_dump())
     db.add(obj)
+    db.flush()
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_contact", entity_id=obj.id, action="create", new_values={"name": obj.name})
     commit(db)
     db.refresh(obj)
-    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_contact", entity_id=obj.id, action="create", new_values={"name": obj.name})
-    db.commit()
     return obj
 
 
@@ -129,6 +129,7 @@ def update_contact(item_id: UUID, payload: ContactUpdate, db: Session = Depends(
         validate_client(db, ident, changes["client_id"])
     for key, value in changes.items():
         setattr(obj, key, value)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_contact", entity_id=obj.id, action="update", new_values={"name": obj.name})
     commit(db)
     db.refresh(obj)
     return obj
@@ -137,6 +138,7 @@ def update_contact(item_id: UUID, payload: ContactUpdate, db: Session = Depends(
 @router.delete("/contacts/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_contact(item_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
     obj = tenant_item(CRMContact, db, ident, item_id)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_contact", entity_id=obj.id, action="delete", new_values={"name": obj.name})
     db.delete(obj)
     commit(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -164,6 +166,8 @@ def create_interaction(payload: InteractionCreate, db: Session = Depends(get_db)
     validate_client(db, ident, payload.client_id)
     obj = CRMInteraction(organization_id=ident.organization_id, user_id=ident.user_id, **payload.model_dump())
     db.add(obj)
+    db.flush()
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_interaction", entity_id=obj.id, action="create", new_values={"subject": obj.subject, "interaction_type": obj.interaction_type})
     commit(db)
     db.refresh(obj)
     return obj
@@ -171,7 +175,9 @@ def create_interaction(payload: InteractionCreate, db: Session = Depends(get_db)
 
 @router.delete("/interactions/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_interaction(item_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
-    db.delete(tenant_item(CRMInteraction, db, ident, item_id))
+    obj = tenant_item(CRMInteraction, db, ident, item_id)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_interaction", entity_id=obj.id, action="delete", new_values={"subject": obj.subject, "interaction_type": obj.interaction_type})
+    db.delete(obj)
     commit(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -205,6 +211,8 @@ def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db)
     validate_user(db, ident, payload.owner_id)
     obj = CRMOpportunity(organization_id=ident.organization_id, **payload.model_dump())
     db.add(obj)
+    db.flush()
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_opportunity", entity_id=obj.id, action="create", new_values={"title": obj.title, "stage": obj.stage, "estimated_value": str(obj.estimated_value)})
     commit(db)
     db.refresh(obj)
     return obj
@@ -225,6 +233,7 @@ def update_opportunity(item_id: UUID, payload: OpportunityUpdate, db: Session = 
         validate_user(db, ident, changes["owner_id"])
     for key, value in changes.items():
         setattr(obj, key, value)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_opportunity", entity_id=obj.id, action="update", new_values={"title": obj.title, "stage": obj.stage, "estimated_value": str(obj.estimated_value)})
     commit(db)
     db.refresh(obj)
     return obj
@@ -232,7 +241,9 @@ def update_opportunity(item_id: UUID, payload: OpportunityUpdate, db: Session = 
 
 @router.delete("/opportunities/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_opportunity(item_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
-    db.delete(tenant_item(CRMOpportunity, db, ident, item_id))
+    obj = tenant_item(CRMOpportunity, db, ident, item_id)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_opportunity", entity_id=obj.id, action="delete", new_values={"title": obj.title, "stage": obj.stage})
+    db.delete(obj)
     commit(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -270,6 +281,8 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db), ident: Ident
     if obj.status == "completed":
         obj.completed_at = datetime.now(timezone.utc)
     db.add(obj)
+    db.flush()
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_task", entity_id=obj.id, action="create", new_values={"title": obj.title, "status": obj.status, "priority": obj.priority})
     commit(db)
     db.refresh(obj)
     return obj
@@ -294,6 +307,7 @@ def update_task(item_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db
         setattr(obj, key, value)
     if "status" in changes:
         obj.completed_at = datetime.now(timezone.utc) if changes["status"] == "completed" else None
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_task", entity_id=obj.id, action="update", new_values={"title": obj.title, "status": obj.status, "priority": obj.priority})
     commit(db)
     db.refresh(obj)
     return obj
@@ -304,6 +318,7 @@ def complete_task(item_id: UUID, db: Session = Depends(get_db), ident: IdentityC
     obj = tenant_item(CRMTask, db, ident, item_id)
     obj.status = "completed"
     obj.completed_at = datetime.now(timezone.utc)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_task", entity_id=obj.id, action="complete", new_values={"title": obj.title, "status": obj.status})
     commit(db)
     db.refresh(obj)
     return obj
@@ -311,7 +326,9 @@ def complete_task(item_id: UUID, db: Session = Depends(get_db), ident: IdentityC
 
 @router.delete("/tasks/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(item_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
-    db.delete(tenant_item(CRMTask, db, ident, item_id))
+    obj = tenant_item(CRMTask, db, ident, item_id)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="crm_task", entity_id=obj.id, action="delete", new_values={"title": obj.title, "status": obj.status})
+    db.delete(obj)
     commit(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

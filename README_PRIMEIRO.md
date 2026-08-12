@@ -1,57 +1,74 @@
-# CS Platform v5.7.0 — configurações e segurança
+# CS Platform v5.7.1 — Histórico de atividades
 
-Este pacote completa a área **Configurações** e corrige a revogação das sessões no backend.
+Esta versão adiciona uma área protegida para consultar as atividades realizadas no sistema.
 
-Ele permite:
+## O que foi incluído
 
-- consultar e atualizar razão social, nome de apresentação, e-mail e telefone da organização;
-- restringir a alteração dos dados institucionais aos perfis autorizados;
-- alterar a senha da conta conectada;
-- exigir confirmação da nova senha no frontend;
-- direcionar usuários com senha temporária para a área de troca de senha;
-- visualizar as sessões ativas com navegador, sistema, IP e datas;
-- encerrar uma sessão específica;
-- encerrar todas as sessões e sair da plataforma;
-- revogar corretamente o token de renovação associado à sessão encerrada;
-- revogar todas as sessões e tokens após a alteração da senha;
-- registrar navegador e IP nos novos acessos.
+- nova opção **Histórico** no menu;
+- acesso restrito a administradores e supervisores;
+- busca por pessoa, e-mail, área ou ação;
+- filtros por área, ação, responsável e período;
+- paginação com 25 atividades por página;
+- registro de entrada, saída, alteração de senha e atualização da organização;
+- registro ampliado de criações, alterações e exclusões no CRM e na ficha financeira;
+- registro da criação de diagnósticos;
+- proteção de senhas, tokens, hashes, CPF e CNPJ na resposta da API;
+- separação dos dados por organização.
 
-Sessões criadas antes desta atualização podem aparecer como **Dispositivo não identificado**. Os dados do navegador e do IP passam a ser gravados nos novos logins.
+Não há migration nova. A tabela `audit_events` já existe no banco desde a migration `0001_sprint1`.
 
 ## Como aplicar no GitHub
 
-Substitua exatamente estes seis arquivos no repositório `csadvogados/cs-platform`:
+Extraia o ZIP e substitua exatamente estes 11 arquivos no repositório `csadvogados/cs-platform`, mantendo as pastas:
 
-1. `backend/app/api/routes/auth.py`
-2. `backend/app/api/routes/access_control.py`
-3. `backend/app/core/config.py`
-4. `frontend/index.html`
-5. `frontend/assets/app.js`
-6. `frontend/assets/styles.css`
+1. `backend/app/api/routes/audit.py`
+2. `backend/app/api/routes/auth.py`
+3. `backend/app/api/routes/crm.py`
+4. `backend/app/api/routes/diagnoses.py`
+5. `backend/app/api/routes/financial.py`
+6. `backend/app/api/routes/organizations.py`
+7. `backend/app/main.py`
+8. `backend/app/schemas/audit.py`
+9. `frontend/index.html`
+10. `frontend/assets/app.js`
+11. `frontend/assets/styles.css`
 
 Use este nome no commit:
 
-`feat: adicionar configurações e segurança v5.7.0`
+`feat: adicionar histórico de atividades v5.7.1`
 
-O commit deverá gerar deployments dos serviços `cs-platform-api` e `cs-platform-web` no Railway.
+O commit deverá gerar dois deployments no Railway:
 
-Aguarde os dois serviços ficarem verdes. Depois, abra o sistema e pressione `Ctrl + F5`.
+- `cs-platform-api`
+- `cs-platform-web`
 
-Esta versão não exige migration e não altera `railway.json`, `Dockerfile`, `docker-entrypoint.sh`, `nginx.conf` ou as variáveis do Railway.
+Aguarde os dois ficarem verdes. Depois, abra o sistema e pressione `Ctrl + F5`.
 
-## Teste depois do deploy
+Não altere migrations, banco, variáveis, `railway.json`, `Dockerfile`, `docker-entrypoint.sh` ou `nginx.conf`.
 
-1. Entre na plataforma e abra **Configurações**.
-2. Confirme que os dados da organização foram carregados.
-3. Altere o nome de apresentação ou o telefone e clique em **Salvar organização**.
-4. Abra o sistema em outro navegador ou janela anônima e faça um segundo login.
-5. Volte para **Configurações** e confirme que existem duas sessões ativas.
-6. Encerre apenas a segunda sessão e confirme que ela desaparece da lista.
-7. Altere a senha usando a senha atual e uma nova senha de pelo menos 12 caracteres.
-8. Confirme que a plataforma encerra todas as sessões e solicita um novo login.
-9. Entre novamente usando a nova senha.
-10. Opcionalmente, entre com um usuário que não seja administrador e confirme que os dados da organização ficam somente para leitura.
+## Como testar depois do deploy
 
-## Conferência
+1. Entre com uma conta de administrador.
+2. Confira se apareceu **Histórico** no menu esquerdo.
+3. Abra **Histórico** e confirme que as atividades existentes são exibidas da mais recente para a mais antiga.
+4. Teste a busca pelo seu nome.
+5. Teste os filtros **Área**, **Ação**, **Responsável**, **De** e **Até**.
+6. Se houver mais de 25 registros, teste **Próxima página** e **Página anterior**.
+7. Cadastre ou altere um registro no CRM, volte ao histórico e clique em **Atualizar**.
+8. Entre com um perfil de atendimento, financeiro, negociador ou advogado e confirme que o menu **Histórico** não aparece.
 
-O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos seis arquivos substituídos e deste README.
+Os eventos já gravados antes da v5.7.1 continuam disponíveis. A cobertura ampliada de CRM, financeiro, organização e diagnóstico começa após este deploy.
+
+## Validações realizadas
+
+- sintaxe de todos os arquivos Python;
+- sintaxe do JavaScript;
+- cadeia Alembic até `0008_add_client_payment_capacity`;
+- presença da tabela `audit_events` na migration inicial;
+- isolamento do histórico por organização;
+- permissão `audit.read` para administrador e supervisor;
+- busca, filtros, paginação e bloqueio de período inválido;
+- ocultação do menu para perfil sem permissão;
+- ausência de erros no console do navegador durante os testes.
+
+O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos 11 arquivos que devem ser substituídos.

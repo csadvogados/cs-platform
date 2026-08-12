@@ -13,6 +13,7 @@ from swagger_ui_bundle import swagger_ui_path
 from app.api.exception_handlers import register_exception_handlers
 from app.api.routes import (
     auth,
+    audit,
     clients,
     dashboard,
     diagnoses,
@@ -130,6 +131,11 @@ app.include_router(
     users.router,
     prefix=f"{settings.api_v1_prefix}/users",
     tags=["Users"],
+)
+app.include_router(
+    audit.router,
+    prefix=f"{settings.api_v1_prefix}/audit",
+    tags=["Audit"],
 )
 
 app.include_router(
