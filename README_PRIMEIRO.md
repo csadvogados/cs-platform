@@ -1,25 +1,29 @@
-# CS Platform v5.7.2 — Exportação de clientes
+# CS Platform v5.7.3 — Importação de clientes por CSV
 
-Este pacote adiciona uma exportação segura da base de clientes em CSV.
+Este pacote adiciona a importação segura de clientes a partir de um arquivo CSV.
 
 ## O que foi incluído
 
-- botão **Exportar CSV** na tela **Clientes**;
-- filtro por status na lista de clientes;
-- exportação respeitando o texto pesquisado e o status selecionado;
-- arquivo compatível com Excel, com acentos e colunas separadas corretamente;
-- proteção contra fórmulas perigosas em células do CSV;
-- acesso permitido somente para administrador, supervisor ou superadministrador;
-- registro da exportação no **Histórico de atividades**.
+- botão **Importar CSV** na tela **Clientes**;
+- leitura de arquivos CSV separados por `;` ou `,`;
+- compatibilidade com arquivos UTF-8 e arquivos antigos do Excel;
+- conferência das linhas antes de salvar qualquer cliente;
+- indicação de linhas prontas, inválidas e duplicadas;
+- bloqueio de CPF já cadastrado ou repetido no próprio arquivo;
+- importação somente das linhas válidas após confirmação;
+- limite de 500 clientes e 2 MB por arquivo;
+- atualização automática da lista de clientes após a importação;
+- registro da operação no **Histórico de atividades**.
 
 ## Arquivos que devem ser substituídos
 
-Substitua somente estes quatro arquivos no repositório `csadvogados/cs-platform`:
+Substitua somente estes cinco arquivos no repositório `csadvogados/cs-platform`:
 
 1. `backend/app/api/routes/clients.py`
-2. `frontend/index.html`
-3. `frontend/assets/app.js`
-4. `frontend/assets/styles.css`
+2. `backend/app/schemas/client.py`
+3. `frontend/index.html`
+4. `frontend/assets/app.js`
+5. `frontend/assets/styles.css`
 
 Os arquivos já estão nas pastas corretas dentro deste ZIP.
 
@@ -27,13 +31,14 @@ Os arquivos já estão nas pastas corretas dentro deste ZIP.
 
 1. Extraia este ZIP no computador.
 2. Abra o repositório `csadvogados/cs-platform` no GitHub.
-3. Substitua os quatro arquivos acima pelos arquivos deste pacote, mantendo exatamente os mesmos caminhos.
-4. Use o seguinte nome no commit:
+3. Substitua os cinco arquivos acima, mantendo exatamente os mesmos caminhos.
+4. Faça todos os arquivos no mesmo commit.
+5. Use este nome no commit:
 
-   `feat: adicionar exportação de clientes v5.7.2`
+   `feat: adicionar importação de clientes por CSV v5.7.3`
 
-5. Confirme o commit na branch `main`.
-6. Aguarde o Railway concluir os deployments de `cs-platform-api` e `cs-platform-web`.
+6. Confirme o commit na branch `main`.
+7. Aguarde o Railway concluir os deployments de `cs-platform-api` e `cs-platform-web`.
 
 ## Não altere no Railway
 
@@ -45,30 +50,45 @@ Esta versão não exige:
 - mudança em `Dockerfile`;
 - comando manual no Console.
 
+## Como preparar o CSV
+
+As colunas obrigatórias são:
+
+- `Nome`
+- `CPF`
+
+As demais colunas são opcionais. O modo mais simples é abrir **Clientes**, clicar em **Exportar CSV**, editar uma cópia desse arquivo no Excel e depois importá-la.
+
+O sistema também reconhece: Nascimento, Profissão, E-mail, Telefone, Cidade, Estado, Status, Pessoa natural, Boa-fé declarada, Capacidade de pagamento e Observações.
+
 ## Teste depois do deployment
 
 1. Abra `https://cs-platform-web-production.up.railway.app/`.
-2. Pressione `Ctrl + F5` para carregar os arquivos novos.
+2. Pressione `Ctrl + F5`.
 3. Entre com uma conta de administrador ou supervisor.
 4. Clique em **Clientes**.
-5. Confira se aparecem o campo **Status** e o botão **Exportar CSV**.
-6. Digite parte do nome de um cliente ou selecione um status.
-7. Clique em **Exportar CSV**.
-8. Confira na pasta **Downloads** o arquivo `clientes_AAAA-MM-DD.csv`.
-9. Abra o arquivo no Excel e confirme que cada informação ficou em sua própria coluna.
-10. Abra **Histórico** e confirme a atividade **Exportou — Cliente**.
+5. Clique em **Importar CSV**.
+6. Selecione um arquivo `.csv` com as colunas Nome e CPF.
+7. Clique em **Conferir arquivo**.
+8. Confira os totais de linhas prontas, inválidas e duplicadas.
+9. Clique em **Importar clientes**.
+10. Confirme que os clientes válidos apareceram na lista.
+11. Abra **Histórico** e confira a atividade **Importou — Cliente**.
 
-O arquivo exportado contém somente clientes da organização da pessoa conectada.
+Linhas inválidas ou duplicadas não são salvas. Se um CPF for cadastrado por outra pessoa entre a conferência e a confirmação, toda a gravação é interrompida para evitar importação parcial incorreta.
 
 ## Validações realizadas
 
 - sintaxe Python e JavaScript;
-- ordem correta da rota de exportação;
-- permissão `client.export`;
+- leitura de CSV com `;` e `,`;
+- codificações UTF-8 com BOM e Windows-1252;
+- acentos, datas brasileiras e campos Sim/Não;
+- limite de tamanho e quantidade de linhas;
+- colunas obrigatórias Nome e CPF;
+- CPF inválido, repetido no arquivo e já cadastrado;
 - isolamento por organização;
-- filtros por pesquisa e status;
-- codificação UTF-8 com BOM para Excel;
-- separador `;` compatível com Excel em português;
-- neutralização de conteúdo iniciado por `=`, `+`, `-` ou `@`;
-- clique real no botão em navegador local controlado;
+- permissões de criação e exportação de clientes;
+- ordem correta das rotas da API;
+- fluxo real de seleção, prévia e confirmação em navegador local;
+- confirmação de que apenas linhas válidas foram enviadas;
 - estrutura e hashes SHA-256 do ZIP.

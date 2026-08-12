@@ -53,3 +53,32 @@ class ClientRead(ClientBase):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     organization_id: uuid.UUID
+
+
+class ClientImportPreviewRow(BaseModel):
+    line: int
+    valid: bool
+    duplicate: bool = False
+    display_name: str | None = None
+    display_cpf: str | None = None
+    data: ClientCreate | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
+class ClientImportPreview(BaseModel):
+    filename: str
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    duplicate_rows: int
+    rows: list[ClientImportPreviewRow]
+
+
+class ClientImportRequest(BaseModel):
+    source_filename: str | None = Field(default=None, max_length=255)
+    clients: list[ClientCreate] = Field(min_length=1, max_length=500)
+
+
+class ClientImportResult(BaseModel):
+    imported: int
+    client_ids: list[uuid.UUID]

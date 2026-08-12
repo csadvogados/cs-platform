@@ -1,9 +1,12 @@
 import csv
 import io
+import re
+import unicodedata
 import uuid
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,7 +15,15 @@ from app.api.deps import get_current_user, require_permissions, require_roles
 from app.db.session import get_db
 from app.models.client import Client
 from app.models.user import User
-from app.schemas.client import ClientCreate, ClientRead, ClientUpdate
+from app.schemas.client import (
+    ClientCreate,
+    ClientImportPreview,
+    ClientImportPreviewRow,
+    ClientImportRequest,
+    ClientImportResult,
+    ClientRead,
+    ClientUpdate,
+)
 from app.security.identity import IdentityContext
 from app.security.permissions import PermissionCode
 from app.services.audit import record_audit
@@ -34,6 +45,238 @@ CLIENT_STATUS_LABELS = {
     "closed": "Encerrado",
     "cancelled": "Cancelado",
 }
+
+MAX_IMPORT_BYTES = 2 * 1024 * 1024
+MAX_IMPORT_ROWS = 500
+IMPORT_HEADER_ALIASES = {
+    "nome": "full_name",
+    "nome_completo": "full_name",
+    "full_name": "full_name",
+    "cpf": "cpf",
+    "rg": "rg",
+    "nascimento": "birth_date",
+    "data_de_nascimento": "birth_date",
+    "birth_date": "birth_date",
+    "profissao": "profession",
+    "profession": "profession",
+    "e_mail": "email",
+    "email": "email",
+    "telefone": "phone",
+    "celular": "phone",
+    "phone": "phone",
+    "cidade": "city",
+    "city": "city",
+    "estado": "state",
+    "uf": "state",
+    "state": "state",
+    "status": "status",
+    "pessoa_natural": "person_natural",
+    "boa_fe": "good_faith_declared",
+    "boa_fe_declarada": "good_faith_declared",
+    "good_faith_declared": "good_faith_declared",
+    "capacidade_de_pagamento": "can_pay_without_harming_basics",
+    "can_pay_without_harming_basics": "can_pay_without_harming_basics",
+    "observacao": "notes",
+    "observacoes": "notes",
+    "notes": "notes",
+}
+IMPORT_FIELD_LABELS = {
+    "full_name": "Nome",
+    "cpf": "CPF",
+    "rg": "RG",
+    "birth_date": "Nascimento",
+    "profession": "Profissão",
+    "email": "E-mail",
+    "phone": "Telefone",
+    "city": "Cidade",
+    "state": "Estado",
+    "status": "Status",
+    "person_natural": "Pessoa natural",
+    "good_faith_declared": "Boa-fé declarada",
+    "can_pay_without_harming_basics": "Capacidade de pagamento",
+    "notes": "Observações",
+}
+
+
+def _normalize_import_key(value: object) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = "".join(character for character in normalized if not unicodedata.combining(character))
+    return re.sub(r"[^a-z0-9]+", "_", ascii_value.lower()).strip("_")
+
+
+CLIENT_STATUS_IMPORT_VALUES = {
+    _normalize_import_key(label): value for value, label in CLIENT_STATUS_LABELS.items()
+}
+CLIENT_STATUS_IMPORT_VALUES.update(
+    {_normalize_import_key(value): value for value in CLIENT_STATUS_LABELS}
+)
+
+
+def _safe_import_filename(value: str | None) -> str:
+    filename = re.split(r"[\\/]", str(value or "clientes.csv"))[-1].strip()
+    return (filename or "clientes.csv")[:255]
+
+
+def _import_text(value: object) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _parse_import_date(value: object) -> date | None:
+    text = _import_text(value)
+    if not text:
+        return None
+    for pattern in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, pattern).date()
+        except ValueError:
+            continue
+    raise ValueError("Nascimento deve usar o formato DD/MM/AAAA.")
+
+
+def _parse_import_boolean(value: object, *, default: bool | None) -> bool | None:
+    text = _normalize_import_key(value)
+    if not text or text in {"nao_informado", "nao_informada"}:
+        return default
+    if text in {"sim", "s", "yes", "true", "1"}:
+        return True
+    if text in {"nao", "n", "no", "false", "0"}:
+        return False
+    raise ValueError("Use Sim ou Não nos campos de confirmação.")
+
+
+def _parse_import_status(value: object) -> str:
+    text = _normalize_import_key(value)
+    if not text:
+        return "lead"
+    status_value = CLIENT_STATUS_IMPORT_VALUES.get(text)
+    if not status_value:
+        raise ValueError("Status não reconhecido.")
+    return status_value
+
+
+def _import_validation_errors(exc: ValidationError) -> list[str]:
+    errors = []
+    for error in exc.errors():
+        field = str(error.get("loc", ("registro",))[0])
+        label = IMPORT_FIELD_LABELS.get(field, field)
+        if field == "cpf":
+            message = "deve conter 11 dígitos e não pode ter todos os números iguais."
+        elif field == "email":
+            message = "endereço inválido."
+        elif field == "full_name":
+            message = "informe pelo menos 3 caracteres."
+        elif field == "state":
+            message = "informe uma UF com 2 letras."
+        else:
+            message = "valor inválido."
+        errors.append(f"{label}: {message}")
+    return errors
+
+
+def _build_import_client(row: dict[str, object], header_map: dict[str, str]) -> ClientCreate:
+    values = {
+        target: row.get(source)
+        for source, target in header_map.items()
+        if source is not None
+    }
+    payload = {
+        "full_name": _import_text(values.get("full_name")),
+        "cpf": _import_text(values.get("cpf")),
+        "rg": _import_text(values.get("rg")),
+        "birth_date": _parse_import_date(values.get("birth_date")),
+        "profession": _import_text(values.get("profession")),
+        "email": _import_text(values.get("email")),
+        "phone": _import_text(values.get("phone")),
+        "city": _import_text(values.get("city")),
+        "state": _import_text(values.get("state")),
+        "status": _parse_import_status(values.get("status")),
+        "person_natural": _parse_import_boolean(values.get("person_natural"), default=True),
+        "good_faith_declared": _parse_import_boolean(values.get("good_faith_declared"), default=None),
+        "can_pay_without_harming_basics": _parse_import_boolean(
+            values.get("can_pay_without_harming_basics"),
+            default=None,
+        ),
+        "notes": _import_text(values.get("notes")),
+    }
+    return ClientCreate.model_validate(payload)
+
+
+def _decode_import_file(content: bytes) -> str:
+    for encoding in ("utf-8-sig", "cp1252"):
+        try:
+            text = content.decode(encoding)
+            if "\x00" in text:
+                raise UnicodeDecodeError(encoding, content, 0, 1, "NUL")
+            return text
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(status_code=400, detail="Não foi possível ler o CSV. Salve-o em UTF-8.")
+
+
+def _read_import_rows(content: bytes) -> list[dict[str, object]]:
+    text = _decode_import_file(content)
+    first_line = text.splitlines()[0] if text.splitlines() else ""
+    delimiter = ";" if first_line.count(";") >= first_line.count(",") else ","
+    try:
+        reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+        if not reader.fieldnames:
+            raise HTTPException(status_code=400, detail="O CSV não possui cabeçalho.")
+
+        header_map: dict[str, str] = {}
+        mapped_fields: set[str] = set()
+        for source in reader.fieldnames:
+            target = IMPORT_HEADER_ALIASES.get(_normalize_import_key(source))
+            if target and target not in mapped_fields:
+                header_map[source] = target
+                mapped_fields.add(target)
+
+        missing = {"full_name", "cpf"} - mapped_fields
+        if missing:
+            raise HTTPException(status_code=400, detail="O CSV precisa conter as colunas Nome e CPF.")
+
+        parsed_rows: list[dict[str, object]] = []
+        for row in reader:
+            if not any(_import_text(value) for value in row.values() if value is not None):
+                continue
+            if len(parsed_rows) >= MAX_IMPORT_ROWS:
+                raise HTTPException(status_code=400, detail=f"O limite é de {MAX_IMPORT_ROWS} clientes por arquivo.")
+            display_values = {
+                target: row.get(source)
+                for source, target in header_map.items()
+                if source is not None
+            }
+            try:
+                client = _build_import_client(row, header_map)
+                parsed_rows.append({
+                    "line": reader.line_num,
+                    "client": client,
+                    "errors": [],
+                    "display_name": _import_text(display_values.get("full_name")),
+                    "display_cpf": _import_text(display_values.get("cpf")),
+                })
+            except ValidationError as exc:
+                parsed_rows.append({
+                    "line": reader.line_num,
+                    "client": None,
+                    "errors": _import_validation_errors(exc),
+                    "display_name": _import_text(display_values.get("full_name")),
+                    "display_cpf": _import_text(display_values.get("cpf")),
+                })
+            except ValueError as exc:
+                parsed_rows.append({
+                    "line": reader.line_num,
+                    "client": None,
+                    "errors": [str(exc)],
+                    "display_name": _import_text(display_values.get("full_name")),
+                    "display_cpf": _import_text(display_values.get("cpf")),
+                })
+    except csv.Error as exc:
+        raise HTTPException(status_code=400, detail="O arquivo CSV está malformado.") from exc
+
+    if not parsed_rows:
+        raise HTTPException(status_code=400, detail="O CSV não possui clientes para importar.")
+    return parsed_rows
 
 
 def _client_query(organization_id: uuid.UUID, query: str | None, client_status: str | None):
@@ -211,6 +454,156 @@ def export_clients_csv(
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",
         },
+    )
+
+
+@router.post("/import/preview", response_model=ClientImportPreview)
+async def preview_clients_import(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    identity: IdentityContext = Depends(
+        require_permissions(
+            PermissionCode.CLIENT_CREATE.value,
+            PermissionCode.CLIENT_EXPORT.value,
+        )
+    ),
+):
+    filename = _safe_import_filename(file.filename)
+    if not filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Selecione um arquivo com extensão .csv.")
+
+    content = await file.read(MAX_IMPORT_BYTES + 1)
+    await file.close()
+    if not content:
+        raise HTTPException(status_code=400, detail="O arquivo CSV está vazio.")
+    if len(content) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=400, detail="O CSV deve ter no máximo 2 MB.")
+
+    parsed_rows = _read_import_rows(content)
+    candidate_cpfs = {
+        item["client"].cpf
+        for item in parsed_rows
+        if isinstance(item.get("client"), ClientCreate)
+    }
+    existing_cpfs = set()
+    if candidate_cpfs:
+        existing_cpfs = set(
+            db.scalars(
+                select(Client.cpf).where(
+                    Client.organization_id == identity.organization_id,
+                    Client.cpf.in_(candidate_cpfs),
+                )
+            )
+        )
+
+    rows: list[ClientImportPreviewRow] = []
+    seen_cpfs: set[str] = set()
+    duplicate_rows = 0
+    for item in parsed_rows:
+        client = item.get("client")
+        errors = list(item.get("errors") or [])
+        duplicate = False
+        if isinstance(client, ClientCreate):
+            if client.cpf in existing_cpfs:
+                errors.append("CPF já cadastrado nesta organização.")
+                duplicate = True
+            elif client.cpf in seen_cpfs:
+                errors.append("CPF repetido no próprio arquivo.")
+                duplicate = True
+            seen_cpfs.add(client.cpf)
+        if duplicate:
+            duplicate_rows += 1
+        rows.append(
+            ClientImportPreviewRow(
+                line=int(item["line"]),
+                valid=not errors,
+                duplicate=duplicate,
+                display_name=str(item.get("display_name") or "") or None,
+                display_cpf=str(item.get("display_cpf") or "") or None,
+                data=client if not errors else None,
+                errors=errors,
+            )
+        )
+
+    valid_rows = sum(1 for row in rows if row.valid)
+    return ClientImportPreview(
+        filename=filename,
+        total_rows=len(rows),
+        valid_rows=valid_rows,
+        invalid_rows=len(rows) - valid_rows,
+        duplicate_rows=duplicate_rows,
+        rows=rows,
+    )
+
+
+@router.post("/import", response_model=ClientImportResult, status_code=status.HTTP_201_CREATED)
+def import_clients(
+    payload: ClientImportRequest,
+    db: Session = Depends(get_db),
+    identity: IdentityContext = Depends(
+        require_permissions(
+            PermissionCode.CLIENT_CREATE.value,
+            PermissionCode.CLIENT_EXPORT.value,
+        )
+    ),
+):
+    cpfs = [client.cpf for client in payload.clients]
+    repeated_cpfs: set[str] = set()
+    seen_cpfs: set[str] = set()
+    for cpf in cpfs:
+        if cpf in seen_cpfs:
+            repeated_cpfs.add(cpf)
+        seen_cpfs.add(cpf)
+    if repeated_cpfs:
+        raise HTTPException(status_code=409, detail="O arquivo contém CPFs repetidos. Faça uma nova conferência.")
+
+    existing_cpfs = set(
+        db.scalars(
+            select(Client.cpf).where(
+                Client.organization_id == identity.organization_id,
+                Client.cpf.in_(set(cpfs)),
+            )
+        )
+    )
+    if existing_cpfs:
+        raise HTTPException(
+            status_code=409,
+            detail="Um ou mais CPFs já foram cadastrados. Faça uma nova conferência do CSV.",
+        )
+
+    clients = [
+        Client(
+            organization_id=identity.organization_id,
+            **client.model_dump(mode="python"),
+        )
+        for client in payload.clients
+    ]
+    db.add_all(clients)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A importação encontrou um CPF já cadastrado. Confira o arquivo novamente.",
+        ) from exc
+
+    record_audit(
+        db,
+        organization_id=identity.organization_id,
+        user_id=identity.user_id,
+        entity_type="client",
+        entity_id=None,
+        action="import",
+        new_values={
+            "count": len(clients),
+            "source_filename": _safe_import_filename(payload.source_filename),
+        },
+    )
+    db.commit()
+    return ClientImportResult(
+        imported=len(clients),
+        client_ids=[client.id for client in clients],
     )
 
 

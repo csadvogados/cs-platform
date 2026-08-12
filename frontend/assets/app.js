@@ -11,6 +11,7 @@
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
     editingClientId: null,
+    clientImport: { filename: "", clients: [], preview: null },
     financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null, history: [] },
     editingFinancial: null,
     editingUserId: null,
@@ -108,6 +109,7 @@
     update: "Atualizou",
     delete: "Apagou",
     export: "Exportou",
+    import: "Importou",
     block: "Desativou",
     unblock: "Reativou",
     complete: "Concluiu",
@@ -135,7 +137,10 @@
     trade_name: "Nome de apresentação",
     version: "Versão",
     eligibility_score: "Pontuação",
-    eligibility_result: "Resultado"
+    eligibility_result: "Resultado",
+    count: "Quantidade",
+    query: "Pesquisa",
+    source_filename: "Arquivo"
   };
 
   const crmDefinitions = {
@@ -259,6 +264,12 @@
   function canExportClients() {
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("client.export");
+  }
+
+  function canImportClients() {
+    const permissions = state.user?.permissions || [];
+    return Boolean(state.user?.is_superuser)
+      || (permissions.includes("client.create") && permissions.includes("client.export"));
   }
 
   function calculateWeightedPipeline(opportunities) {
@@ -389,6 +400,7 @@
     $("#password-security-warning").hidden = !state.user.must_change_password;
     $("#audit-nav-item").hidden = !canViewAudit();
     $("#export-clients-button").hidden = !canExportClients();
+    $("#import-clients-button").hidden = !canImportClients();
   }
 
   function setView(view) {
@@ -411,6 +423,10 @@
       toast("Somente administradores podem cadastrar membros.", "error");
       return;
     }
+    if (id === "client-import-dialog" && !canImportClients()) {
+      toast("Seu perfil não possui permissão para importar clientes.", "error");
+      return;
+    }
     const financialDefinition = Object.values(financialDefinitions).find((definition) => definition.dialogId === id);
     const crmDefinition = Object.values(crmDefinitions).find((definition) => definition.dialogId === id);
     if (financialDefinition && !state.selectedClient) {
@@ -420,6 +436,7 @@
     if (financialDefinition) resetFinancialDialog(id);
     if (crmDefinition) resetCrmDialog(id);
     if (id === "client-dialog") resetClientDialog();
+    if (id === "client-import-dialog") resetClientImportDialog();
     if (id === "user-dialog") resetUserDialog();
     if (["opportunity-dialog", "task-dialog", "interaction-dialog"].includes(id)) {
       try {
@@ -455,6 +472,35 @@
       submit.textContent = "Salvar cliente";
       delete submit.dataset.originalLabel;
     }
+  }
+
+  function resetClientImportDialog() {
+    const form = $("#client-import-form");
+    if (!form) return;
+    form.reset();
+    state.clientImport = { filename: "", clients: [], preview: null };
+    $("#client-import-summary").hidden = true;
+    $("#client-import-preview-body").innerHTML = "";
+    $("#client-import-guidance").textContent = "";
+    const previewButton = $("#client-import-preview-button");
+    const confirmButton = $("#client-import-confirm-button");
+    previewButton.disabled = false;
+    previewButton.textContent = "Conferir arquivo";
+    delete previewButton.dataset.originalLabel;
+    confirmButton.hidden = true;
+    confirmButton.disabled = true;
+    confirmButton.textContent = "Importar clientes";
+    delete confirmButton.dataset.originalLabel;
+  }
+
+  function clearClientImportPreview() {
+    state.clientImport = { filename: "", clients: [], preview: null };
+    $("#client-import-summary").hidden = true;
+    $("#client-import-preview-body").innerHTML = "";
+    $("#client-import-guidance").textContent = "";
+    const confirmButton = $("#client-import-confirm-button");
+    confirmButton.hidden = true;
+    confirmButton.disabled = true;
   }
 
   function resetUserDialog() {
@@ -820,6 +866,112 @@
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       toast("Lista de clientes exportada em CSV.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  function formatImportCpf(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (digits.length !== 11) return value || "—";
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  }
+
+  function renderClientImportPreview(preview) {
+    $("#import-total-count").textContent = preview.total_rows || 0;
+    $("#import-valid-count").textContent = preview.valid_rows || 0;
+    $("#import-invalid-count").textContent = preview.invalid_rows || 0;
+    $("#import-duplicate-count").textContent = preview.duplicate_rows || 0;
+    $("#client-import-preview-body").innerHTML = preview.rows.map((row) => {
+      const name = row.data?.full_name || row.display_name || "—";
+      const cpf = row.data?.cpf || row.display_cpf || "—";
+      const result = row.valid
+        ? '<span class="import-result valid">✓ Pronto para importar</span>'
+        : `<span class="import-result invalid">${escapeHtml((row.errors || []).join(" ") || "Registro inválido.")}</span>`;
+      return `<tr class="${row.valid ? "" : "import-row-invalid"}">
+        <td>${escapeHtml(row.line)}</td>
+        <td><strong>${escapeHtml(name)}</strong></td>
+        <td>${escapeHtml(formatImportCpf(cpf))}</td>
+        <td>${result}</td>
+      </tr>`;
+    }).join("");
+
+    const guidance = $("#client-import-guidance");
+    if (preview.valid_rows && preview.invalid_rows) {
+      guidance.textContent = `${preview.valid_rows} cliente(s) pronto(s). As ${preview.invalid_rows} linha(s) com problema não serão importadas.`;
+    } else if (preview.valid_rows) {
+      guidance.textContent = "Todos os clientes estão prontos. Confira a prévia e confirme a importação.";
+    } else {
+      guidance.textContent = "Nenhum cliente pode ser importado. Corrija o CSV e confira novamente.";
+    }
+    $("#client-import-summary").hidden = false;
+    const confirmButton = $("#client-import-confirm-button");
+    confirmButton.hidden = preview.valid_rows < 1;
+    confirmButton.disabled = preview.valid_rows < 1;
+    confirmButton.textContent = preview.valid_rows === 1
+      ? "Importar 1 cliente"
+      : `Importar ${preview.valid_rows} clientes`;
+    delete confirmButton.dataset.originalLabel;
+  }
+
+  async function previewClientImport(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !canImportClients()) return;
+    const file = form.elements.file.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      toast("Selecione um arquivo com extensão .csv.", "error");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast("O CSV deve ter no máximo 2 MB.", "error");
+      return;
+    }
+
+    const button = $("#client-import-preview-button");
+    const body = new FormData();
+    body.append("file", file, file.name);
+    setBusy(button, true, "Conferindo…");
+    clearClientImportPreview();
+    try {
+      const preview = await api("/api/v1/clients/import/preview", { method: "POST", body });
+      state.clientImport = {
+        filename: preview.filename || file.name,
+        clients: preview.rows.filter((row) => row.valid && row.data).map((row) => row.data),
+        preview
+      };
+      renderClientImportPreview(preview);
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function confirmClientImport() {
+    if (!canImportClients() || !state.clientImport.clients.length) return;
+    const button = $("#client-import-confirm-button");
+    const count = state.clientImport.clients.length;
+    setBusy(button, true, "Importando…");
+    try {
+      const result = await api("/api/v1/clients/import", {
+        method: "POST",
+        body: JSON.stringify({
+          source_filename: state.clientImport.filename,
+          clients: state.clientImport.clients
+        })
+      });
+      closeDialog($("#client-import-dialog"));
+      const refreshed = await Promise.allSettled([loadClients(), loadDashboard()]);
+      const message = result.imported === 1
+        ? "1 cliente importado com sucesso."
+        : `${result.imported} clientes importados com sucesso.`;
+      toast(refreshed.some((request) => request.status === "rejected")
+        ? `${message} Clique em Atualizar para recarregar a tela.`
+        : message);
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -1823,6 +1975,9 @@
     $("#client-search").addEventListener("input", renderClients);
     $("#client-status-filter").addEventListener("change", renderClients);
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
+    $("#client-import-form").addEventListener("submit", previewClientImport);
+    $("#client-import-confirm-button").addEventListener("click", confirmClientImport);
+    $("#client-import-file").addEventListener("change", clearClientImportPreview);
     $("#crm-search").addEventListener("input", (event) => {
       state.crmFilters.search = event.currentTarget.value;
       renderCrm();
@@ -1947,6 +2102,7 @@
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
     $("#client-dialog").addEventListener("close", resetClientDialog);
+    $("#client-import-dialog").addEventListener("close", resetClientImportDialog);
     $("#user-dialog").addEventListener("close", resetUserDialog);
     Object.values(financialDefinitions).forEach((definition) => {
       document.getElementById(definition.dialogId)?.addEventListener("close", () => resetFinancialDialog(definition.dialogId));
