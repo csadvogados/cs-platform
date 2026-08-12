@@ -1,48 +1,57 @@
-# CS Platform v5.6.9 — gestão da equipe
+# CS Platform v5.7.0 — configurações e segurança
 
-Este pacote completa a área **Equipe** com controles seguros para administrar o acesso dos usuários da organização.
+Este pacote completa a área **Configurações** e corrige a revogação das sessões no backend.
 
-Ele permite ao administrador:
+Ele permite:
 
-- cadastrar um novo membro com nome, e-mail, senha temporária e perfil de acesso;
-- editar o nome e o perfil de um membro;
-- desativar e reativar acessos;
-- visualizar o estado ativo ou inativo de cada usuário;
-- identificar a própria conta, que fica protegida contra desativação pela tela;
-- informar que o novo membro deverá trocar a senha temporária no primeiro acesso.
+- consultar e atualizar razão social, nome de apresentação, e-mail e telefone da organização;
+- restringir a alteração dos dados institucionais aos perfis autorizados;
+- alterar a senha da conta conectada;
+- exigir confirmação da nova senha no frontend;
+- direcionar usuários com senha temporária para a área de troca de senha;
+- visualizar as sessões ativas com navegador, sistema, IP e datas;
+- encerrar uma sessão específica;
+- encerrar todas as sessões e sair da plataforma;
+- revogar corretamente o token de renovação associado à sessão encerrada;
+- revogar todas as sessões e tokens após a alteração da senha;
+- registrar navegador e IP nos novos acessos.
 
-Os demais perfis podem consultar a equipe quando autorizados pela API, mas não veem os botões de administração.
+Sessões criadas antes desta atualização podem aparecer como **Dispositivo não identificado**. Os dados do navegador e do IP passam a ser gravados nos novos logins.
 
 ## Como aplicar no GitHub
 
-Substitua exatamente estes três arquivos no repositório `csadvogados/cs-platform`:
+Substitua exatamente estes seis arquivos no repositório `csadvogados/cs-platform`:
 
-1. `frontend/index.html`
-2. `frontend/assets/app.js`
-3. `frontend/assets/styles.css`
+1. `backend/app/api/routes/auth.py`
+2. `backend/app/api/routes/access_control.py`
+3. `backend/app/core/config.py`
+4. `frontend/index.html`
+5. `frontend/assets/app.js`
+6. `frontend/assets/styles.css`
 
 Use este nome no commit:
 
-`feat: adicionar gestão da equipe v5.6.9`
+`feat: adicionar configurações e segurança v5.7.0`
 
-O commit deverá gerar o deployment do serviço `cs-platform-web` no Railway. Se a API aparecer como **Skipped / No changes to watched files**, isso é normal.
+O commit deverá gerar deployments dos serviços `cs-platform-api` e `cs-platform-web` no Railway.
 
-Aguarde o `cs-platform-web` ficar verde. Depois, abra o sistema e pressione `Ctrl + F5`.
+Aguarde os dois serviços ficarem verdes. Depois, abra o sistema e pressione `Ctrl + F5`.
 
-Não altere banco, migrations, variáveis, `railway.json`, `Dockerfile`, `docker-entrypoint.sh` ou `nginx.conf`. Esta versão não exige migration.
+Esta versão não exige migration e não altera `railway.json`, `Dockerfile`, `docker-entrypoint.sh`, `nginx.conf` ou as variáveis do Railway.
 
 ## Teste depois do deploy
 
-1. Entre com uma conta de administrador e abra **Equipe**.
-2. Clique em **Novo membro**.
-3. Cadastre um usuário de teste com uma senha temporária de pelo menos 12 caracteres.
-4. Confirme que o usuário aparece na lista como ativo e com a troca de senha pendente.
-5. Clique em **Editar**, altere o nome ou o perfil e salve.
-6. Desative o usuário de teste e confirme que o estado muda para **Inativo**.
-7. Reative o mesmo usuário e confirme que o estado retorna para **Ativo**.
-8. Confirme que a sua própria linha mostra **Conta atual** e não oferece os botões de alteração de acesso.
-9. Entre com um perfil não administrador e confirme que os botões **Novo membro**, **Editar**, **Ativar** e **Desativar** não aparecem.
+1. Entre na plataforma e abra **Configurações**.
+2. Confirme que os dados da organização foram carregados.
+3. Altere o nome de apresentação ou o telefone e clique em **Salvar organização**.
+4. Abra o sistema em outro navegador ou janela anônima e faça um segundo login.
+5. Volte para **Configurações** e confirme que existem duas sessões ativas.
+6. Encerre apenas a segunda sessão e confirme que ela desaparece da lista.
+7. Altere a senha usando a senha atual e uma nova senha de pelo menos 12 caracteres.
+8. Confirme que a plataforma encerra todas as sessões e solicita um novo login.
+9. Entre novamente usando a nova senha.
+10. Opcionalmente, entre com um usuário que não seja administrador e confirme que os dados da organização ficam somente para leitura.
 
 ## Conferência
 
-O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos três arquivos substituídos e deste README.
+O arquivo `SHA256SUMS.txt` contém os códigos SHA-256 dos seis arquivos substituídos e deste README.

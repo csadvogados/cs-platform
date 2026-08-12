@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.6.9" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.7.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -181,10 +181,43 @@
           </section>
 
           <section id="view-settings" class="page-view" aria-labelledby="settings-heading">
-            <div class="section-intro"><div><p class="eyebrow dark">AMBIENTE</p><h1 id="settings-heading">Configurações</h1><p>Informações desta instalação.</p></div></div>
-            <div class="settings-grid">
-              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.9</dd></div></dl></section>
-              <section class="panel"><h3>Sessão atual</h3><dl class="definition-list"><div><dt>Usuário</dt><dd id="settings-user">—</dd></div><div><dt>E-mail</dt><dd id="settings-email">—</dd></div><div><dt>Perfil</dt><dd id="settings-role">—</dd></div></dl></section>
+            <div class="section-intro"><div><p class="eyebrow dark">SEGURANÇA E CONTA</p><h1 id="settings-heading">Configurações</h1><p>Gerencie a organização, a senha e os acessos conectados.</p></div></div>
+            <div id="password-security-warning" class="security-warning" hidden>
+              <strong>Troca de senha obrigatória</strong>
+              <span>Substitua a senha temporária antes de continuar usando a plataforma.</span>
+            </div>
+            <div class="settings-grid security-settings-grid">
+              <section class="panel organization-panel">
+                <div class="panel-header"><div><p class="eyebrow dark">ORGANIZAÇÃO</p><h3>Dados institucionais</h3></div><span class="badge">Protegido</span></div>
+                <form id="organization-form" class="settings-form">
+                  <label><span>Razão social *</span><input name="legal_name" required minlength="2" maxlength="200" /></label>
+                  <label><span>Nome de apresentação</span><input name="trade_name" maxlength="200" /></label>
+                  <label><span>E-mail institucional</span><input name="email" type="email" maxlength="320" /></label>
+                  <label><span>Telefone</span><input name="phone" type="tel" maxlength="30" /></label>
+                  <p id="organization-permission-note" class="form-help wide">Carregando permissões…</p>
+                  <button id="save-organization-button" class="primary-button wide" type="submit">Salvar organização</button>
+                </form>
+              </section>
+
+              <section class="panel account-security-panel">
+                <p class="eyebrow dark">CONTA ATUAL</p><h3>Alterar senha</h3>
+                <dl class="definition-list compact-definition"><div><dt>Usuário</dt><dd id="settings-user">—</dd></div><div><dt>E-mail</dt><dd id="settings-email">—</dd></div><div><dt>Perfil</dt><dd id="settings-role">—</dd></div></dl>
+                <form id="password-form" class="settings-form single-column">
+                  <label><span>Senha atual *</span><input id="current-password" name="current_password" type="password" required maxlength="128" autocomplete="current-password" /></label>
+                  <label><span>Nova senha *</span><input name="new_password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+                  <label><span>Confirmar nova senha *</span><input name="password_confirmation" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+                  <p class="form-help">Use pelo menos 12 caracteres. A nova senha deve ser diferente da atual.</p>
+                  <button class="primary-button" type="submit">Alterar senha</button>
+                </form>
+              </section>
+
+              <section class="panel sessions-panel">
+                <div class="panel-header"><div><p class="eyebrow dark">ACESSOS CONECTADOS</p><h3>Sessões ativas</h3><span id="session-count">0 sessões ativas</span></div><button id="revoke-all-sessions" class="delete-button" type="button" hidden>Encerrar todas</button></div>
+                <p class="form-help">Ao encerrar uma sessão, seu token de renovação deixa de funcionar. O acesso remanescente expira automaticamente.</p>
+                <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
+              </section>
+
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -326,6 +359,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.6.9"></script>
+    <script src="./assets/app.js?v=5.7.0"></script>
   </body>
 </html>

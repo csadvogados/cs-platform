@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 import uuid
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -37,7 +37,7 @@ from app.services.audit import record_audit
 router = APIRouter()
 
 
-def _issue_tokens(db: Session, user: User) -> TokenPair:
+def _issue_tokens(db: Session, user: User, request: Request) -> TokenPair:
     extra = {
         "org": str(user.organization_id),
         "role": user.role,
@@ -69,6 +69,8 @@ def _issue_tokens(db: Session, user: User) -> TokenPair:
             organization_id=user.organization_id,
             user_id=user.id,
             refresh_token_hash=refresh_hash,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent", "")[:500] or None,
             last_activity_at=datetime.now(timezone.utc),
             expires_at=expires_at,
         )
@@ -141,6 +143,7 @@ def _authenticate(
 @router.post("/login", response_model=TokenPair)
 def login_json(
     payload: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     user = _authenticate(
@@ -149,7 +152,7 @@ def login_json(
         payload.password,
     )
 
-    tokens = _issue_tokens(db, user)
+    tokens = _issue_tokens(db, user, request)
 
     record_audit(
         db,
@@ -167,6 +170,7 @@ def login_json(
 
 @router.post("/token", response_model=TokenPair)
 def login_oauth(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
@@ -176,7 +180,7 @@ def login_oauth(
         form.password,
     )
 
-    tokens = _issue_tokens(db, user)
+    tokens = _issue_tokens(db, user, request)
     db.commit()
     return tokens
 
@@ -184,6 +188,7 @@ def login_oauth(
 @router.post("/refresh", response_model=TokenPair)
 def refresh(
     payload: RefreshRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -223,8 +228,15 @@ def refresh(
 
     stored.revoked = True
     stored.revoked_at = now
+    previous_session = db.scalar(
+        select(UserSession).where(
+            UserSession.refresh_token_hash == token_hash_value
+        )
+    )
+    if previous_session and not previous_session.revoked_at:
+        previous_session.revoked_at = now
 
-    tokens = _issue_tokens(db, user)
+    tokens = _issue_tokens(db, user, request)
     db.commit()
 
     return tokens
@@ -322,8 +334,16 @@ def change_password(
         )
         .values(
             revoked=True,
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=now,
         )
+    )
+    db.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
     )
 
     record_audit(

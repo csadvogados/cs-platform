@@ -15,6 +15,8 @@
     editingFinancial: null,
     editingUserId: null,
     users: [],
+    organization: null,
+    sessions: [],
     currentView: "dashboard"
   };
 
@@ -29,7 +31,7 @@
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
     crm: ["DESENVOLVIMENTO DE NEGÓCIOS", "CRM", "Nova oportunidade"],
     users: ["ORGANIZAÇÃO", "Equipe", "Atualizar"],
-    settings: ["AMBIENTE", "Configurações", "Verificar API"]
+    settings: ["SEGURANÇA E CONTA", "Configurações", "Atualizar"]
   };
 
   const stageLabels = {
@@ -139,6 +141,27 @@
       : { dateStyle: "short" }).format(date);
   }
 
+  function sessionDevice(userAgent) {
+    const value = String(userAgent || "");
+    if (!value) return "Dispositivo não identificado";
+    const browser = value.includes("Edg/") ? "Microsoft Edge"
+      : value.includes("Firefox/") ? "Firefox"
+        : value.includes("Chrome/") ? "Google Chrome"
+          : value.includes("Safari/") ? "Safari"
+            : "Navegador";
+    const system = value.includes("Windows") ? "Windows"
+      : value.includes("Android") ? "Android"
+        : /iPhone|iPad/.test(value) ? "iOS"
+          : value.includes("Mac OS") ? "macOS"
+            : value.includes("Linux") ? "Linux"
+              : "dispositivo desconhecido";
+    return `${browser} em ${system}`;
+  }
+
+  function sessionIsActive(session) {
+    return !session.revoked_at && new Date(session.expires_at).getTime() > Date.now();
+  }
+
   function normalizeCpf(value) {
     return String(value || "").replace(/\D/g, "");
   }
@@ -155,6 +178,11 @@
 
   function canManageUsers() {
     return String(state.user?.role || "").toLowerCase() === "admin";
+  }
+
+  function canUpdateOrganization() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("organization.update");
   }
 
   function calculateWeightedPipeline(opportunities) {
@@ -281,7 +309,8 @@
     $("#welcome-name").textContent = firstName;
     $("#settings-user").textContent = name;
     $("#settings-email").textContent = state.user.email || "—";
-    $("#settings-role").textContent = state.user.role || "—";
+    $("#settings-role").textContent = userRoleLabels[state.user.role] || state.user.role || "—";
+    $("#password-security-warning").hidden = !state.user.must_change_password;
   }
 
   function setView(view) {
@@ -434,7 +463,13 @@
       state.user = await api("/api/v1/auth/me");
       showApp();
       await refreshAll();
-      toast("Acesso realizado com sucesso.");
+      if (state.user.must_change_password) {
+        setView("settings");
+        window.setTimeout(() => $("#current-password").focus(), 50);
+        toast("Antes de continuar, substitua a senha temporária.");
+      } else {
+        toast("Acesso realizado com sucesso.");
+      }
     } catch (error) {
       message.textContent = error.message === "Incorrect email or password" ? "E-mail ou senha incorretos." : error.message;
     } finally {
@@ -461,6 +496,7 @@
       loadClients(),
       loadCrm(),
       loadUsers(),
+      loadSettings(),
       checkHealth()
     ];
     if (state.currentView === "clientDetail" && state.selectedClient) {
@@ -553,6 +589,16 @@
     const response = await api("/api/v1/users?page=1&page_size=50");
     state.users = Array.isArray(response) ? response : response.items || [];
     renderUsers();
+  }
+
+  async function loadSettings() {
+    const [organization, sessions] = await Promise.all([
+      api("/api/v1/organizations/current"),
+      api("/api/v1/sessions")
+    ]);
+    state.organization = organization;
+    state.sessions = Array.isArray(sessions) ? sessions : [];
+    renderSettings();
   }
 
   async function checkHealth() {
@@ -1062,6 +1108,121 @@
     }).join("") : '<div class="empty-state">Nenhum usuário encontrado.</div>';
   }
 
+  function renderSettings() {
+    const organization = state.organization || state.user?.organization || {};
+    const organizationForm = $("#organization-form");
+    organizationForm.elements.legal_name.value = organization.legal_name || "";
+    organizationForm.elements.trade_name.value = organization.trade_name || "";
+    organizationForm.elements.email.value = organization.email || "";
+    organizationForm.elements.phone.value = organization.phone || "";
+
+    const editable = canUpdateOrganization();
+    Array.from(organizationForm.elements).forEach((element) => {
+      element.disabled = !editable;
+    });
+    $("#save-organization-button").hidden = !editable;
+    $("#organization-permission-note").textContent = editable
+      ? "As alterações são aplicadas à organização atual."
+      : "Seu perfil pode consultar, mas não alterar estes dados.";
+
+    const activeSessions = state.sessions.filter(sessionIsActive);
+    $("#session-count").textContent = `${activeSessions.length} ${activeSessions.length === 1 ? "sessão ativa" : "sessões ativas"}`;
+    $("#revoke-all-sessions").hidden = !activeSessions.length;
+    $("#session-list").innerHTML = activeSessions.length ? activeSessions.map((session) => `<article class="session-row">
+      <span class="session-icon" aria-hidden="true">✓</span>
+      <div><h4>${escapeHtml(sessionDevice(session.user_agent))}</h4><p>Iniciada em ${escapeHtml(formatDate(session.created_at, true))}</p><small>${escapeHtml(session.ip_address ? `IP ${session.ip_address}` : "IP não informado")} · expira em ${escapeHtml(formatDate(session.expires_at, true))}</small></div>
+      <button class="delete-button" type="button" data-revoke-session="${escapeHtml(session.id)}">Encerrar</button>
+    </article>`).join("") : '<div class="empty-state">Nenhuma sessão ativa encontrada.</div>';
+  }
+
+  async function submitOrganization(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !canUpdateOrganization() || !state.organization?.id) return;
+    const button = $("#save-organization-button");
+    const values = Object.fromEntries(new FormData(form));
+    const payload = {
+      legal_name: String(values.legal_name || "").trim(),
+      trade_name: String(values.trade_name || "").trim() || null,
+      email: String(values.email || "").trim() || null,
+      phone: String(values.phone || "").trim() || null
+    };
+    setBusy(button, true, "Salvando…");
+    try {
+      state.organization = await api(`/api/v1/organizations/${state.organization.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload)
+      });
+      state.user.organization = {
+        id: state.organization.id,
+        legal_name: state.organization.legal_name,
+        trade_name: state.organization.trade_name,
+        status: state.organization.status
+      };
+      renderSettings();
+      toast("Dados da organização atualizados.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function submitPasswordChange(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const currentPassword = form.elements.current_password.value;
+    const newPassword = form.elements.new_password.value;
+    const confirmation = form.elements.password_confirmation.value;
+    if (newPassword !== confirmation) {
+      toast("A confirmação da nova senha não confere.", "error");
+      form.elements.password_confirmation.focus();
+      return;
+    }
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Alterando…");
+    try {
+      await api("/api/v1/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+      });
+      form.reset();
+      clearSession();
+      showLogin("Senha alterada. Todas as sessões foram encerradas; entre novamente com a nova senha.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function revokeSession(sessionId, button) {
+    if (!window.confirm("Deseja encerrar esta sessão? O token de renovação será revogado.")) return;
+    setBusy(button, true, "Encerrando…");
+    try {
+      await api(`/api/v1/sessions/${sessionId}`, { method: "DELETE" });
+      await loadSettings();
+      toast("Sessão encerrada com segurança.");
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
+  }
+
+  async function revokeAllSessions(button) {
+    if (!window.confirm("Deseja encerrar todas as sessões, inclusive esta? Será necessário entrar novamente.")) return;
+    setBusy(button, true, "Encerrando…");
+    try {
+      await api("/api/v1/sessions", { method: "DELETE" });
+      clearSession();
+      showLogin("Todas as sessões foram encerradas com segurança.");
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
+  }
+
   function openUserEditor(userId) {
     if (!canManageUsers()) {
       toast("Somente administradores podem alterar a equipe.", "error");
@@ -1434,7 +1595,10 @@
       clientDetail: () => openDialog("income-dialog"),
       crm: () => openDialog("opportunity-dialog"),
       users: () => refreshAll(true),
-      settings: () => checkHealth().then(() => toast("Verificação concluída."))
+      settings: async () => {
+        await Promise.all([checkHealth(), loadSettings()]);
+        toast("Configurações atualizadas.");
+      }
     };
     actions[state.currentView]?.();
   }
@@ -1473,6 +1637,8 @@
     });
     $("#client-form").addEventListener("submit", submitClient);
     $("#user-form").addEventListener("submit", submitUser);
+    $("#organization-form").addEventListener("submit", submitOrganization);
+    $("#password-form").addEventListener("submit", submitPasswordChange);
     $("#contact-form").addEventListener("submit", submitContact);
     $("#opportunity-form").addEventListener("submit", submitOpportunity);
     $("#task-form").addEventListener("submit", submitTask);
@@ -1491,6 +1657,11 @@
       if (editButton) openUserEditor(editButton.dataset.editUser);
       else if (toggleButton) toggleUserStatus(toggleButton.dataset.toggleUser, toggleButton.dataset.userAction, toggleButton);
     });
+    $("#session-list").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-revoke-session]");
+      if (button) revokeSession(button.dataset.revokeSession, button);
+    });
+    $("#revoke-all-sessions").addEventListener("click", (event) => revokeAllSessions(event.currentTarget));
     $("#view-crm").addEventListener("click", (event) => {
       const editContact = event.target.closest("[data-edit-contact]");
       const editOpportunity = event.target.closest("[data-edit-opportunity]");
@@ -1519,7 +1690,10 @@
       input.type = visible ? "password" : "text";
       $("#toggle-password").textContent = visible ? "Mostrar" : "Ocultar";
     });
-    $$("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+    $$("[data-view]").forEach((button) => button.addEventListener("click", () => {
+      setView(button.dataset.view);
+      if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
+    }));
     $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
@@ -1554,6 +1728,10 @@
       state.user = await api("/api/v1/auth/me");
       showApp();
       await refreshAll();
+      if (state.user.must_change_password) {
+        setView("settings");
+        window.setTimeout(() => $("#current-password").focus(), 50);
+      }
     } catch {
       showLogin("Entre novamente para continuar.");
     }

@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     log_level: str = DEFAULT_LOG_LEVEL
     log_json: bool = False
     healthcheck_database: bool = True
-    organization_api_enabled: bool = False
+    organization_api_enabled: bool = True
 
     rate_limit_enabled: bool = True
     rate_limit_requests: int = 120
