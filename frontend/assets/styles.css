@@ -213,6 +213,11 @@ tr:last-child td { border-bottom: 0; }
 .crm-summary article:last-child { border-right: 0; }
 .crm-summary span { color: #67726c; font-size: 11px; }
 .crm-summary strong { font-family: Georgia, serif; font-size: 29px; font-weight: 500; }
+.crm-filter-bar { display: grid; grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(140px, .75fr)) auto; align-items: end; gap: 12px; margin-bottom: 18px; padding: 16px; border: 1px solid var(--line); background: #f0ede5; }
+.crm-filter-bar label { min-width: 0; display: grid; gap: 6px; color: #66726b; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.crm-filter-bar input, .crm-filter-bar select { width: 100%; min-height: 41px; padding: 9px 11px; background: var(--surface); font-size: 12px; }
+.crm-filter-bar .secondary-button { min-height: 41px; white-space: nowrap; }
+.crm-filter-summary { grid-column: 1 / -1; color: #6f7973; font-size: 11px; }
 .crm-tabs { display: flex; gap: 25px; margin-bottom: 18px; border-bottom: 1px solid #cbc7bd; }
 .crm-tab { border: 0; border-bottom: 3px solid transparent; padding: 12px 2px; color: #6d7771; background: transparent; font-weight: 700; }
 .crm-tab.active { color: var(--forest); border-color: var(--forest-2); }
@@ -362,6 +367,7 @@ tr:last-child td { border-bottom: 0; }
   .financial-summary article:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .diagnosis-grid { grid-template-columns: 160px 1fr; }
   .diagnosis-conclusion { grid-column: 1 / -1; }
+  .crm-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 820px) {
@@ -420,6 +426,7 @@ tr:last-child td { border-bottom: 0; }
   .form-grid .wide { grid-column: auto; }
   .crm-tabs { gap: 12px; overflow-x: auto; }
   .crm-tab { white-space: nowrap; font-size: 12px; }
+  .crm-filter-bar { grid-template-columns: 1fr; }
   .crm-task-row { grid-template-columns: auto minmax(0, 1fr); }
   .crm-task-row .list-meta { grid-column: 2; text-align: left; }
   .crm-task-row .crm-item-actions { grid-column: 1 / -1; justify-content: flex-start; }

@@ -7,6 +7,7 @@
     dashboard: null,
     clients: [],
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
+    crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
     editingClientId: null,
@@ -132,6 +133,12 @@
 
   function compactObject(object) {
     return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== "" && value !== null && value !== undefined));
+  }
+
+  function matchesCrmSearch(...values) {
+    const term = state.crmFilters.search.trim().toLocaleLowerCase("pt-BR");
+    if (!term) return true;
+    return values.some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(term));
   }
 
   function calculateWeightedPipeline(opportunities) {
@@ -908,14 +915,45 @@
 
   function renderCrm() {
     const summary = state.crm.summary || {};
+    const filteredOpportunities = state.crm.opportunities.filter((item) => matchesCrmSearch(
+      item.title,
+      clientName(item.client_id),
+      stageLabels[item.stage],
+      item.estimated_value,
+      item.notes
+    ));
+    const filteredTasks = state.crm.tasks.filter((item) => {
+      const status = String(item.status || "pending").toLowerCase();
+      const priority = String(item.priority || "normal").toLowerCase();
+      return matchesCrmSearch(item.title, item.description, clientName(item.client_id), taskStatusLabels[status], priorityLabels[priority])
+        && (state.crmFilters.taskStatus === "all" || status === state.crmFilters.taskStatus)
+        && (state.crmFilters.priority === "all" || priority === state.crmFilters.priority);
+    });
+    const filteredContacts = state.crm.contacts.filter((item) => matchesCrmSearch(
+      item.name,
+      item.position,
+      item.email,
+      item.phone,
+      item.notes,
+      clientName(item.client_id)
+    ));
+    const filteredInteractions = state.crm.interactions.filter((item) => {
+      const interactionType = String(item.interaction_type || "other").toLowerCase();
+      return matchesCrmSearch(item.subject, item.description, clientName(item.client_id), interactionTypeLabels[interactionType])
+        && (state.crmFilters.interactionType === "all" || interactionType === state.crmFilters.interactionType);
+    });
+    const totalRecords = state.crm.opportunities.length + state.crm.tasks.length + state.crm.contacts.length + state.crm.interactions.length;
+    const shownRecords = filteredOpportunities.length + filteredTasks.length + filteredContacts.length + filteredInteractions.length;
+
     $("#crm-contacts-count").textContent = summary.contacts ?? state.crm.contacts.length;
     $("#crm-opportunities-count").textContent = summary.opportunities ?? state.crm.opportunities.length;
     $("#crm-open-value").textContent = formatCurrency(summary.open_pipeline_value);
     $("#crm-pending-count").textContent = summary.pending_tasks ?? 0;
+    $("#crm-filter-summary").textContent = `Mostrando ${shownRecords} de ${totalRecords} ${totalRecords === 1 ? "registro" : "registros"}`;
 
     const boardStages = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
     $("#opportunity-board").innerHTML = boardStages.map((stage) => {
-      const opportunities = state.crm.opportunities.filter((item) => item.stage === stage);
+      const opportunities = filteredOpportunities.filter((item) => item.stage === stage);
       return `<section class="stage-column">
         <div class="stage-header"><strong>${stageLabels[stage]}</strong><span>${opportunities.length}</span></div>
         ${opportunities.length ? opportunities.map((item) => `<article class="opportunity-card">
@@ -934,9 +972,9 @@
       </section>`;
     }).join("");
 
-    $("#task-list").innerHTML = state.crm.tasks.length ? state.crm.tasks.map((task) => taskRow(task, true)).join("") : '<div class="empty-state">Nenhuma tarefa cadastrada.</div>';
-    $("#contact-count").textContent = `${state.crm.contacts.length} ${state.crm.contacts.length === 1 ? "contato" : "contatos"}`;
-    $("#contact-list").innerHTML = state.crm.contacts.length ? state.crm.contacts.map((contact) => `<article class="contact-card">
+    $("#task-list").innerHTML = filteredTasks.length ? filteredTasks.map((task) => taskRow(task, true)).join("") : '<div class="empty-state">Nenhuma tarefa encontrada com os filtros atuais.</div>';
+    $("#contact-count").textContent = `${filteredContacts.length} de ${state.crm.contacts.length} ${state.crm.contacts.length === 1 ? "contato" : "contatos"}`;
+    $("#contact-list").innerHTML = filteredContacts.length ? filteredContacts.map((contact) => `<article class="contact-card">
       <span class="avatar">${escapeHtml(initials(contact.name))}</span>
       <h4>${escapeHtml(contact.name)}</h4>
       <p>${escapeHtml(contact.position || "Contato comercial")}</p>
@@ -946,10 +984,10 @@
         <button class="edit-button" type="button" data-edit-contact="${escapeHtml(contact.id)}">Editar</button>
         <button class="delete-button" type="button" data-delete-contact="${escapeHtml(contact.id)}">Apagar</button>
       </div>
-    </article>`).join("") : '<div class="empty-state">Nenhum contato cadastrado.</div>';
+    </article>`).join("") : '<div class="empty-state">Nenhum contato encontrado com os filtros atuais.</div>';
 
-    $("#interaction-count").textContent = `${state.crm.interactions.length} ${state.crm.interactions.length === 1 ? "atendimento" : "atendimentos"}`;
-    $("#interaction-list").innerHTML = state.crm.interactions.length ? state.crm.interactions.map((interaction) => {
+    $("#interaction-count").textContent = `${filteredInteractions.length} de ${state.crm.interactions.length} ${state.crm.interactions.length === 1 ? "atendimento" : "atendimentos"}`;
+    $("#interaction-list").innerHTML = filteredInteractions.length ? filteredInteractions.map((interaction) => {
       const interactionType = String(interaction.interaction_type || "other").toLowerCase();
       return `<article class="interaction-item">
         <span class="interaction-marker" aria-hidden="true"></span>
@@ -961,7 +999,7 @@
         </div>
         <button class="delete-button" type="button" data-delete-interaction="${escapeHtml(interaction.id)}">Apagar</button>
       </article>`;
-    }).join("") : '<div class="empty-state">Nenhum atendimento registrado.</div>';
+    }).join("") : '<div class="empty-state">Nenhum atendimento encontrado com os filtros atuais.</div>';
   }
 
   function renderUsers() {
@@ -1284,6 +1322,30 @@
     $("#menu-button").addEventListener("click", openSidebar);
     $("#sidebar-scrim").addEventListener("click", closeSidebar);
     $("#client-search").addEventListener("input", renderClients);
+    $("#crm-search").addEventListener("input", (event) => {
+      state.crmFilters.search = event.currentTarget.value;
+      renderCrm();
+    });
+    $("#crm-task-status-filter").addEventListener("change", (event) => {
+      state.crmFilters.taskStatus = event.currentTarget.value;
+      renderCrm();
+    });
+    $("#crm-priority-filter").addEventListener("change", (event) => {
+      state.crmFilters.priority = event.currentTarget.value;
+      renderCrm();
+    });
+    $("#crm-interaction-type-filter").addEventListener("change", (event) => {
+      state.crmFilters.interactionType = event.currentTarget.value;
+      renderCrm();
+    });
+    $("#clear-crm-filters").addEventListener("click", () => {
+      state.crmFilters = { search: "", taskStatus: "all", priority: "all", interactionType: "all" };
+      $("#crm-search").value = "";
+      $("#crm-task-status-filter").value = "all";
+      $("#crm-priority-filter").value = "all";
+      $("#crm-interaction-type-filter").value = "all";
+      renderCrm();
+    });
     $("#client-form").addEventListener("submit", submitClient);
     $("#contact-form").addEventListener("submit", submitContact);
     $("#opportunity-form").addEventListener("submit", submitOpportunity);

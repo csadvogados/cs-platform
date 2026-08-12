@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.6.7" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.6.8" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -154,6 +154,14 @@
               <article><span>Pipeline aberto</span><strong id="crm-open-value">—</strong></article>
               <article><span>Tarefas pendentes</span><strong id="crm-pending-count">—</strong></article>
             </div>
+            <div class="crm-filter-bar" aria-label="Busca e filtros do CRM">
+              <label class="crm-search-field"><span>Buscar no CRM</span><input id="crm-search" type="search" placeholder="Cliente, assunto, contato ou oportunidade" autocomplete="off" /></label>
+              <label><span>Status da tarefa</span><select id="crm-task-status-filter"><option value="all">Todos</option><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="completed">Concluída</option><option value="cancelled">Cancelada</option></select></label>
+              <label><span>Prioridade</span><select id="crm-priority-filter"><option value="all">Todas</option><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
+              <label><span>Tipo de atendimento</span><select id="crm-interaction-type-filter"><option value="all">Todos</option><option value="call">Ligação</option><option value="email">E-mail</option><option value="meeting">Reunião</option><option value="message">Mensagem</option><option value="note">Observação</option><option value="other">Outro</option></select></label>
+              <button id="clear-crm-filters" class="secondary-button" type="button">Limpar filtros</button>
+              <span id="crm-filter-summary" class="crm-filter-summary">Mostrando 0 de 0 registros</span>
+            </div>
             <div class="crm-tabs" role="tablist" aria-label="Áreas do CRM">
               <button class="crm-tab active" data-crm-tab="opportunities" role="tab">Oportunidades</button>
               <button class="crm-tab" data-crm-tab="tasks" role="tab">Tarefas</button>
@@ -174,7 +182,7 @@
           <section id="view-settings" class="page-view" aria-labelledby="settings-heading">
             <div class="section-intro"><div><p class="eyebrow dark">AMBIENTE</p><h1 id="settings-heading">Configurações</h1><p>Informações desta instalação.</p></div></div>
             <div class="settings-grid">
-              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.7</dd></div></dl></section>
+              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.8</dd></div></dl></section>
               <section class="panel"><h3>Sessão atual</h3><dl class="definition-list"><div><dt>Usuário</dt><dd id="settings-user">—</dd></div><div><dt>E-mail</dt><dd id="settings-email">—</dd></div><div><dt>Perfil</dt><dd id="settings-role">—</dd></div></dl></section>
             </div>
           </section>
@@ -303,6 +311,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.6.7"></script>
+    <script src="./assets/app.js?v=5.6.8"></script>
   </body>
 </html>
