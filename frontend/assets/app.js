@@ -489,6 +489,7 @@
     $("#client-import-summary").hidden = true;
     $("#client-import-preview-body").innerHTML = "";
     $("#client-import-guidance").textContent = "";
+    $("#client-import-errors-button").hidden = true;
     $("#client-import-authorization-label").hidden = true;
     $("#client-import-authorization").checked = false;
     const previewButton = $("#client-import-preview-button");
@@ -511,6 +512,7 @@
     $("#client-import-summary").hidden = true;
     $("#client-import-preview-body").innerHTML = "";
     $("#client-import-guidance").textContent = "";
+    $("#client-import-errors-button").hidden = true;
     $("#client-import-authorization-label").hidden = true;
     $("#client-import-authorization").checked = false;
     const confirmButton = $("#client-import-confirm-button");
@@ -943,6 +945,78 @@
     }
   }
 
+  function saveBlob(blob, filename) {
+    const link = document.createElement("a");
+    const objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
+    link.download = filename;
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
+
+  async function downloadClientImportTemplate() {
+    if (!canImportClients()) {
+      toast("Seu perfil não possui permissão para importar clientes.", "error");
+      return;
+    }
+    const button = $("#client-import-template-button");
+    setBusy(button, true, "Baixando…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const response = await fetch(`${API_BASE}/api/v1/clients/import/template.csv`, { headers });
+      if (response.status === 401) {
+        clearSession();
+        showLogin("Sua sessão expirou. Entre novamente.");
+        throw new Error("Sessão expirada.");
+      }
+      if (!response.ok) throw new Error(await readError(response));
+      saveBlob(await response.blob(), "modelo_importacao_clientes.csv");
+      toast("Modelo CSV baixado. Preencha uma linha para cada cliente.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  function importReportCell(value) {
+    let text = String(value ?? "");
+    if (/^[=+\-@\t\r]/.test(text.trimStart())) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  function downloadClientImportErrors() {
+    const invalidRows = (state.clientImport.preview?.rows || []).filter((row) => !row.valid);
+    if (!invalidRows.length) {
+      toast("A conferência não encontrou linhas com problema.");
+      return;
+    }
+    const rows = [
+      ["Linha", "Nome", "CPF", "Situação", "Erros"],
+      ...invalidRows.map((row) => [
+        row.line,
+        row.display_name || row.data?.full_name || "",
+        row.display_cpf || row.data?.cpf || "",
+        row.duplicate ? "Duplicado" : "Inválido",
+        (row.errors || []).join(" | ") || "Registro inválido"
+      ])
+    ];
+    const csv = rows.map((row) => row.map(importReportCell).join(";")).join("\r\n");
+    const now = new Date();
+    const stamp = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0")
+    ].join("-");
+    saveBlob(new Blob([`\ufeff${csv}\r\n`], { type: "text/csv;charset=utf-8" }), `erros_importacao_clientes_${stamp}.csv`);
+    toast(`${invalidRows.length} linha(s) com problema exportada(s).`);
+  }
+
   function formatImportCpf(value) {
     const digits = String(value || "").replace(/\D/g, "");
     if (digits.length !== 11) return value || "—";
@@ -977,6 +1051,7 @@
       guidance.textContent = "Nenhum cliente pode ser importado. Corrija o CSV e confira novamente.";
     }
     $("#client-import-summary").hidden = false;
+    $("#client-import-errors-button").hidden = preview.invalid_rows < 1;
     const authorizationLabel = $("#client-import-authorization-label");
     const authorization = $("#client-import-authorization");
     authorizationLabel.hidden = preview.valid_rows < 1;
@@ -2110,6 +2185,8 @@
     });
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
+    $("#client-import-template-button").addEventListener("click", downloadClientImportTemplate);
+    $("#client-import-errors-button").addEventListener("click", downloadClientImportErrors);
     $("#client-import-preview-button").addEventListener("click", previewClientImport);
     $("#client-import-confirm-button").addEventListener("click", confirmClientImport);
     $("#client-import-final-confirm-button").addEventListener("click", executeClientImport);

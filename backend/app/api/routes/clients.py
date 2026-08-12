@@ -491,6 +491,46 @@ def export_clients_csv(
     )
 
 
+@router.get("/import/template.csv")
+def download_clients_import_template(
+    _identity: IdentityContext = Depends(
+        require_permissions(
+            PermissionCode.CLIENT_CREATE.value,
+            PermissionCode.CLIENT_EXPORT.value,
+        )
+    ),
+):
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(
+        [
+            "Nome",
+            "CPF",
+            "RG",
+            "Nascimento",
+            "Profissão",
+            "E-mail",
+            "Telefone",
+            "Cidade",
+            "Estado",
+            "Status",
+            "Pessoa natural",
+            "Boa-fé declarada",
+            "Capacidade de pagamento",
+            "Observações",
+        ]
+    )
+    content = ("\ufeff" + stream.getvalue()).encode("utf-8")
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="modelo_importacao_clientes.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post("/import/preview", response_model=ClientImportPreview)
 async def preview_clients_import(
     file: UploadFile = File(...),

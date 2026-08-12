@@ -1,25 +1,24 @@
-# CS Platform v5.7.5 — Paginação e busca de clientes
+# CS Platform v5.7.6 — Assistente de importação
 
-Este pacote contém uma atualização verificada para a tela **Clientes**.
+Esta atualização deixa a importação de clientes mais simples e segura.
 
-## O que muda
+## O que foi adicionado
 
-- A pesquisa passa a consultar toda a base de clientes, e não somente os primeiros 100 registros.
-- A lista mostra o total correto de resultados.
-- Foram adicionados os botões **Anterior** e **Próxima**.
-- É possível escolher 10, 25, 50 ou 100 clientes por página.
-- Ao trocar a pesquisa ou o status, a lista volta automaticamente para a primeira página.
-- Os seletores de cliente do CRM continuam sendo carregados normalmente.
+- Botão **Baixar modelo CSV** dentro da janela de importação.
+- Modelo compatível com Excel e com todas as colunas aceitas pela plataforma.
+- Botão **Baixar relatório de erros** quando a conferência encontrar linhas inválidas ou duplicadas.
+- Relatório com linha, nome, CPF, situação e descrição do problema.
+- Proteção do relatório contra fórmulas perigosas em arquivos CSV.
+- A conferência e os downloads não gravam clientes na base.
 
 ## Arquivos que devem ser substituídos
 
-Substitua exatamente estes cinco arquivos no GitHub:
+Substitua exatamente estes quatro arquivos no GitHub:
 
 1. `backend/app/api/routes/clients.py`
-2. `backend/app/schemas/client.py`
-3. `frontend/index.html`
-4. `frontend/assets/app.js`
-5. `frontend/assets/styles.css`
+2. `frontend/index.html`
+3. `frontend/assets/app.js`
+4. `frontend/assets/styles.css`
 
 Mantenha cada arquivo na pasta indicada acima.
 
@@ -27,7 +26,7 @@ Mantenha cada arquivo na pasta indicada acima.
 
 Use este nome:
 
-`feat: adicionar busca e paginação de clientes v5.7.5`
+`feat: adicionar modelo e relatório de importação v5.7.6`
 
 ## Railway
 
@@ -41,16 +40,15 @@ Esta versão:
 
 ## Teste simples depois do deploy
 
-1. Abra o sistema e entre normalmente.
-2. Clique em **Clientes**.
-3. Confira se aparece o total de clientes e `Página 1 de ...`.
-4. Em **Por página**, selecione `10`.
-5. Se houver mais de 10 clientes, clique em **Próxima** e depois em **Anterior**.
-6. Pesquise um cliente pelo nome e confira se o total muda.
-7. Limpe a pesquisa e teste o filtro **Status**.
-8. Abra **Ver detalhes** de um cliente para confirmar o acesso normal.
+1. Entre no sistema e clique em **Clientes**.
+2. Clique em **Importar CSV**.
+3. Clique em **Baixar modelo CSV** e confirme que o arquivo abre com os títulos das colunas.
+4. Escolha um CSV e clique em **Conferir arquivo**.
+5. Se existirem linhas com problema, clique em **Baixar relatório de erros**.
+6. Abra o relatório e confira as colunas **Linha**, **Nome**, **CPF**, **Situação** e **Erros**.
+7. Não marque a autorização durante este primeiro teste. Feche a janela.
 
-Se a base tiver menos de 11 clientes, o botão **Próxima** ficará desativado. Isso é o comportamento correto.
+Se o CSV estiver totalmente correto, o botão de relatório de erros ficará oculto. Isso é o comportamento esperado.
 
 ## Verificação do pacote
 
