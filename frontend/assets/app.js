@@ -6,6 +6,7 @@
     user: null,
     dashboard: null,
     clients: [],
+    clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
@@ -664,16 +665,52 @@
     renderDashboard();
   }
 
-  async function loadClients() {
-    const response = await api("/api/v1/clients?limit=100");
+  async function loadClientOptions() {
+    const response = await api("/api/v1/clients?limit=1000");
     state.clients = Array.isArray(response) ? response : (response.items || []);
-    renderClients();
     fillClientSelects();
   }
 
+  function clientPageParams(page = state.clientPage.page) {
+    const params = new URLSearchParams({
+      page: String(Math.max(1, Number(page) || 1)),
+      page_size: String(state.clientPage.pageSize)
+    });
+    const query = $("#client-search").value.trim();
+    const status = $("#client-status-filter").value;
+    if (query) params.set("q", query);
+    if (status !== "all") params.set("status", status);
+    return params;
+  }
+
+  async function loadClientPage(page = state.clientPage.page) {
+    const requestId = state.clientPage.requestId + 1;
+    state.clientPage.requestId = requestId;
+    $("#clients-table").innerHTML = '<tr><td colspan="6" class="empty-cell">Carregando clientes…</td></tr>';
+    const response = await api(`/api/v1/clients/page?${clientPageParams(page).toString()}`);
+    if (requestId !== state.clientPage.requestId) return;
+    state.clientPage = {
+      ...state.clientPage,
+      items: Array.isArray(response.items) ? response.items : [],
+      total: Number(response.total || 0),
+      page: Number(response.page || 1),
+      pageSize: Number(response.page_size || state.clientPage.pageSize),
+      pages: Number(response.pages || 0),
+      requestId
+    };
+    renderClients();
+  }
+
+  async function loadClients(page = 1) {
+    await Promise.all([loadClientOptions(), loadClientPage(page)]);
+  }
+
   async function loadClientDetail(clientId) {
-    const client = state.clients.find((item) => String(item.id) === String(clientId));
-    if (!client) throw new Error("Cliente não encontrado na base carregada.");
+    let client = state.clients.find((item) => String(item.id) === String(clientId));
+    if (!client) {
+      client = state.clientPage.items.find((item) => String(item.id) === String(clientId));
+    }
+    if (!client) client = await api(`/api/v1/clients/${clientId}`);
     state.selectedClient = client;
 
     const paths = [
@@ -823,15 +860,19 @@
   }
 
   function renderClients() {
-    const term = $("#client-search").value.trim().toLocaleLowerCase("pt-BR");
-    const status = $("#client-status-filter").value;
-    const clients = state.clients.filter((client) => {
-      const matchesTerm = [client.full_name, client.cpf, client.city, client.email]
-        .some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(term));
-      const matchesStatus = status === "all" || String(client.status || "") === status;
-      return matchesTerm && matchesStatus;
-    });
-    $("#client-count").textContent = `${clients.length} ${clients.length === 1 ? "cliente" : "clientes"}`;
+    const { items: clients, total, page, pageSize, pages } = state.clientPage;
+    const first = total ? ((page - 1) * pageSize) + 1 : 0;
+    const last = total ? Math.min(total, first + clients.length - 1) : 0;
+    $("#client-count").textContent = total === 1
+      ? "1 cliente encontrado"
+      : `${total} clientes encontrados`;
+    $("#client-page-range").textContent = total
+      ? `Mostrando ${first}–${last} de ${total}`
+      : "Nenhum cliente para mostrar";
+    $("#client-page-label").textContent = `Página ${pages ? page : 0} de ${pages}`;
+    $("#client-prev-page").disabled = page <= 1 || pages === 0;
+    $("#client-next-page").disabled = pages === 0 || page >= pages;
+    $("#client-page-size").value = String(pageSize);
     $("#clients-table").innerHTML = clients.length ? clients.map((client) => `
       <tr class="client-row" data-client-id="${escapeHtml(client.id)}">
         <td><strong>${escapeHtml(client.full_name)}</strong><br><small>${escapeHtml(client.cpf || "CPF não informado")}</small></td>
@@ -841,6 +882,14 @@
         <td>${formatDate(client.created_at)}</td>
         <td><button class="text-link" type="button" data-client-detail="${escapeHtml(client.id)}">Ver detalhes</button></td>
       </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum cliente encontrado.</td></tr>';
+  }
+
+  let clientSearchTimer = null;
+  function queueClientSearch() {
+    window.clearTimeout(clientSearchTimer);
+    clientSearchTimer = window.setTimeout(() => {
+      loadClientPage(1).catch((error) => toast(error.message, "error"));
+    }, 350);
   }
 
   async function downloadClientsCsv() {
@@ -2045,8 +2094,20 @@
     $("#top-action-button").addEventListener("click", handleTopAction);
     $("#menu-button").addEventListener("click", openSidebar);
     $("#sidebar-scrim").addEventListener("click", closeSidebar);
-    $("#client-search").addEventListener("input", renderClients);
-    $("#client-status-filter").addEventListener("change", renderClients);
+    $("#client-search").addEventListener("input", queueClientSearch);
+    $("#client-status-filter").addEventListener("change", () => {
+      loadClientPage(1).catch((error) => toast(error.message, "error"));
+    });
+    $("#client-page-size").addEventListener("change", (event) => {
+      state.clientPage.pageSize = Number(event.currentTarget.value) || 25;
+      loadClientPage(1).catch((error) => toast(error.message, "error"));
+    });
+    $("#client-prev-page").addEventListener("click", () => {
+      loadClientPage(state.clientPage.page - 1).catch((error) => toast(error.message, "error"));
+    });
+    $("#client-next-page").addEventListener("click", () => {
+      loadClientPage(state.clientPage.page + 1).catch((error) => toast(error.message, "error"));
+    });
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
     $("#client-import-preview-button").addEventListener("click", previewClientImport);

@@ -55,6 +55,14 @@ class ClientRead(ClientBase):
     organization_id: uuid.UUID
 
 
+class ClientPage(BaseModel):
+    items: list[ClientRead]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
+    pages: int = Field(ge=0)
+
+
 class ClientImportPreviewRow(BaseModel):
     line: int
     valid: bool

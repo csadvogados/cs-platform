@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import ValidationError
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from app.schemas.client import (
     ClientImportPreviewRow,
     ClientImportRequest,
     ClientImportResult,
+    ClientPage,
     ClientRead,
     ClientUpdate,
 )
@@ -361,7 +362,7 @@ def create_client(
 def list_clients(
     q: str | None = Query(default=None, max_length=200),
     client_status: str | None = Query(default=None, alias="status", max_length=40),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
@@ -373,6 +374,37 @@ def list_clients(
         .offset(offset)
     )
     return list(db.scalars(stmt))
+
+
+@router.get("/page", response_model=ClientPage)
+def paginate_clients(
+    q: str | None = Query(default=None, max_length=200),
+    client_status: str | None = Query(default=None, alias="status", max_length=40),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=10, le=100),
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    filtered = _client_query(actor.organization_id, q, client_status)
+    total = int(db.scalar(select(func.count()).select_from(filtered.subquery())) or 0)
+    pages = (total + page_size - 1) // page_size if total else 0
+    effective_page = min(page, pages) if pages else 1
+    offset = (effective_page - 1) * page_size
+    items = list(
+        db.scalars(
+            filtered
+            .order_by(Client.created_at.desc(), Client.id.desc())
+            .limit(page_size)
+            .offset(offset)
+        )
+    )
+    return ClientPage(
+        items=items,
+        total=total,
+        page=effective_page,
+        page_size=page_size,
+        pages=pages,
+    )
 
 
 @router.get("/export.csv")
