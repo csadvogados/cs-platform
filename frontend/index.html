@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.6.6" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.6.7" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -158,10 +158,12 @@
               <button class="crm-tab active" data-crm-tab="opportunities" role="tab">Oportunidades</button>
               <button class="crm-tab" data-crm-tab="tasks" role="tab">Tarefas</button>
               <button class="crm-tab" data-crm-tab="contacts" role="tab">Contatos</button>
+              <button class="crm-tab" data-crm-tab="interactions" role="tab">Atendimentos</button>
             </div>
             <div id="crm-opportunities" class="crm-tab-panel active"><div id="opportunity-board" class="opportunity-board"></div></div>
             <div id="crm-tasks" class="crm-tab-panel"><div id="task-list" class="stack-list panel-list"></div></div>
             <div id="crm-contacts" class="crm-tab-panel"><div class="panel-list-header"><span id="contact-count">0 contatos</span><button class="secondary-button" data-open-dialog="contact-dialog">Novo contato</button></div><div id="contact-list" class="contact-grid"></div></div>
+            <div id="crm-interactions" class="crm-tab-panel"><div class="panel-list-header"><span id="interaction-count">0 atendimentos</span><button class="primary-button" data-open-dialog="interaction-dialog">Novo atendimento</button></div><div id="interaction-list" class="interaction-list"></div></div>
           </section>
 
           <section id="view-users" class="page-view" aria-labelledby="users-heading">
@@ -172,7 +174,7 @@
           <section id="view-settings" class="page-view" aria-labelledby="settings-heading">
             <div class="section-intro"><div><p class="eyebrow dark">AMBIENTE</p><h1 id="settings-heading">Configurações</h1><p>Informações desta instalação.</p></div></div>
             <div class="settings-grid">
-              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.6</dd></div></dl></section>
+              <section class="panel"><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.6.7</dd></div></dl></section>
               <section class="panel"><h3>Sessão atual</h3><dl class="definition-list"><div><dt>Usuário</dt><dd id="settings-user">—</dd></div><div><dt>E-mail</dt><dd id="settings-email">—</dd></div><div><dt>Perfil</dt><dd id="settings-role">—</dd></div></dl></section>
             </div>
           </section>
@@ -243,6 +245,20 @@
       </form>
     </dialog>
 
+    <dialog id="interaction-dialog" class="modal">
+      <form id="interaction-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">HISTÓRICO DO CRM</p><h2>Novo atendimento</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid">
+          <label class="wide"><span>Cliente *</span><select name="client_id" id="interaction-client" required><option value="">Selecione</option></select></label>
+          <label><span>Tipo de atendimento *</span><select name="interaction_type" required><option value="call">Ligação</option><option value="email">E-mail</option><option value="meeting">Reunião</option><option value="message">Mensagem</option><option value="note" selected>Observação</option><option value="other">Outro atendimento</option></select></label>
+          <label><span>Data e horário *</span><input name="occurred_at" type="datetime-local" required /></label>
+          <label class="wide"><span>Assunto *</span><input name="subject" required maxlength="200" placeholder="Ex.: retorno sobre proposta" /></label>
+          <label class="wide"><span>Descrição</span><textarea name="description" rows="4" maxlength="10000" placeholder="Registre os pontos importantes do atendimento"></textarea></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar atendimento</button></div>
+      </form>
+    </dialog>
+
     <dialog id="income-dialog" class="modal small-modal">
       <form id="income-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">FINANCEIRO</p><h2>Nova receita</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
@@ -287,6 +303,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.6.6"></script>
+    <script src="./assets/app.js?v=5.6.7"></script>
   </body>
 </html>

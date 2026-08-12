@@ -6,8 +6,8 @@
     user: null,
     dashboard: null,
     clients: [],
-    crm: { summary: null, contacts: [], opportunities: [], tasks: [] },
-    editingCrm: { contact: null, opportunity: null, task: null },
+    crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
+    editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
     editingClientId: null,
     financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null, history: [] },
@@ -48,10 +48,20 @@
     cancelled: "Cancelada"
   };
 
+  const interactionTypeLabels = {
+    call: "Ligação",
+    email: "E-mail",
+    meeting: "Reunião",
+    message: "Mensagem",
+    note: "Observação",
+    other: "Outro atendimento"
+  };
+
   const crmDefinitions = {
     contact: { collection: "contacts", dialogId: "contact-dialog", formId: "contact-form", singular: "contato", createTitle: "Novo contato", editTitle: "Editar contato", createButton: "Salvar contato" },
     opportunity: { collection: "opportunities", dialogId: "opportunity-dialog", formId: "opportunity-form", singular: "oportunidade", createTitle: "Nova oportunidade", editTitle: "Editar oportunidade", createButton: "Salvar oportunidade" },
-    task: { collection: "tasks", dialogId: "task-dialog", formId: "task-form", singular: "tarefa", createTitle: "Nova tarefa", editTitle: "Editar tarefa", createButton: "Salvar tarefa" }
+    task: { collection: "tasks", dialogId: "task-dialog", formId: "task-form", singular: "tarefa", createTitle: "Nova tarefa", editTitle: "Editar tarefa", createButton: "Salvar tarefa" },
+    interaction: { collection: "interactions", dialogId: "interaction-dialog", formId: "interaction-form", singular: "atendimento", createTitle: "Novo atendimento", editTitle: "", createButton: "Salvar atendimento" }
   };
 
   const clientStatusLabels = {
@@ -274,13 +284,16 @@
     if (financialDefinition) resetFinancialDialog(id);
     if (crmDefinition) resetCrmDialog(id);
     if (id === "client-dialog") resetClientDialog();
-    if (["opportunity-dialog", "task-dialog"].includes(id)) {
+    if (["opportunity-dialog", "task-dialog", "interaction-dialog"].includes(id)) {
       try {
         await loadClients();
       } catch (error) {
         toast(error.message || "Não foi possível carregar os clientes.", "error");
         return;
       }
+    }
+    if (id === "interaction-dialog") {
+      $("#interaction-form").elements.occurred_at.value = toLocalDateTimeValue(new Date());
     }
     if (dialog?.showModal) dialog.showModal();
   }
@@ -472,17 +485,19 @@
   }
 
   async function loadCrm() {
-    const [summary, contacts, opportunities, tasks] = await Promise.all([
+    const [summary, contacts, opportunities, tasks, interactions] = await Promise.all([
       api("/api/v1/crm/summary"),
       api("/api/v1/crm/contacts?limit=100"),
       api("/api/v1/crm/opportunities?limit=100"),
-      api("/api/v1/crm/tasks?limit=100")
+      api("/api/v1/crm/tasks?limit=100"),
+      api("/api/v1/crm/interactions?limit=100")
     ]);
     state.crm = {
       summary,
       contacts: Array.isArray(contacts) ? contacts : contacts.items || [],
       opportunities: Array.isArray(opportunities) ? opportunities : opportunities.items || [],
-      tasks: Array.isArray(tasks) ? tasks : tasks.items || []
+      tasks: Array.isArray(tasks) ? tasks : tasks.items || [],
+      interactions: Array.isArray(interactions) ? interactions : interactions.items || []
     };
     renderCrm();
     renderDashboard();
@@ -555,6 +570,7 @@
     const options = state.clients.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.full_name)}</option>`).join("");
     $("#opportunity-client").innerHTML = `<option value="">Selecione</option>${options}`;
     $("#task-client").innerHTML = `<option value="">Sem cliente vinculado</option>${options}`;
+    $("#interaction-client").innerHTML = `<option value="">Selecione</option>${options}`;
   }
 
   function fillCreditorSelect() {
@@ -830,12 +846,18 @@
     const warning = kind === "opportunity"
       ? " As tarefas vinculadas a ela também serão apagadas."
       : "";
-    if (!window.confirm(`Deseja realmente apagar este ${definition.singular}?${warning} Esta ação não pode ser desfeita.`)) return;
+    const article = ["opportunity", "task"].includes(kind) ? "esta" : "este";
+    if (!window.confirm(`Deseja realmente apagar ${article} ${definition.singular}?${warning} Esta ação não pode ser desfeita.`)) return;
 
     setBusy(button, true, "Apagando…");
     try {
       await api(`/api/v1/crm/${definition.collection}/${itemId}`, { method: "DELETE" });
-      const deletedMessage = kind === "contact" ? "Contato apagado." : `${definition.singular.charAt(0).toUpperCase()}${definition.singular.slice(1)} apagada.`;
+      const deletedMessage = {
+        contact: "Contato apagado.",
+        opportunity: "Oportunidade apagada.",
+        task: "Tarefa apagada.",
+        interaction: "Atendimento apagado."
+      }[kind] || "Registro apagado.";
       await refreshCrm(deletedMessage);
     } catch (error) {
       toast(error.message, "error");
@@ -925,6 +947,21 @@
         <button class="delete-button" type="button" data-delete-contact="${escapeHtml(contact.id)}">Apagar</button>
       </div>
     </article>`).join("") : '<div class="empty-state">Nenhum contato cadastrado.</div>';
+
+    $("#interaction-count").textContent = `${state.crm.interactions.length} ${state.crm.interactions.length === 1 ? "atendimento" : "atendimentos"}`;
+    $("#interaction-list").innerHTML = state.crm.interactions.length ? state.crm.interactions.map((interaction) => {
+      const interactionType = String(interaction.interaction_type || "other").toLowerCase();
+      return `<article class="interaction-item">
+        <span class="interaction-marker" aria-hidden="true"></span>
+        <div class="interaction-content">
+          <div class="interaction-heading"><span class="badge neutral">${escapeHtml(interactionTypeLabels[interactionType] || interactionType)}</span><time>${escapeHtml(formatDate(interaction.occurred_at, true))}</time></div>
+          <h4>${escapeHtml(interaction.subject)}</h4>
+          <p class="interaction-client">${escapeHtml(clientName(interaction.client_id))}</p>
+          ${interaction.description ? `<p>${escapeHtml(interaction.description)}</p>` : ""}
+        </div>
+        <button class="delete-button" type="button" data-delete-interaction="${escapeHtml(interaction.id)}">Apagar</button>
+      </article>`;
+    }).join("") : '<div class="empty-state">Nenhum atendimento registrado.</div>';
   }
 
   function renderUsers() {
@@ -1202,6 +1239,31 @@
     }
   }
 
+  async function submitInteraction(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Salvando…");
+    try {
+      const data = compactObject(Object.fromEntries(new FormData(form)));
+      const payload = {
+        client_id: data.client_id,
+        interaction_type: data.interaction_type || "note",
+        subject: data.subject,
+        occurred_at: new Date(data.occurred_at).toISOString(),
+        description: data.description || null
+      };
+      await api("/api/v1/crm/interactions", { method: "POST", body: JSON.stringify(payload) });
+      closeDialog(form.closest("dialog"));
+      await refreshCrm("Atendimento registrado.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   function handleTopAction() {
     const actions = {
       dashboard: () => openDialog("client-dialog"),
@@ -1226,6 +1288,7 @@
     $("#contact-form").addEventListener("submit", submitContact);
     $("#opportunity-form").addEventListener("submit", submitOpportunity);
     $("#task-form").addEventListener("submit", submitTask);
+    $("#interaction-form").addEventListener("submit", submitInteraction);
     $("#income-form").addEventListener("submit", submitIncome);
     $("#expense-form").addEventListener("submit", submitExpense);
     $("#debt-form").addEventListener("submit", submitDebt);
@@ -1240,6 +1303,7 @@
       const deleteContact = event.target.closest("[data-delete-contact]");
       const deleteOpportunity = event.target.closest("[data-delete-opportunity]");
       const deleteTask = event.target.closest("[data-delete-task]");
+      const deleteInteraction = event.target.closest("[data-delete-interaction]");
       const completeTask = event.target.closest("[data-complete-task]");
       if (editContact) openCrmEditor("contact", editContact.dataset.editContact);
       else if (editOpportunity) openCrmEditor("opportunity", editOpportunity.dataset.editOpportunity);
@@ -1247,6 +1311,7 @@
       else if (deleteContact) deleteCrmItem("contact", deleteContact.dataset.deleteContact, deleteContact);
       else if (deleteOpportunity) deleteCrmItem("opportunity", deleteOpportunity.dataset.deleteOpportunity, deleteOpportunity);
       else if (deleteTask) deleteCrmItem("task", deleteTask.dataset.deleteTask, deleteTask);
+      else if (deleteInteraction) deleteCrmItem("interaction", deleteInteraction.dataset.deleteInteraction, deleteInteraction);
       else if (completeTask) completeCrmTask(completeTask.dataset.completeTask, completeTask);
     });
     $("#view-crm").addEventListener("change", (event) => {
