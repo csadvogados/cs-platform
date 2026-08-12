@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.financial import Creditor, Debt, Expense, Income
+from app.models.financial import Creditor, Debt, Expense, Income, PaymentAgreement
 from app.models.user import User
 from app.schemas.financial import (
     CreditorCreate,
@@ -18,6 +18,8 @@ from app.schemas.financial import (
     ExpenseRead,
     IncomeCreate,
     IncomeRead,
+    PaymentAgreementCreate,
+    PaymentAgreementRead,
 )
 from app.services.audit import record_audit
 
@@ -413,5 +415,168 @@ def delete_debt(
         },
     )
     db.delete(debt)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def owned_agreement(
+    db: Session,
+    client_id: uuid.UUID,
+    agreement_id: uuid.UUID,
+    organization_id: uuid.UUID,
+) -> PaymentAgreement:
+    agreement = db.scalar(
+        select(PaymentAgreement).where(
+            PaymentAgreement.id == agreement_id,
+            PaymentAgreement.client_id == client_id,
+            PaymentAgreement.organization_id == organization_id,
+        )
+    )
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Acordo não encontrado")
+    return agreement
+
+
+def validate_agreement_debt(
+    db: Session,
+    client_id: uuid.UUID,
+    debt_id: uuid.UUID | None,
+    organization_id: uuid.UUID,
+) -> None:
+    if debt_id is None:
+        return
+    exists = db.scalar(
+        select(Debt.id).where(
+            Debt.id == debt_id,
+            Debt.client_id == client_id,
+            Debt.organization_id == organization_id,
+        )
+    )
+    if not exists:
+        raise HTTPException(status_code=422, detail="A dívida selecionada não pertence a este cliente")
+
+
+@router.post(
+    "/clients/{client_id}/agreements",
+    response_model=PaymentAgreementRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_payment_agreement(
+    client_id: uuid.UUID,
+    payload: PaymentAgreementCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    validate_agreement_debt(db, client_id, payload.debt_id, actor.organization_id)
+    agreement = PaymentAgreement(
+        organization_id=actor.organization_id,
+        client_id=client_id,
+        **payload.model_dump(),
+    )
+    db.add(agreement)
+    db.flush()
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="payment_agreement",
+        entity_id=agreement.id,
+        action="create",
+        new_values={
+            "title": agreement.title,
+            "status": agreement.status,
+            "payment_method": agreement.payment_method,
+            "negotiated_amount": str(agreement.negotiated_amount),
+        },
+    )
+    db.commit()
+    db.refresh(agreement)
+    return agreement
+
+
+@router.get(
+    "/clients/{client_id}/agreements",
+    response_model=list[PaymentAgreementRead],
+)
+def list_payment_agreements(
+    client_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    owned_client(db, client_id, actor.organization_id)
+    return list(
+        db.scalars(
+            select(PaymentAgreement)
+            .where(
+                PaymentAgreement.client_id == client_id,
+                PaymentAgreement.organization_id == actor.organization_id,
+            )
+            .order_by(PaymentAgreement.created_at.desc(), PaymentAgreement.id)
+        )
+    )
+
+
+@router.put(
+    "/clients/{client_id}/agreements/{agreement_id}",
+    response_model=PaymentAgreementRead,
+)
+def update_payment_agreement(
+    client_id: uuid.UUID,
+    agreement_id: uuid.UUID,
+    payload: PaymentAgreementCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    validate_agreement_debt(db, client_id, payload.debt_id, actor.organization_id)
+    agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
+    for field, value in payload.model_dump().items():
+        setattr(agreement, field, value)
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="payment_agreement",
+        entity_id=agreement.id,
+        action="update",
+        new_values={
+            "title": agreement.title,
+            "status": agreement.status,
+            "payment_method": agreement.payment_method,
+            "negotiated_amount": str(agreement.negotiated_amount),
+        },
+    )
+    db.commit()
+    db.refresh(agreement)
+    return agreement
+
+
+@router.delete(
+    "/clients/{client_id}/agreements/{agreement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_payment_agreement(
+    client_id: uuid.UUID,
+    agreement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="payment_agreement",
+        entity_id=agreement.id,
+        action="delete",
+        new_values={
+            "title": agreement.title,
+            "status": agreement.status,
+            "negotiated_amount": str(agreement.negotiated_amount),
+        },
+    )
+    db.delete(agreement)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

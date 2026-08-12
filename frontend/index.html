@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.7.6" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.8.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -198,7 +198,7 @@
             </div>
             <form id="audit-filter-form" class="audit-filter-bar">
               <label class="audit-search-field"><span>Buscar no histórico</span><input id="audit-search" name="search" type="search" placeholder="Pessoa, e-mail, área ou ação" autocomplete="off" /></label>
-              <label><span>Área</span><select id="audit-entity-filter" name="entity_type"><option value="all">Todas</option><option value="auth">Acesso</option><option value="user">Equipe</option><option value="role">Perfil de acesso</option><option value="invitation">Convite</option><option value="session">Sessão</option><option value="organization">Organização</option><option value="client">Cliente</option><option value="income">Receita</option><option value="expense">Despesa</option><option value="creditor">Credor</option><option value="debt">Dívida</option><option value="diagnosis">Diagnóstico</option><option value="crm_contact">Contato CRM</option><option value="crm_interaction">Atendimento</option><option value="crm_opportunity">Oportunidade</option><option value="crm_task">Tarefa</option></select></label>
+              <label><span>Área</span><select id="audit-entity-filter" name="entity_type"><option value="all">Todas</option><option value="auth">Acesso</option><option value="user">Equipe</option><option value="role">Perfil de acesso</option><option value="invitation">Convite</option><option value="session">Sessão</option><option value="organization">Organização</option><option value="client">Cliente</option><option value="income">Receita</option><option value="expense">Despesa</option><option value="creditor">Credor</option><option value="debt">Dívida</option><option value="payment_agreement">Acordo de pagamento</option><option value="diagnosis">Diagnóstico</option><option value="crm_contact">Contato CRM</option><option value="crm_interaction">Atendimento</option><option value="crm_opportunity">Oportunidade</option><option value="crm_task">Tarefa</option></select></label>
               <label><span>Ação</span><select id="audit-action-filter" name="action"><option value="all">Todas</option><option value="login">Entrou</option><option value="logout">Saiu</option><option value="create">Criou</option><option value="update">Atualizou</option><option value="delete">Apagou</option><option value="complete">Concluiu</option><option value="change_password">Alterou a senha</option><option value="block">Desativou</option><option value="unblock">Reativou</option><option value="revoke">Encerrou sessão</option><option value="revoke_all">Encerrou todas as sessões</option><option value="accept">Aceitou convite</option></select></label>
               <label><span>Responsável</span><select id="audit-user-filter" name="user_id"><option value="all">Todos</option></select></label>
               <label><span>De</span><input id="audit-date-from" name="date_from" type="date" /></label>
@@ -251,7 +251,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.6</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.8.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -430,8 +430,30 @@
       </form>
     </dialog>
 
+    <dialog id="agreement-dialog" class="modal">
+      <form id="agreement-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h2>Novo acordo de pagamento</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid">
+          <label class="wide"><span>Título do acordo *</span><input name="title" required minlength="2" maxlength="200" placeholder="Ex.: Acordo com Banco Itaú" /></label>
+          <label class="wide"><span>Dívida vinculada</span><select id="agreement-debt" name="debt_id"><option value="">Sem dívida vinculada</option></select></label>
+          <label><span>Status *</span><select name="status" required><option value="draft">Rascunho</option><option value="active" selected>Em andamento</option><option value="completed">Concluído</option><option value="defaulted">Inadimplente</option><option value="cancelled">Cancelado</option></select></label>
+          <label><span>Forma de pagamento *</span><select name="payment_method" required><option value="pix">Pix</option><option value="bank_slip">Boleto</option><option value="bank_transfer">Transferência bancária</option><option value="cash">Dinheiro</option><option value="credit_card">Cartão de crédito</option><option value="debit_card">Cartão de débito</option><option value="automatic_debit">Débito automático</option><option value="other">Outra forma</option></select></label>
+          <label><span>Valor original</span><input name="original_amount" type="number" min="0" step="0.01" value="0" /></label>
+          <label><span>Valor negociado *</span><input name="negotiated_amount" type="number" min="0.01" step="0.01" required /></label>
+          <label><span>Entrada</span><input name="down_payment" type="number" min="0" step="0.01" value="0" /></label>
+          <label><span>Quantidade de parcelas *</span><input name="installment_count" type="number" min="1" max="600" step="1" value="1" required /></label>
+          <label><span>Valor de cada parcela</span><input name="installment_amount" type="number" min="0" step="0.01" value="0" /></label>
+          <label><span>Primeiro vencimento</span><input name="first_due_date" type="date" /></label>
+          <label class="wide"><span>Observações</span><textarea name="notes" rows="3" maxlength="10000" placeholder="Condições, descontos, canais e outras informações importantes"></textarea></label>
+        </div>
+        <div class="agreement-calculation"><span id="agreement-installment-preview">Previsão: 1 parcela de R$ 0.</span><button id="agreement-calculate-button" class="secondary-button" type="button">Calcular parcela</button></div>
+        <p class="form-help">O cálculo divide o valor negociado, descontada a entrada, pela quantidade de parcelas. Você pode ajustar o valor manualmente.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar acordo</button></div>
+      </form>
+    </dialog>
+
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.7.6"></script>
+    <script src="./assets/app.js?v=5.8.0"></script>
   </body>
 </html>

@@ -1,6 +1,7 @@
 import uuid
+from datetime import date
 from decimal import Decimal
-from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text, Uuid
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
@@ -48,6 +49,34 @@ class Debt(TimestampMixin, Base):
     overdue: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     client = relationship("Client", back_populates="debts")
     creditor = relationship("Creditor")
+
+
+class PaymentAgreement(TimestampMixin, Base):
+    __tablename__ = "payment_agreements"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"), index=True
+    )
+    debt_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("debts.id", ondelete="SET NULL"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="active", index=True)
+    payment_method: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    original_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
+    negotiated_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
+    down_payment: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
+    installment_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    installment_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
+    first_due_date: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    client = relationship("Client")
+    debt = relationship("Debt")
 
 class Diagnosis(TimestampMixin, Base):
     __tablename__ = "diagnoses"

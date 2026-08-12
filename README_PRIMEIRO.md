@@ -1,55 +1,74 @@
-# CS Platform v5.7.6 — Assistente de importação
+# CS Platform v5.8.0 — Acordos e formas de pagamento
 
-Esta atualização deixa a importação de clientes mais simples e segura.
+Este pacote deve ser aplicado sobre a **v5.7.6 já instalada**.
 
-## O que foi adicionado
+## O que esta versão acrescenta
 
-- Botão **Baixar modelo CSV** dentro da janela de importação.
-- Modelo compatível com Excel e com todas as colunas aceitas pela plataforma.
-- Botão **Baixar relatório de erros** quando a conferência encontrar linhas inválidas ou duplicadas.
-- Relatório com linha, nome, CPF, situação e descrição do problema.
-- Proteção do relatório contra fórmulas perigosas em arquivos CSV.
-- A conferência e os downloads não gravam clientes na base.
+- cadastro de acordos de pagamento dentro dos detalhes do cliente;
+- vínculo opcional do acordo com uma dívida já cadastrada;
+- formas de pagamento: Pix, boleto, transferência, dinheiro, cartões, débito automático e outra;
+- valor original, valor negociado, entrada, quantidade e valor das parcelas;
+- cálculo automático da parcela;
+- primeiro vencimento e situação do acordo;
+- edição e exclusão com confirmação;
+- registro das operações no Histórico de atividades;
+- correção de datas sem horário que podiam aparecer um dia antes;
+- migration `0009_payment_agreements.py` aplicada automaticamente no deploy da API.
 
-## Arquivos que devem ser substituídos
+## Como instalar
 
-Substitua exatamente estes quatro arquivos no GitHub:
+1. Extraia este ZIP no computador.
+2. Abra o repositório `csadvogados/cs-platform` no GitHub.
+3. Copie os **10 arquivos** do pacote para o projeto, mantendo exatamente as mesmas pastas. Nove arquivos serão substituídos.
+4. O décimo arquivo é novo e deve ser adicionado neste caminho:
 
-1. `backend/app/api/routes/clients.py`
-2. `frontend/index.html`
-3. `frontend/assets/app.js`
-4. `frontend/assets/styles.css`
+   `backend/alembic/versions/0009_payment_agreements.py`
 
-Mantenha cada arquivo na pasta indicada acima.
+5. Faça um único commit com o nome:
 
-## Nome do commit
+   `feat: adicionar acordos e formas de pagamento v5.8.0`
 
-Use este nome:
+6. Aguarde os dois deployments do Railway:
 
-`feat: adicionar modelo e relatório de importação v5.7.6`
+   - `cs-platform-api`
+   - `cs-platform-web`
 
-## Railway
+7. Não altere variáveis, comandos ou configurações do Railway. A migration será executada pelo `docker-entrypoint.sh` da API.
 
-Depois do commit, aguarde os serviços **cs-platform-api** e **cs-platform-web** concluírem o deploy.
+## Teste depois do deploy
 
-Esta versão:
+1. Abra `https://cs-platform-api-production.up.railway.app/api/v1/health` e confirme:
 
-- não possui migration de banco de dados;
-- não altera variáveis do Railway;
-- não altera `railway.json`, `Dockerfile` ou comandos de inicialização.
+   `{"status":"ok","database":"ok"}`
 
-## Teste simples depois do deploy
+2. Entre em `https://cs-platform-web-production.up.railway.app/`.
+3. Abra **Clientes** e depois **Ver detalhes** em um cliente que possua dívida.
+4. Localize **Acordos de pagamento** e clique em **Novo acordo**.
+5. Selecione a dívida. O título e o valor original devem ser preenchidos automaticamente.
+6. Informe, para um teste simples:
 
-1. Entre no sistema e clique em **Clientes**.
-2. Clique em **Importar CSV**.
-3. Clique em **Baixar modelo CSV** e confirme que o arquivo abre com os títulos das colunas.
-4. Escolha um CSV e clique em **Conferir arquivo**.
-5. Se existirem linhas com problema, clique em **Baixar relatório de erros**.
-6. Abra o relatório e confira as colunas **Linha**, **Nome**, **CPF**, **Situação** e **Erros**.
-7. Não marque a autorização durante este primeiro teste. Feche a janela.
+   - forma: `Boleto`;
+   - valor negociado: `7000`;
+   - entrada: `1000`;
+   - parcelas: `12`;
+   - primeiro vencimento: uma data futura.
 
-Se o CSV estiver totalmente correto, o botão de relatório de erros ficará oculto. Isso é o comportamento esperado.
+7. Clique em **Calcular parcela**. O resultado esperado é `12 parcela(s) de R$ 500`.
+8. Clique em **Salvar acordo** e confirme que ele aparece na tabela.
+9. Teste **Editar**, alterando a situação para **Concluído**.
+10. Teste **Apagar** e confirme que o registro desaparece.
 
-## Verificação do pacote
+## Arquivos incluídos
 
-O arquivo `SHA256SUMS.txt` contém os códigos de integridade de todos os arquivos desta atualização.
+- `backend/alembic/versions/0009_payment_agreements.py`
+- `backend/app/api/routes/financial.py`
+- `backend/app/core/constants.py`
+- `backend/app/models/__init__.py`
+- `backend/app/models/financial.py`
+- `backend/app/schemas/financial.py`
+- `backend/docker-entrypoint.sh`
+- `frontend/index.html`
+- `frontend/assets/app.js`
+- `frontend/assets/styles.css`
+
+Não copie `README_PRIMEIRO.md` nem `SHA256SUMS.txt` para o repositório; eles servem apenas como instrução e verificação do pacote.

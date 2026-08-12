@@ -13,7 +13,7 @@
     selectedClient: null,
     editingClientId: null,
     clientImport: { filename: "", clients: [], preview: null },
-    financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null, history: [] },
+    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], diagnosis: null, history: [] },
     editingFinancial: null,
     editingUserId: null,
     users: [],
@@ -95,6 +95,7 @@
     expense: "Despesa",
     creditor: "Credor",
     debt: "Dívida",
+    payment_agreement: "Acordo de pagamento",
     diagnosis: "Diagnóstico",
     crm_contact: "Contato CRM",
     crm_interaction: "Atendimento",
@@ -133,6 +134,8 @@
     estimated_value: "Valor estimado",
     current_balance: "Saldo atual",
     monthly_installment: "Parcela mensal",
+    negotiated_amount: "Valor negociado",
+    payment_method: "Forma de pagamento",
     nature: "Natureza",
     legal_name: "Razão social",
     trade_name: "Nome de apresentação",
@@ -181,10 +184,30 @@
     rent_condo: "Aluguel ou condomínio"
   };
 
+  const paymentMethodLabels = {
+    pix: "Pix",
+    bank_slip: "Boleto",
+    bank_transfer: "Transferência bancária",
+    cash: "Dinheiro",
+    credit_card: "Cartão de crédito",
+    debit_card: "Cartão de débito",
+    automatic_debit: "Débito automático",
+    other: "Outra forma"
+  };
+
+  const agreementStatusLabels = {
+    draft: "Rascunho",
+    active: "Em andamento",
+    completed: "Concluído",
+    defaulted: "Inadimplente",
+    cancelled: "Cancelado"
+  };
+
   const financialDefinitions = {
     income: { path: "incomes", collection: "incomes", dialogId: "income-dialog", formId: "income-form", singular: "receita", createTitle: "Nova receita", editTitle: "Editar receita", createButton: "Salvar receita" },
     expense: { path: "expenses", collection: "expenses", dialogId: "expense-dialog", formId: "expense-form", singular: "despesa", createTitle: "Nova despesa", editTitle: "Editar despesa", createButton: "Salvar despesa" },
-    debt: { path: "debts", collection: "debts", dialogId: "debt-dialog", formId: "debt-form", singular: "dívida", createTitle: "Nova dívida", editTitle: "Editar dívida", createButton: "Salvar dívida" }
+    debt: { path: "debts", collection: "debts", dialogId: "debt-dialog", formId: "debt-form", singular: "dívida", createTitle: "Nova dívida", editTitle: "Editar dívida", createButton: "Salvar dívida" },
+    agreement: { path: "agreements", collection: "agreements", dialogId: "agreement-dialog", formId: "agreement-form", singular: "acordo", createTitle: "Novo acordo de pagamento", editTitle: "Editar acordo de pagamento", createButton: "Salvar acordo" }
   };
 
   function escapeHtml(value) {
@@ -206,7 +229,10 @@
 
   function formatDate(value, includeTime = false) {
     if (!value) return "Sem data";
-    const date = new Date(value);
+    const dateOnly = !includeTime && /^\d{4}-\d{2}-\d{2}$/.test(String(value));
+    const date = dateOnly
+      ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
+      : new Date(value);
     if (Number.isNaN(date.getTime())) return "Sem data";
     return new Intl.DateTimeFormat("pt-BR", includeTime
       ? { dateStyle: "short", timeStyle: "short" }
@@ -440,6 +466,7 @@
       return;
     }
     if (financialDefinition) resetFinancialDialog(id);
+    if (id === "agreement-dialog") fillAgreementDebtSelect();
     if (crmDefinition) resetCrmDialog(id);
     if (id === "client-dialog") resetClientDialog();
     if (id === "client-import-dialog") resetClientImportDialog();
@@ -560,6 +587,7 @@
       submit.textContent = definition.createButton;
       delete submit.dataset.originalLabel;
     }
+    if (dialogId === "agreement-dialog") updateAgreementInstallmentPreview();
   }
 
   function resetCrmDialog(dialogId) {
@@ -721,7 +749,8 @@
       `/api/v1/financial/clients/${client.id}/debts`,
       "/api/v1/financial/creditors",
       `/api/v1/diagnoses/${client.id}/preview`,
-      `/api/v1/diagnoses/${client.id}/history?limit=50`
+      `/api/v1/diagnoses/${client.id}/history?limit=50`,
+      `/api/v1/financial/clients/${client.id}/agreements`
     ];
     const results = await Promise.allSettled(paths.map((path) => api(path)));
     const valueAt = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
@@ -731,9 +760,11 @@
       debts: Array.isArray(valueAt(2, [])) ? valueAt(2, []) : [],
       creditors: Array.isArray(valueAt(3, [])) ? valueAt(3, []) : [],
       diagnosis: valueAt(4, null),
-      history: Array.isArray(valueAt(5, [])) ? valueAt(5, []) : []
+      history: Array.isArray(valueAt(5, [])) ? valueAt(5, []) : [],
+      agreements: Array.isArray(valueAt(6, [])) ? valueAt(6, []) : []
     };
     fillCreditorSelect();
+    fillAgreementDebtSelect();
     renderClientDetail();
 
     const failed = results.filter((result) => result.status === "rejected");
@@ -1163,12 +1194,44 @@
     select.innerHTML = `<option value="">Sem credor cadastrado</option>${options}`;
   }
 
+  function fillAgreementDebtSelect() {
+    const select = $("#agreement-debt");
+    if (!select) return;
+    const selected = select.value;
+    const options = state.financial.debts.map((debt) => {
+      const creditor = creditorName(debt.creditor_id);
+      return `<option value="${escapeHtml(debt.id)}">${escapeHtml(debtNatureLabel(debt.nature))} · ${escapeHtml(creditor)} · ${escapeHtml(formatCurrency(debt.current_balance))}</option>`;
+    }).join("");
+    select.innerHTML = `<option value="">Sem dívida vinculada</option>${options}`;
+    setSelectValue(select, selected);
+  }
+
   function creditorName(id) {
     return state.financial.creditors.find((creditor) => String(creditor.id) === String(id))?.legal_name || "Credor não informado";
   }
 
   function debtNatureLabel(value) {
     return debtNatureLabels[String(value || "").toLowerCase()] || value || "Não informada";
+  }
+
+  function paymentMethodLabel(value) {
+    return paymentMethodLabels[String(value || "").toLowerCase()] || value || "Não informada";
+  }
+
+  function agreementStatusLabel(value) {
+    return agreementStatusLabels[String(value || "").toLowerCase()] || value || "Em andamento";
+  }
+
+  function agreementStatusClass(value) {
+    const normalized = String(value || "").toLowerCase();
+    if (["defaulted", "cancelled"].includes(normalized)) return "danger";
+    if (["draft", "completed"].includes(normalized)) return "neutral";
+    return "";
+  }
+
+  function agreementDebtLabel(debtId) {
+    const debt = state.financial.debts.find((item) => String(item.id) === String(debtId));
+    return debt ? `${debtNatureLabel(debt.nature)} · ${creditorName(debt.creditor_id)}` : "Sem dívida vinculada";
   }
 
   function setSelectValue(select, value, label = value) {
@@ -1262,6 +1325,20 @@
       form.elements.current_balance.value = item.current_balance ?? "";
       form.elements.monthly_installment.value = item.monthly_installment ?? 0;
       form.elements.overdue.checked = Boolean(item.overdue);
+    } else if (kind === "agreement") {
+      fillAgreementDebtSelect();
+      setSelectValue(form.elements.debt_id, item.debt_id || "");
+      form.elements.title.value = item.title || "";
+      setSelectValue(form.elements.status, item.status || "active", agreementStatusLabel(item.status));
+      setSelectValue(form.elements.payment_method, item.payment_method || "pix", paymentMethodLabel(item.payment_method));
+      form.elements.original_amount.value = item.original_amount ?? 0;
+      form.elements.negotiated_amount.value = item.negotiated_amount ?? "";
+      form.elements.down_payment.value = item.down_payment ?? 0;
+      form.elements.installment_count.value = item.installment_count ?? 1;
+      form.elements.installment_amount.value = item.installment_amount ?? 0;
+      form.elements.first_due_date.value = item.first_due_date || "";
+      form.elements.notes.value = item.notes || "";
+      updateAgreementInstallmentPreview();
     }
     dialog.showModal();
   }
@@ -1269,7 +1346,7 @@
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
-    const { incomes, expenses, debts, diagnosis, history } = state.financial;
+    const { incomes, expenses, debts, agreements, diagnosis, history } = state.financial;
     const totalIncome = incomes.reduce((total, item) => total + Number(item.net_amount || 0), 0);
     const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount || 0), 0);
     const totalDebt = debts.reduce((total, item) => total + Number(item.current_balance || 0), 0);
@@ -1316,6 +1393,14 @@
         <div class="table-wrap compact-table">
           <table><thead><tr><th>Natureza</th><th>Credor</th><th>Saldo atual</th><th>Parcela mensal</th><th>Situação</th><th>Ações</th></tr></thead>
           <tbody>${debts.length ? debts.map((item) => `<tr><td>${escapeHtml(debtNatureLabel(item.nature))}</td><td>${escapeHtml(creditorName(item.creditor_id))}</td><td>${formatCurrency(item.current_balance)}</td><td>${formatCurrency(item.monthly_installment)}</td><td><span class="badge ${item.overdue ? "danger" : ""}">${item.overdue ? "Em atraso" : "Em dia"}</span></td><td><span class="financial-actions"><button class="edit-button" type="button" data-edit-financial="debt" data-edit-id="${escapeHtml(item.id)}">Editar</button><button class="delete-button" type="button" data-delete-financial="debt" data-delete-id="${escapeHtml(item.id)}">Apagar</button></span></td></tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhuma dívida cadastrada.</td></tr>'}</tbody></table>
+        </div>
+      </section>
+
+      <section class="panel agreement-panel">
+        <div class="panel-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h3>Acordos de pagamento</h3></div><div class="button-row"><span class="result-count">${agreements.length} ${agreements.length === 1 ? "acordo" : "acordos"}</span><button class="primary-button" type="button" data-open-dialog="agreement-dialog">Novo acordo</button></div></div>
+        <div class="table-wrap compact-table">
+          <table><thead><tr><th>Acordo</th><th>Dívida vinculada</th><th>Forma</th><th>Valor negociado</th><th>Parcelamento</th><th>1º vencimento</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody>${agreements.length ? agreements.map((item) => `<tr><td><strong>${escapeHtml(item.title)}</strong>${Number(item.down_payment || 0) > 0 ? `<small>Entrada: ${escapeHtml(formatCurrency(item.down_payment))}</small>` : ""}</td><td>${escapeHtml(agreementDebtLabel(item.debt_id))}</td><td>${escapeHtml(paymentMethodLabel(item.payment_method))}</td><td>${formatCurrency(item.negotiated_amount)}</td><td>${escapeHtml(item.installment_count)} × ${formatCurrency(item.installment_amount)}</td><td>${escapeHtml(formatDate(item.first_due_date))}</td><td><span class="badge ${agreementStatusClass(item.status)}">${escapeHtml(agreementStatusLabel(item.status))}</span></td><td><span class="financial-actions"><button class="edit-button" type="button" data-edit-financial="agreement" data-edit-id="${escapeHtml(item.id)}">Editar</button><button class="delete-button" type="button" data-delete-financial="agreement" data-delete-id="${escapeHtml(item.id)}">Apagar</button></span></td></tr>`).join("") : '<tr><td colspan="8" class="empty-cell">Nenhum acordo de pagamento cadastrado.</td></tr>'}</tbody></table>
         </div>
       </section>
 
@@ -1830,13 +1915,15 @@
     if (!state.selectedClient || !itemId) return;
     const definition = financialDefinitions[kind];
     if (!definition) return;
-    const confirmed = window.confirm(`Deseja realmente apagar esta ${definition.singular}? Esta ação não pode ser desfeita.`);
+    const article = kind === "agreement" ? "este" : "esta";
+    const confirmed = window.confirm(`Deseja realmente apagar ${article} ${definition.singular}? Esta ação não pode ser desfeita.`);
     if (!confirmed) return;
 
     setBusy(button, true, "Apagando…");
     try {
       await api(`/api/v1/financial/clients/${state.selectedClient.id}/${definition.path}/${itemId}`, { method: "DELETE" });
-      await refreshFinancial(`${definition.singular.charAt(0).toUpperCase()}${definition.singular.slice(1)} apagada.`);
+      const participle = kind === "agreement" ? "apagado" : "apagada";
+      await refreshFinancial(`${definition.singular.charAt(0).toUpperCase()}${definition.singular.slice(1)} ${participle}.`);
     } catch (error) {
       toast(error.message, "error");
       setBusy(button, false);
@@ -1923,6 +2010,74 @@
       await api(`/api/v1/financial/clients/${state.selectedClient.id}/debts${suffix}`, { method: editing ? "PUT" : "POST", body: JSON.stringify(data) });
       closeDialog(form.closest("dialog"));
       await refreshFinancial(editing ? "Dívida atualizada." : "Dívida cadastrada.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  function calculateAgreementInstallment() {
+    const form = $("#agreement-form");
+    if (!form) return 0;
+    const negotiated = Number(form.elements.negotiated_amount.value || 0);
+    const downPayment = Number(form.elements.down_payment.value || 0);
+    const installments = Math.max(1, Number(form.elements.installment_count.value || 1));
+    return Math.max(0, (negotiated - downPayment) / installments);
+  }
+
+  function updateAgreementInstallmentPreview() {
+    const form = $("#agreement-form");
+    const preview = $("#agreement-installment-preview");
+    if (!form || !preview) return;
+    const installment = Number(form.elements.installment_amount.value || 0) || calculateAgreementInstallment();
+    preview.textContent = `Previsão: ${Math.max(1, Number(form.elements.installment_count.value || 1))} parcela(s) de ${formatCurrency(installment)}.`;
+  }
+
+  function applyAgreementCalculation() {
+    const form = $("#agreement-form");
+    if (!form) return;
+    form.elements.installment_amount.value = calculateAgreementInstallment().toFixed(2);
+    updateAgreementInstallmentPreview();
+  }
+
+  async function submitAgreement(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !state.selectedClient) return;
+    const negotiatedAmount = Number(form.elements.negotiated_amount.value || 0);
+    const downPayment = Number(form.elements.down_payment.value || 0);
+    if (downPayment > negotiatedAmount) {
+      toast("A entrada não pode ser maior que o valor negociado.", "error");
+      form.elements.down_payment.focus();
+      return;
+    }
+    if (!Number(form.elements.installment_amount.value || 0)) applyAgreementCalculation();
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Salvando…");
+    try {
+      const raw = Object.fromEntries(new FormData(form));
+      const payload = {
+        debt_id: raw.debt_id || null,
+        title: raw.title.trim(),
+        status: raw.status || "active",
+        payment_method: raw.payment_method,
+        original_amount: Number(raw.original_amount || 0),
+        negotiated_amount: Number(raw.negotiated_amount || 0),
+        down_payment: Number(raw.down_payment || 0),
+        installment_count: Math.max(1, Number(raw.installment_count || 1)),
+        installment_amount: Number(form.elements.installment_amount.value || 0),
+        first_due_date: raw.first_due_date || null,
+        notes: raw.notes || null
+      };
+      const editing = state.editingFinancial?.kind === "agreement" ? state.editingFinancial : null;
+      const suffix = editing ? `/${editing.id}` : "";
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/agreements${suffix}`, {
+        method: editing ? "PUT" : "POST",
+        body: JSON.stringify(payload)
+      });
+      closeDialog(form.closest("dialog"));
+      await refreshFinancial(editing ? "Acordo atualizado." : "Acordo de pagamento cadastrado.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -2263,6 +2418,21 @@
     $("#income-form").addEventListener("submit", submitIncome);
     $("#expense-form").addEventListener("submit", submitExpense);
     $("#debt-form").addEventListener("submit", submitDebt);
+    $("#agreement-form").addEventListener("submit", submitAgreement);
+    $("#agreement-calculate-button").addEventListener("click", applyAgreementCalculation);
+    ["negotiated_amount", "down_payment", "installment_count", "installment_amount"].forEach((name) => {
+      $("#agreement-form").elements[name].addEventListener("input", updateAgreementInstallmentPreview);
+    });
+    $("#agreement-debt").addEventListener("change", (event) => {
+      if (state.editingFinancial) return;
+      const debt = state.financial.debts.find((item) => String(item.id) === String(event.target.value));
+      if (!debt) return;
+      const form = $("#agreement-form");
+      form.elements.title.value = `Acordo com ${creditorName(debt.creditor_id)}`;
+      form.elements.original_amount.value = Number(debt.current_balance || 0).toFixed(2);
+      if (!form.elements.negotiated_amount.value) form.elements.negotiated_amount.value = Number(debt.current_balance || 0).toFixed(2);
+      updateAgreementInstallmentPreview();
+    });
     $("#clients-table").addEventListener("click", (event) => {
       const button = event.target.closest("[data-client-detail]");
       if (button) openClientDetail(button.dataset.clientDetail);
