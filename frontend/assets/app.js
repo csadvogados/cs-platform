@@ -7,6 +7,7 @@
     dashboard: null,
     clients: [],
     crm: { summary: null, contacts: [], opportunities: [], tasks: [] },
+    editingCrm: { contact: null, opportunity: null, task: null },
     selectedClient: null,
     editingClientId: null,
     financial: { incomes: [], expenses: [], debts: [], creditors: [], diagnosis: null, history: [] },
@@ -39,6 +40,19 @@
   };
 
   const priorityLabels = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
+
+  const taskStatusLabels = {
+    pending: "Pendente",
+    in_progress: "Em andamento",
+    completed: "Concluída",
+    cancelled: "Cancelada"
+  };
+
+  const crmDefinitions = {
+    contact: { collection: "contacts", dialogId: "contact-dialog", formId: "contact-form", singular: "contato", createTitle: "Novo contato", editTitle: "Editar contato", createButton: "Salvar contato" },
+    opportunity: { collection: "opportunities", dialogId: "opportunity-dialog", formId: "opportunity-form", singular: "oportunidade", createTitle: "Nova oportunidade", editTitle: "Editar oportunidade", createButton: "Salvar oportunidade" },
+    task: { collection: "tasks", dialogId: "task-dialog", formId: "task-form", singular: "tarefa", createTitle: "Nova tarefa", editTitle: "Editar tarefa", createButton: "Salvar tarefa" }
+  };
 
   const clientStatusLabels = {
     lead: "Potencial cliente",
@@ -252,11 +266,13 @@
   async function openDialog(id) {
     const dialog = document.getElementById(id);
     const financialDefinition = Object.values(financialDefinitions).find((definition) => definition.dialogId === id);
+    const crmDefinition = Object.values(crmDefinitions).find((definition) => definition.dialogId === id);
     if (financialDefinition && !state.selectedClient) {
       toast("Selecione um cliente antes de registrar dados financeiros.", "error");
       return;
     }
     if (financialDefinition) resetFinancialDialog(id);
+    if (crmDefinition) resetCrmDialog(id);
     if (id === "client-dialog") resetClientDialog();
     if (["opportunity-dialog", "task-dialog"].includes(id)) {
       try {
@@ -299,6 +315,24 @@
     if (!dialog || !form) return;
     form.reset();
     state.editingFinancial = null;
+    const title = $(".modal-header h2", dialog);
+    const submit = $('button[type="submit"]', form);
+    if (title) title.textContent = definition.createTitle;
+    if (submit) {
+      submit.textContent = definition.createButton;
+      delete submit.dataset.originalLabel;
+    }
+  }
+
+  function resetCrmDialog(dialogId) {
+    const entry = Object.entries(crmDefinitions).find(([, definition]) => definition.dialogId === dialogId);
+    if (!entry) return;
+    const [kind, definition] = entry;
+    const dialog = document.getElementById(definition.dialogId);
+    const form = document.getElementById(definition.formId);
+    if (!dialog || !form) return;
+    form.reset();
+    state.editingCrm[kind] = null;
     const title = $(".modal-header h2", dialog);
     const submit = $('button[type="submit"]', form);
     if (title) title.textContent = definition.createTitle;
@@ -725,13 +759,128 @@
     return state.clients.find((client) => String(client.id) === String(id))?.full_name || "Cliente não identificado";
   }
 
-  function taskRow(task) {
+  function toLocalDateTimeValue(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (part) => String(part).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  async function openCrmEditor(kind, itemId) {
+    const definition = crmDefinitions[kind];
+    const item = definition && state.crm[definition.collection].find((record) => String(record.id) === String(itemId));
+    if (!definition || !item) {
+      toast("Registro do CRM não encontrado.", "error");
+      return;
+    }
+
+    if (["opportunity", "task"].includes(kind)) {
+      try {
+        await loadClients();
+      } catch (error) {
+        toast(error.message || "Não foi possível carregar os clientes.", "error");
+        return;
+      }
+    }
+
+    resetCrmDialog(definition.dialogId);
+    state.editingCrm[kind] = item.id;
+    const dialog = document.getElementById(definition.dialogId);
+    const form = document.getElementById(definition.formId);
+
+    if (kind === "contact") {
+      form.elements.name.value = item.name || "";
+      form.elements.position.value = item.position || "";
+      form.elements.email.value = item.email || "";
+      form.elements.phone.value = item.phone || "";
+      form.elements.notes.value = item.notes || "";
+    } else if (kind === "opportunity") {
+      form.elements.title.value = item.title || "";
+      setSelectValue(form.elements.client_id, item.client_id, clientName(item.client_id));
+      setSelectValue(form.elements.stage, item.stage || "lead", stageLabels[item.stage]);
+      form.elements.estimated_value.value = item.estimated_value ?? 0;
+      form.elements.probability.value = item.probability ?? 0;
+      form.elements.expected_close_date.value = item.expected_close_date || "";
+      form.elements.notes.value = item.notes || "";
+    } else if (kind === "task") {
+      form.elements.title.value = item.title || "";
+      setSelectValue(form.elements.client_id, item.client_id, clientName(item.client_id));
+      setSelectValue(form.elements.priority, item.priority || "normal", priorityLabels[item.priority]);
+      setSelectValue(form.elements.status, item.status || "pending", taskStatusLabels[item.status]);
+      form.elements.due_at.value = toLocalDateTimeValue(item.due_at);
+      form.elements.description.value = item.description || "";
+    }
+
+    $(".modal-header h2", dialog).textContent = definition.editTitle;
+    const submit = $('button[type="submit"]', form);
+    submit.textContent = "Salvar alterações";
+    delete submit.dataset.originalLabel;
+    dialog.showModal();
+  }
+
+  async function refreshCrm(message) {
+    await Promise.all([loadCrm(), loadDashboard()]);
+    if (message) toast(message);
+  }
+
+  async function deleteCrmItem(kind, itemId, button) {
+    const definition = crmDefinitions[kind];
+    if (!definition || !itemId) return;
+    const warning = kind === "opportunity"
+      ? " As tarefas vinculadas a ela também serão apagadas."
+      : "";
+    if (!window.confirm(`Deseja realmente apagar este ${definition.singular}?${warning} Esta ação não pode ser desfeita.`)) return;
+
+    setBusy(button, true, "Apagando…");
+    try {
+      await api(`/api/v1/crm/${definition.collection}/${itemId}`, { method: "DELETE" });
+      const deletedMessage = kind === "contact" ? "Contato apagado." : `${definition.singular.charAt(0).toUpperCase()}${definition.singular.slice(1)} apagada.`;
+      await refreshCrm(deletedMessage);
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
+  }
+
+  async function completeCrmTask(itemId, button) {
+    if (!itemId) return;
+    setBusy(button, true, "Concluindo…");
+    try {
+      await api(`/api/v1/crm/tasks/${itemId}/complete`, { method: "POST" });
+      await refreshCrm("Tarefa concluída.");
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
+  }
+
+  async function changeOpportunityStage(itemId, stage, select) {
+    if (!itemId || !stage) return;
+    select.disabled = true;
+    try {
+      await api(`/api/v1/crm/opportunities/${itemId}`, { method: "PATCH", body: JSON.stringify({ stage }) });
+      await refreshCrm(`Oportunidade movida para ${stageLabels[stage] || stage}.`);
+    } catch (error) {
+      toast(error.message, "error");
+      select.disabled = false;
+      renderCrm();
+    }
+  }
+
+  function taskRow(task, showActions = false) {
     const priority = String(task.priority || "normal").toLowerCase();
-    const isOverdue = task.due_at && new Date(task.due_at) < new Date() && !["completed", "cancelled"].includes(String(task.status).toLowerCase());
-    return `<div class="list-row">
+    const taskStatus = String(task.status || "pending").toLowerCase();
+    const isOverdue = task.due_at && new Date(task.due_at) < new Date() && !["completed", "cancelled"].includes(taskStatus);
+    return `<div class="list-row crm-task-row ${taskStatus === "completed" ? "completed" : ""}">
       <span class="list-icon">${priority === "urgent" ? "!" : "✓"}</span>
-      <span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.client_id ? clientName(task.client_id) : priorityLabels[priority] || priority)}</small></span>
+      <span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.client_id ? clientName(task.client_id) : priorityLabels[priority] || priority)} · ${escapeHtml(taskStatusLabels[taskStatus] || taskStatus)}</small></span>
       <span class="list-meta ${isOverdue ? "danger-text" : ""}">${escapeHtml(task.due_at ? formatDate(task.due_at, true) : "Sem prazo")}</span>
+      ${showActions ? `<span class="crm-item-actions">
+        ${!["completed", "cancelled"].includes(taskStatus) ? `<button class="complete-button" type="button" data-complete-task="${escapeHtml(task.id)}">Concluir</button>` : ""}
+        <button class="edit-button" type="button" data-edit-task="${escapeHtml(task.id)}">Editar</button>
+        <button class="delete-button" type="button" data-delete-task="${escapeHtml(task.id)}">Apagar</button>
+      </span>` : ""}
     </div>`;
   }
 
@@ -742,7 +891,7 @@
     $("#crm-open-value").textContent = formatCurrency(summary.open_pipeline_value);
     $("#crm-pending-count").textContent = summary.pending_tasks ?? 0;
 
-    const boardStages = ["lead", "qualified", "proposal", "negotiation"];
+    const boardStages = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
     $("#opportunity-board").innerHTML = boardStages.map((stage) => {
       const opportunities = state.crm.opportunities.filter((item) => item.stage === stage);
       return `<section class="stage-column">
@@ -752,11 +901,18 @@
           <p>${escapeHtml(clientName(item.client_id))}</p>
           <p><strong>${formatCurrency(item.estimated_value)}</strong> · ${Number(item.probability || 0)}%</p>
           <p>Previsão: ${formatDate(item.expected_close_date)}</p>
+          <label class="stage-control"><span>Etapa</span><select data-opportunity-stage="${escapeHtml(item.id)}" aria-label="Alterar etapa de ${escapeHtml(item.title)}">
+            ${Object.entries(stageLabels).map(([value, label]) => `<option value="${value}" ${value === item.stage ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+          </select></label>
+          <div class="crm-item-actions">
+            <button class="edit-button" type="button" data-edit-opportunity="${escapeHtml(item.id)}">Editar</button>
+            <button class="delete-button" type="button" data-delete-opportunity="${escapeHtml(item.id)}">Apagar</button>
+          </div>
         </article>`).join("") : '<div class="empty-state">Sem oportunidades</div>'}
       </section>`;
     }).join("");
 
-    $("#task-list").innerHTML = state.crm.tasks.length ? state.crm.tasks.map(taskRow).join("") : '<div class="empty-state">Nenhuma tarefa cadastrada.</div>';
+    $("#task-list").innerHTML = state.crm.tasks.length ? state.crm.tasks.map((task) => taskRow(task, true)).join("") : '<div class="empty-state">Nenhuma tarefa cadastrada.</div>';
     $("#contact-count").textContent = `${state.crm.contacts.length} ${state.crm.contacts.length === 1 ? "contato" : "contatos"}`;
     $("#contact-list").innerHTML = state.crm.contacts.length ? state.crm.contacts.map((contact) => `<article class="contact-card">
       <span class="avatar">${escapeHtml(initials(contact.name))}</span>
@@ -764,6 +920,10 @@
       <p>${escapeHtml(contact.position || "Contato comercial")}</p>
       <p>${escapeHtml(contact.email || "E-mail não informado")}</p>
       <p>${escapeHtml(contact.phone || "")}</p>
+      <div class="crm-item-actions">
+        <button class="edit-button" type="button" data-edit-contact="${escapeHtml(contact.id)}">Editar</button>
+        <button class="delete-button" type="button" data-delete-contact="${escapeHtml(contact.id)}">Apagar</button>
+      </div>
     </article>`).join("") : '<div class="empty-state">Nenhum contato cadastrado.</div>';
   }
 
@@ -963,14 +1123,21 @@
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
     const button = $('button[type="submit"]', form);
+    const editingId = state.editingCrm.contact;
     setBusy(button, true, "Salvando…");
     try {
       const data = compactObject(Object.fromEntries(new FormData(form)));
-      await api("/api/v1/crm/contacts", { method: "POST", body: JSON.stringify(data) });
-      form.reset();
+      const payload = {
+        name: data.name,
+        position: data.position || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        notes: data.notes || null
+      };
+      const path = editingId ? `/api/v1/crm/contacts/${editingId}` : "/api/v1/crm/contacts";
+      await api(path, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(payload) });
       closeDialog(form.closest("dialog"));
-      await loadCrm();
-      toast("Contato cadastrado.");
+      await refreshCrm(editingId ? "Contato atualizado." : "Contato cadastrado.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -983,16 +1150,23 @@
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
     const button = $('button[type="submit"]', form);
+    const editingId = state.editingCrm.opportunity;
     setBusy(button, true, "Salvando…");
     try {
       const data = compactObject(Object.fromEntries(new FormData(form)));
-      if (data.estimated_value) data.estimated_value = Number(data.estimated_value);
-      if (data.probability) data.probability = Number(data.probability);
-      await api("/api/v1/crm/opportunities", { method: "POST", body: JSON.stringify(data) });
-      form.reset();
+      const payload = {
+        title: data.title,
+        client_id: data.client_id,
+        stage: data.stage || "lead",
+        estimated_value: Number(data.estimated_value || 0),
+        probability: Number(data.probability || 0),
+        expected_close_date: data.expected_close_date || null,
+        notes: data.notes || null
+      };
+      const path = editingId ? `/api/v1/crm/opportunities/${editingId}` : "/api/v1/crm/opportunities";
+      await api(path, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(payload) });
       closeDialog(form.closest("dialog"));
-      await loadCrm();
-      toast("Oportunidade cadastrada.");
+      await refreshCrm(editingId ? "Oportunidade atualizada." : "Oportunidade cadastrada.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -1005,15 +1179,22 @@
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
     const button = $('button[type="submit"]', form);
+    const editingId = state.editingCrm.task;
     setBusy(button, true, "Salvando…");
     try {
       const data = compactObject(Object.fromEntries(new FormData(form)));
-      if (data.due_at) data.due_at = new Date(data.due_at).toISOString();
-      await api("/api/v1/crm/tasks", { method: "POST", body: JSON.stringify(data) });
-      form.reset();
+      const payload = {
+        title: data.title,
+        client_id: data.client_id || null,
+        priority: data.priority || "normal",
+        status: data.status || "pending",
+        due_at: data.due_at ? new Date(data.due_at).toISOString() : null,
+        description: data.description || null
+      };
+      const path = editingId ? `/api/v1/crm/tasks/${editingId}` : "/api/v1/crm/tasks";
+      await api(path, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(payload) });
       closeDialog(form.closest("dialog"));
-      await loadCrm();
-      toast("Tarefa cadastrada.");
+      await refreshCrm(editingId ? "Tarefa atualizada." : "Tarefa cadastrada.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -1052,6 +1233,26 @@
       const button = event.target.closest("[data-client-detail]");
       if (button) openClientDetail(button.dataset.clientDetail);
     });
+    $("#view-crm").addEventListener("click", (event) => {
+      const editContact = event.target.closest("[data-edit-contact]");
+      const editOpportunity = event.target.closest("[data-edit-opportunity]");
+      const editTask = event.target.closest("[data-edit-task]");
+      const deleteContact = event.target.closest("[data-delete-contact]");
+      const deleteOpportunity = event.target.closest("[data-delete-opportunity]");
+      const deleteTask = event.target.closest("[data-delete-task]");
+      const completeTask = event.target.closest("[data-complete-task]");
+      if (editContact) openCrmEditor("contact", editContact.dataset.editContact);
+      else if (editOpportunity) openCrmEditor("opportunity", editOpportunity.dataset.editOpportunity);
+      else if (editTask) openCrmEditor("task", editTask.dataset.editTask);
+      else if (deleteContact) deleteCrmItem("contact", deleteContact.dataset.deleteContact, deleteContact);
+      else if (deleteOpportunity) deleteCrmItem("opportunity", deleteOpportunity.dataset.deleteOpportunity, deleteOpportunity);
+      else if (deleteTask) deleteCrmItem("task", deleteTask.dataset.deleteTask, deleteTask);
+      else if (completeTask) completeCrmTask(completeTask.dataset.completeTask, completeTask);
+    });
+    $("#view-crm").addEventListener("change", (event) => {
+      const select = event.target.closest("[data-opportunity-stage]");
+      if (select) changeOpportunityStage(select.dataset.opportunityStage, select.value, select);
+    });
     $("#toggle-password").addEventListener("click", () => {
       const input = $("#login-password");
       const visible = input.type === "text";
@@ -1065,6 +1266,9 @@
     $("#client-dialog").addEventListener("close", resetClientDialog);
     Object.values(financialDefinitions).forEach((definition) => {
       document.getElementById(definition.dialogId)?.addEventListener("close", () => resetFinancialDialog(definition.dialogId));
+    });
+    Object.values(crmDefinitions).forEach((definition) => {
+      document.getElementById(definition.dialogId)?.addEventListener("close", () => resetCrmDialog(definition.dialogId));
     });
     $$(".crm-tab").forEach((button) => button.addEventListener("click", () => {
       $$(".crm-tab").forEach((tab) => tab.classList.toggle("active", tab === button));
