@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.7.3" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.7.4" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -242,7 +242,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.3</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.7.4</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -250,7 +250,7 @@
     </div>
 
     <dialog id="client-import-dialog" class="modal import-modal">
-      <form id="client-import-form" method="dialog">
+      <form id="client-import-form">
         <div class="modal-header"><div><p class="eyebrow dark">BASE DE CLIENTES</p><h2>Importar clientes</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
         <div class="import-upload-panel">
           <label><span>Arquivo CSV *</span><input id="client-import-file" name="file" type="file" accept=".csv,text/csv" required /></label>
@@ -268,8 +268,21 @@
             <table><thead><tr><th>Linha</th><th>Cliente</th><th>CPF</th><th>Resultado</th></tr></thead><tbody id="client-import-preview-body"></tbody></table>
           </div>
           <p id="client-import-guidance" class="form-help"></p>
+          <label id="client-import-authorization-label" class="import-authorization" hidden><input id="client-import-authorization" type="checkbox" /> <span>Revisei os dados acima e autorizo a gravação dos clientes marcados como prontos.</span></label>
         </section>
-        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button id="client-import-preview-button" class="secondary-button" type="submit">Conferir arquivo</button><button id="client-import-confirm-button" class="primary-button" type="button" hidden disabled>Importar clientes</button></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button id="client-import-preview-button" class="secondary-button" type="button">Conferir arquivo</button><button id="client-import-confirm-button" class="primary-button" type="button" hidden disabled>Importar clientes</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="client-import-final-dialog" class="modal small-modal">
+      <form>
+        <div class="modal-header"><div><p class="eyebrow dark">CONFIRMAÇÃO FINAL</p><h2>Gravar clientes?</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="final-confirmation-panel">
+          <strong id="client-import-final-title">Confirme a importação</strong>
+          <p id="client-import-final-message"></p>
+          <small>Somente agora, ao clicar no botão verde abaixo, os clientes serão gravados na base.</small>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Voltar e revisar</button><button id="client-import-final-confirm-button" class="primary-button" type="button">Confirmar e gravar</button></div>
       </form>
     </dialog>
 
@@ -408,6 +421,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.7.3"></script>
+    <script src="./assets/app.js?v=5.7.4"></script>
   </body>
 </html>

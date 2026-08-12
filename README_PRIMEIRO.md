@@ -1,29 +1,26 @@
-# CS Platform v5.7.3 — Importação de clientes por CSV
+# CS Platform v5.7.4 — Segurança da importação e exclusão de clientes
 
-Este pacote adiciona a importação segura de clientes a partir de um arquivo CSV.
+Este pacote corrige o fluxo de importação e adiciona a exclusão segura de clientes.
 
-## O que foi incluído
+## O que foi corrigido
 
-- botão **Importar CSV** na tela **Clientes**;
-- leitura de arquivos CSV separados por `;` ou `,`;
-- compatibilidade com arquivos UTF-8 e arquivos antigos do Excel;
-- conferência das linhas antes de salvar qualquer cliente;
-- indicação de linhas prontas, inválidas e duplicadas;
-- bloqueio de CPF já cadastrado ou repetido no próprio arquivo;
-- importação somente das linhas válidas após confirmação;
-- limite de 500 clientes e 2 MB por arquivo;
-- atualização automática da lista de clientes após a importação;
-- registro da operação no **Histórico de atividades**.
+- o botão **Conferir arquivo** apenas apresenta a prévia e não grava clientes;
+- o botão de importação permanece bloqueado até a caixa de autorização ser marcada;
+- depois da autorização, uma segunda janela informa a quantidade e o nome do arquivo;
+- os clientes só são gravados ao clicar em **Confirmar e gravar**;
+- botão **Apagar cliente** disponível somente para administrador ou superadministrador;
+- a exclusão exige confirmação mostrando o nome do cliente;
+- clientes com registros vinculados não podem ser apagados;
+- exclusões concluídas ficam registradas no **Histórico de atividades**.
 
 ## Arquivos que devem ser substituídos
 
-Substitua somente estes cinco arquivos no repositório `csadvogados/cs-platform`:
+Substitua somente estes quatro arquivos no repositório `csadvogados/cs-platform`:
 
 1. `backend/app/api/routes/clients.py`
-2. `backend/app/schemas/client.py`
-3. `frontend/index.html`
-4. `frontend/assets/app.js`
-5. `frontend/assets/styles.css`
+2. `frontend/index.html`
+3. `frontend/assets/app.js`
+4. `frontend/assets/styles.css`
 
 Os arquivos já estão nas pastas corretas dentro deste ZIP.
 
@@ -31,14 +28,14 @@ Os arquivos já estão nas pastas corretas dentro deste ZIP.
 
 1. Extraia este ZIP no computador.
 2. Abra o repositório `csadvogados/cs-platform` no GitHub.
-3. Substitua os cinco arquivos acima, mantendo exatamente os mesmos caminhos.
+3. Substitua os quatro arquivos acima, mantendo exatamente os mesmos caminhos.
 4. Faça todos os arquivos no mesmo commit.
 5. Use este nome no commit:
 
-   `feat: adicionar importação de clientes por CSV v5.7.3`
+   `fix: proteger importação e exclusão de clientes v5.7.4`
 
 6. Confirme o commit na branch `main`.
-7. Aguarde o Railway concluir os deployments de `cs-platform-api` e `cs-platform-web`.
+7. Aguarde os deployments de `cs-platform-api` e `cs-platform-web` ficarem **Successful** no Railway.
 
 ## Não altere no Railway
 
@@ -50,45 +47,54 @@ Esta versão não exige:
 - mudança em `Dockerfile`;
 - comando manual no Console.
 
-## Como preparar o CSV
-
-As colunas obrigatórias são:
-
-- `Nome`
-- `CPF`
-
-As demais colunas são opcionais. O modo mais simples é abrir **Clientes**, clicar em **Exportar CSV**, editar uma cópia desse arquivo no Excel e depois importá-la.
-
-O sistema também reconhece: Nascimento, Profissão, E-mail, Telefone, Cidade, Estado, Status, Pessoa natural, Boa-fé declarada, Capacidade de pagamento e Observações.
-
-## Teste depois do deployment
+## Teste da importação
 
 1. Abra `https://cs-platform-web-production.up.railway.app/`.
 2. Pressione `Ctrl + F5`.
-3. Entre com uma conta de administrador ou supervisor.
-4. Clique em **Clientes**.
-5. Clique em **Importar CSV**.
-6. Selecione um arquivo `.csv` com as colunas Nome e CPF.
-7. Clique em **Conferir arquivo**.
-8. Confira os totais de linhas prontas, inválidas e duplicadas.
-9. Clique em **Importar clientes**.
-10. Confirme que os clientes válidos apareceram na lista.
-11. Abra **Histórico** e confira a atividade **Importou — Cliente**.
+3. Entre com a conta de administrador.
+4. Abra **Clientes → Importar CSV**.
+5. Selecione um arquivo e clique em **Conferir arquivo**.
+6. Feche a janela, atualize a lista e confirme que nenhum cliente foi gravado.
+7. Abra a importação novamente, confira o arquivo e marque **Revisei os dados acima e autorizo a gravação**.
+8. Clique em **Importar clientes**.
+9. Confira a segunda janela. A base ainda não foi alterada nesse momento.
+10. Clique em **Confirmar e gravar** para concluir.
 
-Linhas inválidas ou duplicadas não são salvas. Se um CPF for cadastrado por outra pessoa entre a conferência e a confirmação, toda a gravação é interrompida para evitar importação parcial incorreta.
+## Como apagar o cliente Teste
+
+Depois do deployment:
+
+1. Abra **Clientes**.
+2. Pesquise `Teste`.
+3. Clique em **Ver detalhes**.
+4. Clique em **Apagar cliente**.
+5. Confira o nome e confirme.
+
+Se o cliente não possuir registros vinculados, será apagado. Caso tenha histórico, o sistema impedirá a exclusão e informará quais registros precisam ser tratados primeiro.
+
+## Registros que bloqueiam a exclusão
+
+- receitas;
+- despesas;
+- dívidas;
+- diagnósticos;
+- contatos do CRM;
+- atendimentos;
+- oportunidades;
+- tarefas.
 
 ## Validações realizadas
 
 - sintaxe Python e JavaScript;
-- leitura de CSV com `;` e `,`;
-- codificações UTF-8 com BOM e Windows-1252;
-- acentos, datas brasileiras e campos Sim/Não;
-- limite de tamanho e quantidade de linhas;
-- colunas obrigatórias Nome e CPF;
-- CPF inválido, repetido no arquivo e já cadastrado;
-- isolamento por organização;
-- permissões de criação e exportação de clientes;
-- ordem correta das rotas da API;
-- fluxo real de seleção, prévia e confirmação em navegador local;
-- confirmação de que apenas linhas válidas foram enviadas;
+- isolamento do cliente por organização;
+- permissão `client.delete` restrita ao administrador;
+- bloqueio de todos os vínculos financeiros e do CRM;
+- trava do registro durante a verificação de exclusão;
+- auditoria da exclusão;
+- conferência do CSV sem gravação;
+- botão de importação inicialmente bloqueado;
+- caixa de autorização obrigatória;
+- segunda janela de confirmação antes da gravação;
+- exclusão real de cliente sem histórico em ambiente local isolado;
+- bloqueio real de cliente com receita vinculada;
 - estrutura e hashes SHA-256 do ZIP.

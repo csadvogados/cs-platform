@@ -272,6 +272,11 @@
       || (permissions.includes("client.create") && permissions.includes("client.export"));
   }
 
+  function canDeleteClients() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("client.delete");
+  }
+
   function calculateWeightedPipeline(opportunities) {
     const openStages = new Set(["lead", "qualified", "proposal", "negotiation"]);
     return opportunities
@@ -477,11 +482,14 @@
   function resetClientImportDialog() {
     const form = $("#client-import-form");
     if (!form) return;
+    closeDialog($("#client-import-final-dialog"));
     form.reset();
     state.clientImport = { filename: "", clients: [], preview: null };
     $("#client-import-summary").hidden = true;
     $("#client-import-preview-body").innerHTML = "";
     $("#client-import-guidance").textContent = "";
+    $("#client-import-authorization-label").hidden = true;
+    $("#client-import-authorization").checked = false;
     const previewButton = $("#client-import-preview-button");
     const confirmButton = $("#client-import-confirm-button");
     previewButton.disabled = false;
@@ -491,6 +499,10 @@
     confirmButton.disabled = true;
     confirmButton.textContent = "Importar clientes";
     delete confirmButton.dataset.originalLabel;
+    const finalButton = $("#client-import-final-confirm-button");
+    finalButton.disabled = false;
+    finalButton.textContent = "Confirmar e gravar";
+    delete finalButton.dataset.originalLabel;
   }
 
   function clearClientImportPreview() {
@@ -498,9 +510,18 @@
     $("#client-import-summary").hidden = true;
     $("#client-import-preview-body").innerHTML = "";
     $("#client-import-guidance").textContent = "";
+    $("#client-import-authorization-label").hidden = true;
+    $("#client-import-authorization").checked = false;
     const confirmButton = $("#client-import-confirm-button");
     confirmButton.hidden = true;
     confirmButton.disabled = true;
+  }
+
+  function updateClientImportAuthorization() {
+    const authorization = $("#client-import-authorization");
+    const confirmButton = $("#client-import-confirm-button");
+    const hasReadyClients = state.clientImport.clients.length > 0;
+    confirmButton.disabled = !hasReadyClients || !authorization.checked;
   }
 
   function resetUserDialog() {
@@ -907,9 +928,13 @@
       guidance.textContent = "Nenhum cliente pode ser importado. Corrija o CSV e confira novamente.";
     }
     $("#client-import-summary").hidden = false;
+    const authorizationLabel = $("#client-import-authorization-label");
+    const authorization = $("#client-import-authorization");
+    authorizationLabel.hidden = preview.valid_rows < 1;
+    authorization.checked = false;
     const confirmButton = $("#client-import-confirm-button");
     confirmButton.hidden = preview.valid_rows < 1;
-    confirmButton.disabled = preview.valid_rows < 1;
+    confirmButton.disabled = true;
     confirmButton.textContent = preview.valid_rows === 1
       ? "Importar 1 cliente"
       : `Importar ${preview.valid_rows} clientes`;
@@ -918,7 +943,7 @@
 
   async function previewClientImport(event) {
     event.preventDefault();
-    const form = event.currentTarget;
+    const form = $("#client-import-form");
     if (!form.reportValidity() || !canImportClients()) return;
     const file = form.elements.file.files?.[0];
     if (!file) return;
@@ -951,9 +976,29 @@
     }
   }
 
-  async function confirmClientImport() {
+  function confirmClientImport() {
     if (!canImportClients() || !state.clientImport.clients.length) return;
-    const button = $("#client-import-confirm-button");
+    const authorization = $("#client-import-authorization");
+    if (!authorization.checked) {
+      toast("Marque a autorização depois de revisar os clientes.", "error");
+      authorization.focus();
+      return;
+    }
+    const count = state.clientImport.clients.length;
+    $("#client-import-final-title").textContent = count === 1
+      ? "1 cliente será gravado"
+      : `${count} clientes serão gravados`;
+    $("#client-import-final-message").textContent = `Arquivo: ${state.clientImport.filename}. As linhas com problema ou CPF duplicado não serão gravadas.`;
+    $("#client-import-final-dialog").showModal();
+  }
+
+  async function executeClientImport() {
+    if (!canImportClients() || !state.clientImport.clients.length || !$("#client-import-authorization").checked) {
+      closeDialog($("#client-import-final-dialog"));
+      toast("A conferência perdeu a validade. Revise o arquivo novamente.", "error");
+      return;
+    }
+    const button = $("#client-import-final-confirm-button");
     const count = state.clientImport.clients.length;
     setBusy(button, true, "Importando…");
     try {
@@ -964,6 +1009,7 @@
           clients: state.clientImport.clients
         })
       });
+      closeDialog($("#client-import-final-dialog"));
       closeDialog($("#client-import-dialog"));
       const refreshed = await Promise.allSettled([loadClients(), loadDashboard()]);
       const message = result.imported === 1
@@ -1113,7 +1159,7 @@
           <h1>${escapeHtml(client.full_name)}</h1>
           <p>${escapeHtml(client.cpf || "CPF não informado")} · ${escapeHtml(client.email || "E-mail não informado")} · ${escapeHtml(client.phone || "Telefone não informado")}</p>
         </div>
-        <div class="button-row"><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span><button id="edit-client-button" class="secondary-button" type="button">Editar cadastro</button></div>
+        <div class="button-row"><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span><button id="edit-client-button" class="secondary-button" type="button">Editar cadastro</button>${canDeleteClients() ? '<button id="delete-client-button" class="danger-button" type="button">Apagar cliente</button>' : ""}</div>
       </div>
 
       <div class="client-profile-grid">
@@ -1175,6 +1221,7 @@
 
     $("#back-to-clients").addEventListener("click", () => setView("clients"));
     $("#edit-client-button").addEventListener("click", openClientEditor);
+    $("#delete-client-button")?.addEventListener("click", deleteSelectedClient);
     $$("[data-open-dialog]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-edit-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openFinancialEditor(button.dataset.editFinancial, button.dataset.editId)));
     $$("[data-delete-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => deleteFinancial(button.dataset.deleteFinancial, button.dataset.deleteId, button)));
@@ -1837,6 +1884,32 @@
     }
   }
 
+  async function deleteSelectedClient(event) {
+    const client = state.selectedClient;
+    const button = event.currentTarget;
+    if (!client || !canDeleteClients()) {
+      toast("Seu perfil não possui permissão para apagar clientes.", "error");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Apagar o cliente "${client.full_name}"?\n\nEsta ação só será permitida se ele não possuir registros financeiros, diagnósticos ou vínculos no CRM.`
+    );
+    if (!confirmed) return;
+
+    setBusy(button, true, "Apagando…");
+    try {
+      await api(`/api/v1/clients/${client.id}`, { method: "DELETE" });
+      state.selectedClient = null;
+      await Promise.all([loadClients(), loadDashboard()]);
+      setView("clients");
+      toast(`Cliente "${client.full_name}" apagado com segurança.`);
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      if (document.body.contains(button)) setBusy(button, false);
+    }
+  }
+
   async function submitContact(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1975,9 +2048,12 @@
     $("#client-search").addEventListener("input", renderClients);
     $("#client-status-filter").addEventListener("change", renderClients);
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
-    $("#client-import-form").addEventListener("submit", previewClientImport);
+    $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
+    $("#client-import-preview-button").addEventListener("click", previewClientImport);
     $("#client-import-confirm-button").addEventListener("click", confirmClientImport);
+    $("#client-import-final-confirm-button").addEventListener("click", executeClientImport);
     $("#client-import-file").addEventListener("change", clearClientImportPreview);
+    $("#client-import-authorization").addEventListener("change", updateClientImportAuthorization);
     $("#crm-search").addEventListener("input", (event) => {
       state.crmFilters.search = event.currentTarget.value;
       renderCrm();

@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_permissions, require_roles
 from app.db.session import get_db
 from app.models.client import Client
+from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask
+from app.models.financial import Debt, Diagnosis, Expense, Income
 from app.models.user import User
 from app.schemas.client import (
     ClientCreate,
@@ -654,3 +656,65 @@ def update_client(
     db.commit()
     db.refresh(client)
     return client
+
+
+@router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_client(
+    client_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    identity: IdentityContext = Depends(
+        require_permissions(PermissionCode.CLIENT_DELETE.value)
+    ),
+):
+    client = db.scalar(
+        select(Client)
+        .where(
+            Client.id == client_id,
+            Client.organization_id == identity.organization_id,
+        )
+        .with_for_update()
+    )
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    linked_records = []
+    linked_models = (
+        (Income, "receitas"),
+        (Expense, "despesas"),
+        (Debt, "dívidas"),
+        (Diagnosis, "diagnósticos"),
+        (CRMContact, "contatos do CRM"),
+        (CRMInteraction, "atendimentos"),
+        (CRMOpportunity, "oportunidades"),
+        (CRMTask, "tarefas"),
+    )
+    for model, label in linked_models:
+        linked_id = db.scalar(
+            select(model.id).where(model.client_id == client.id).limit(1)
+        )
+        if linked_id is not None:
+            linked_records.append(label)
+
+    if linked_records:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Este cliente possui registros vinculados: "
+                + ", ".join(linked_records)
+                + ". Apague esses registros antes de excluir o cliente."
+            ),
+        )
+
+    client_name = client.full_name
+    record_audit(
+        db,
+        organization_id=identity.organization_id,
+        user_id=identity.user_id,
+        entity_type="client",
+        entity_id=client.id,
+        action="delete",
+        new_values={"full_name": client_name},
+    )
+    db.delete(client)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
