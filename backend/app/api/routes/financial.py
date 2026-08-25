@@ -1,9 +1,9 @@
 import calendar
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -15,6 +15,9 @@ from app.models.user import User
 from app.schemas.financial import (
     CreditorCreate,
     CreditorRead,
+    CollectionItemRead,
+    CollectionSummaryRead,
+    CollectionsRead,
     DebtCreate,
     DebtRead,
     ExpenseCreate,
@@ -82,6 +85,102 @@ def sync_installment_statuses(agreement: PaymentAgreement) -> bool:
             installment.status = expected
             changed = True
     return changed
+
+
+def collection_status(installment: PaymentInstallment, today: date) -> str:
+    if installment.status in {"paid", "cancelled"}:
+        return installment.status
+    if installment.due_date < today:
+        return "overdue"
+    if installment.due_date <= today + timedelta(days=7):
+        return "due_soon"
+    return "pending"
+
+
+@router.get("/collections", response_model=CollectionsRead)
+def list_collections(
+    q: str = Query(default="", max_length=200),
+    collection_status_filter: str = Query(default="all", alias="status"),
+    due_from: date | None = None,
+    due_to: date | None = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    if due_from and due_to and due_from > due_to:
+        raise HTTPException(status_code=422, detail="A data inicial não pode ser posterior à data final")
+    allowed_statuses = {"all", "pending", "due_soon", "paid", "overdue", "cancelled"}
+    if collection_status_filter not in allowed_statuses:
+        raise HTTPException(status_code=422, detail="Situação de cobrança inválida")
+
+    rows = db.execute(
+        select(PaymentInstallment, PaymentAgreement, Client)
+        .join(PaymentAgreement, PaymentAgreement.id == PaymentInstallment.agreement_id)
+        .join(Client, Client.id == PaymentInstallment.client_id)
+        .where(PaymentInstallment.organization_id == actor.organization_id)
+        .order_by(PaymentInstallment.due_date, Client.full_name, PaymentInstallment.installment_number)
+    ).all()
+    today = date.today()
+    month_start = today.replace(day=1)
+    normalized_query = q.strip().casefold()
+    status_changed = False
+    all_items: list[CollectionItemRead] = []
+
+    for installment, agreement, client in rows:
+        effective_status = collection_status(installment, today)
+        stored_status = effective_status if effective_status != "due_soon" else "pending"
+        if installment.status not in {"paid", "cancelled"} and installment.status != stored_status:
+            installment.status = stored_status
+            status_changed = True
+        all_items.append(CollectionItemRead(
+            id=installment.id,
+            client_id=client.id,
+            client_name=client.full_name,
+            agreement_id=agreement.id,
+            agreement_title=agreement.title,
+            installment_number=installment.installment_number,
+            due_date=installment.due_date,
+            amount=installment.amount,
+            status=effective_status,
+            paid_amount=installment.paid_amount,
+            paid_at=installment.paid_at,
+            payment_method=installment.payment_method,
+        ))
+    if status_changed:
+        db.commit()
+
+    open_items = [item for item in all_items if item.status in {"pending", "due_soon", "overdue"}]
+    overdue_items = [item for item in all_items if item.status == "overdue"]
+    due_soon_items = [item for item in all_items if item.status == "due_soon"]
+    paid_this_month = [
+        item for item in all_items
+        if item.status == "paid" and item.paid_at and item.paid_at.date() >= month_start
+    ]
+    summary = CollectionSummaryRead(
+        open_count=len(open_items),
+        open_amount=sum((item.amount for item in open_items), Decimal("0")),
+        overdue_count=len(overdue_items),
+        overdue_amount=sum((item.amount for item in overdue_items), Decimal("0")),
+        due_soon_count=len(due_soon_items),
+        due_soon_amount=sum((item.amount for item in due_soon_items), Decimal("0")),
+        paid_this_month_count=len(paid_this_month),
+        paid_this_month_amount=sum((item.paid_amount for item in paid_this_month), Decimal("0")),
+    )
+
+    items = all_items
+    if normalized_query:
+        items = [
+            item for item in items
+            if normalized_query in item.client_name.casefold()
+            or normalized_query in item.agreement_title.casefold()
+        ]
+    if collection_status_filter != "all":
+        items = [item for item in items if item.status == collection_status_filter]
+    if due_from:
+        items = [item for item in items if item.due_date >= due_from]
+    if due_to:
+        items = [item for item in items if item.due_date <= due_to]
+
+    return CollectionsRead(summary=summary, items=items, total=len(items))
 
 
 def owned_client(db: Session, client_id: uuid.UUID, org_id: uuid.UUID) -> Client:
@@ -681,10 +780,10 @@ def register_installment_payment(
     owned_client(db, client_id, actor.organization_id)
     agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
     installment = owned_installment(agreement, installment_id)
-    if payload.paid_amount > installment.amount:
+    if payload.paid_amount != installment.amount:
         raise HTTPException(
             status_code=422,
-            detail="O valor pago não pode ser maior que o valor da parcela",
+            detail="O valor pago deve ser igual ao valor da parcela",
         )
     installment.paid_amount = payload.paid_amount
     installment.paid_at = payload.paid_at

@@ -5,6 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
+    collections: { summary: null, items: [], total: 0, filters: { q: "", status: "all", dueFrom: "", dueTo: "" } },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -39,6 +40,7 @@
   const viewMeta = {
     dashboard: ["VISÃO GERAL", "Painel de operação", "Novo cliente"],
     clients: ["RELACIONAMENTO", "Clientes", "Novo cliente"],
+    collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
     crm: ["DESENVOLVIMENTO DE NEGÓCIOS", "CRM", "Nova oportunidade"],
     users: ["ORGANIZAÇÃO", "Equipe", "Atualizar"],
@@ -208,6 +210,14 @@
 
   const installmentStatusLabels = {
     pending: "Pendente",
+    paid: "Paga",
+    overdue: "Atrasada",
+    cancelled: "Cancelada"
+  };
+
+  const collectionStatusLabels = {
+    pending: "Pendente",
+    due_soon: "Vence em breve",
     paid: "Paga",
     overdue: "Atrasada",
     cancelled: "Cancelada"
@@ -454,7 +464,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = view === "audit";
+    $("#top-action-button").hidden = ["audit", "collections"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -681,6 +691,7 @@
     setBusy(button, true, "Atualizando…");
     const loaders = [
       loadDashboard(),
+      loadCollections(),
       loadClients(),
       loadCrm(),
       loadUsers(),
@@ -703,6 +714,26 @@
   async function loadDashboard() {
     state.dashboard = await api("/api/v1/dashboard");
     renderDashboard();
+  }
+
+  function collectionParams() {
+    const filters = state.collections.filters;
+    const params = new URLSearchParams();
+    if (filters.q) params.set("q", filters.q);
+    if (filters.status && filters.status !== "all") params.set("status", filters.status);
+    if (filters.dueFrom) params.set("due_from", filters.dueFrom);
+    if (filters.dueTo) params.set("due_to", filters.dueTo);
+    return params;
+  }
+
+  async function loadCollections(showNotice = false) {
+    const response = await api(`/api/v1/financial/collections?${collectionParams().toString()}`);
+    state.collections.summary = response.summary || null;
+    state.collections.items = Array.isArray(response.items) ? response.items : [];
+    state.collections.total = Number(response.total || 0);
+    renderCollections();
+    renderDashboardCollections();
+    if (showNotice) toast("Cobranças atualizadas.");
   }
 
   async function loadClientOptions() {
@@ -900,6 +931,52 @@
       .sort((a, b) => new Date(a.due_at || "2999-01-01") - new Date(b.due_at || "2999-01-01"))
       .slice(0, 5);
     $("#dashboard-tasks").innerHTML = tasks.length ? tasks.map(taskRow).join("") : '<div class="empty-state">Nenhuma tarefa pendente. Boa notícia.</div>';
+  }
+
+  function collectionStatusClass(value) {
+    const normalized = String(value || "").toLowerCase();
+    if (normalized === "overdue") return "danger";
+    if (["pending", "cancelled"].includes(normalized)) return "neutral";
+    return "";
+  }
+
+  function collectionStatusLabel(value) {
+    return collectionStatusLabels[String(value || "").toLowerCase()] || value || "Pendente";
+  }
+
+  function renderDashboardCollections() {
+    const summary = state.collections.summary || {};
+    $("#dashboard-overdue-count").textContent = summary.overdue_count ?? 0;
+    $("#dashboard-overdue-amount").textContent = `${formatCurrency(summary.overdue_amount)} em atraso`;
+    $("#dashboard-due-soon-count").textContent = summary.due_soon_count ?? 0;
+    $("#dashboard-due-soon-amount").textContent = `${formatCurrency(summary.due_soon_amount)} a vencer`;
+    $("#dashboard-open-count").textContent = summary.open_count ?? 0;
+    $("#dashboard-open-amount").textContent = `${formatCurrency(summary.open_amount)} em aberto`;
+    $("#dashboard-collections-alert")?.classList.toggle("has-overdue", Number(summary.overdue_count || 0) > 0);
+  }
+
+  function renderCollections() {
+    const summary = state.collections.summary || {};
+    const items = state.collections.items || [];
+    $("#collection-open-amount").textContent = formatCurrency(summary.open_amount);
+    $("#collection-open-count").textContent = `${summary.open_count || 0} parcela(s)`;
+    $("#collection-overdue-amount").textContent = formatCurrency(summary.overdue_amount);
+    $("#collection-overdue-count").textContent = `${summary.overdue_count || 0} parcela(s)`;
+    $("#collection-due-soon-amount").textContent = formatCurrency(summary.due_soon_amount);
+    $("#collection-due-soon-count").textContent = `${summary.due_soon_count || 0} parcela(s)`;
+    $("#collection-paid-month-amount").textContent = formatCurrency(summary.paid_this_month_amount);
+    $("#collection-paid-month-count").textContent = `${summary.paid_this_month_count || 0} pagamento(s)`;
+    $("#collection-result-count").textContent = state.collections.total === 1 ? "1 cobrança" : `${state.collections.total} cobranças`;
+    $("#collections-table").innerHTML = items.length ? items.map((item) => `<tr>
+      <td><strong>${escapeHtml(item.client_name)}</strong></td>
+      <td>${escapeHtml(item.agreement_title)}</td>
+      <td>${escapeHtml(item.installment_number)}</td>
+      <td>${escapeHtml(formatDate(item.due_date))}</td>
+      <td>${formatCurrency(item.status === "paid" ? item.paid_amount : item.amount)}</td>
+      <td><span class="badge ${collectionStatusClass(item.status)}">${escapeHtml(collectionStatusLabel(item.status))}</span>${item.status === "paid" && item.paid_at ? `<small class="collection-payment-date">Pago em ${escapeHtml(formatDate(item.paid_at, true))}</small>` : ""}</td>
+      <td><button class="text-link" type="button" data-collection-client="${escapeHtml(item.client_id)}">Abrir cliente</button></td>
+    </tr>`).join("") : '<tr><td colspan="7" class="empty-cell">Nenhuma cobrança encontrada com estes filtros.</td></tr>';
+    $$("[data-collection-client]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openClientDetail(button.dataset.collectionClient)));
   }
 
   function renderClients() {
@@ -1998,7 +2075,7 @@
   async function refreshFinancial(message = "Dados financeiros atualizados.") {
     if (!state.selectedClient) return;
     await loadClientDetail(state.selectedClient.id);
-    await Promise.allSettled([loadDashboard(), loadClients()]);
+    await Promise.allSettled([loadDashboard(), loadCollections(), loadClients()]);
     if (message) toast(message);
   }
 
@@ -2437,6 +2514,7 @@
     const actions = {
       dashboard: () => openDialog("client-dialog"),
       clients: () => openDialog("client-dialog"),
+      collections: () => loadCollections(true),
       clientDetail: () => openDialog("income-dialog"),
       crm: () => openDialog("opportunity-dialog"),
       users: () => refreshAll(true),
@@ -2472,6 +2550,27 @@
     });
     $("#client-next-page").addEventListener("click", () => {
       loadClientPage(state.clientPage.page + 1).catch((error) => toast(error.message, "error"));
+    });
+    $("#collections-refresh").addEventListener("click", () => loadCollections(true).catch((error) => toast(error.message, "error")));
+    $("#collection-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const raw = Object.fromEntries(new FormData(event.currentTarget));
+      if (raw.due_from && raw.due_to && raw.due_from > raw.due_to) {
+        toast("A data inicial não pode ser posterior à data final.", "error");
+        return;
+      }
+      state.collections.filters = {
+        q: String(raw.q || "").trim(),
+        status: String(raw.status || "all"),
+        dueFrom: String(raw.due_from || ""),
+        dueTo: String(raw.due_to || "")
+      };
+      loadCollections().catch((error) => toast(error.message, "error"));
+    });
+    $("#clear-collection-filters").addEventListener("click", () => {
+      $("#collection-filter-form").reset();
+      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "" };
+      loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
@@ -2615,10 +2714,14 @@
     });
     $$("[data-view]").forEach((button) => button.addEventListener("click", () => {
       setView(button.dataset.view);
+      if (button.dataset.view === "collections") loadCollections().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));
-    $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
+    $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => {
+      setView(button.dataset.viewLink);
+      if (button.dataset.viewLink === "collections") loadCollections().catch((error) => toast(error.message, "error"));
+    }));
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
     $("#client-dialog").addEventListener("close", resetClientDialog);

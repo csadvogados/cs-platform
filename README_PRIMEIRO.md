@@ -1,57 +1,51 @@
-# CS Platform v5.9.0 — Controle de parcelas e pagamentos
+# CS Platform v5.10.0 — Agenda de cobranças
 
-Este pacote atualiza a versão v5.8.0 já instalada. Ele não apaga clientes, dívidas, acordos ou outros dados existentes.
+Este pacote deve ser aplicado sobre a versão v5.9.0 já instalada.
 
-## O que foi adicionado
+## Novidades
 
-- geração automática das parcelas ao cadastrar um acordo;
-- geração de parcelas para acordos antigos que ainda não possuem grade;
-- situações **Pendente**, **Paga**, **Atrasada** e **Cancelada**;
-- registro de valor, data, forma e observação do pagamento;
-- estorno de pagamento;
-- cálculo automático do total recebido e do saldo restante;
-- conclusão automática do acordo quando todas as parcelas forem pagas;
-- histórico das operações na auditoria;
-- proteção contra alteração ou exclusão de acordo com pagamentos registrados.
+- nova opção **Cobranças** no menu principal;
+- resumo de valores em aberto, atrasados, próximos do vencimento e recebidos no mês;
+- identificação automática de parcelas que vencem nos próximos 7 dias;
+- identificação automática de parcelas atrasadas;
+- filtros por cliente ou acordo, situação e período de vencimento;
+- acesso direto aos detalhes do cliente pela cobrança;
+- alertas de cobranças no painel principal;
+- atualização automática da agenda após registrar ou estornar um pagamento;
+- proteção para que o pagamento corresponda ao valor integral da parcela.
 
 ## Arquivos que devem ser substituídos
 
-Copie os 10 arquivos abaixo para os mesmos caminhos do repositório no GitHub:
+Copie os 7 arquivos para os mesmos caminhos do repositório no GitHub:
 
-1. `backend/alembic/versions/0010_payment_installments.py` — arquivo novo
-2. `backend/app/api/routes/financial.py`
-3. `backend/app/core/constants.py`
-4. `backend/app/models/__init__.py`
-5. `backend/app/models/financial.py`
-6. `backend/app/schemas/financial.py`
-7. `backend/docker-entrypoint.sh`
-8. `frontend/index.html`
-9. `frontend/assets/app.js`
-10. `frontend/assets/styles.css`
+1. `backend/app/api/routes/financial.py`
+2. `backend/app/core/constants.py`
+3. `backend/app/schemas/financial.py`
+4. `backend/docker-entrypoint.sh`
+5. `frontend/index.html`
+6. `frontend/assets/app.js`
+7. `frontend/assets/styles.css`
 
-Não apague a migração anterior `0009_payment_agreements.py`.
+Esta versão não possui uma nova migração. Mantenha todas as migrações existentes, inclusive `0010_payment_installments.py`.
 
 ## Nome sugerido para o commit
 
-`feat: adicionar controle de parcelas e pagamentos v5.9.0`
+`feat: adicionar agenda e alertas de cobranças v5.10.0`
 
 ## Deploy
 
-Depois do commit, aguarde o Railway concluir os dois serviços:
+Após o commit, aguarde o Railway concluir os deploys de:
 
 - `cs-platform-api`;
 - `cs-platform-web`.
 
-A API executará automaticamente a migração `0010_payment_installments` durante a inicialização. Não coloque comando adicional em **Pre-deploy Command**.
+Não adicione nenhum comando em **Pre-deploy Command**.
 
 ## Teste após o deploy
 
 1. Abra a plataforma e pressione `Ctrl + F5`.
-2. Entre em **Clientes** e abra **Ver detalhes**.
-3. Cadastre um novo acordo com 2 parcelas.
-4. Confirme que as duas parcelas aparecem com seus vencimentos.
-5. Na primeira parcela, clique em **Registrar pagamento**.
-6. Confirme que ela muda para **Paga**, o total recebido aumenta e o saldo restante diminui.
-7. Clique em **Estornar** e confirme que a parcela volta para **Pendente** ou **Atrasada**.
-
-Para um acordo criado na v5.8.0, clique em **Gerar parcelas** uma única vez.
+2. Confira no painel principal o bloco **Cobranças que exigem atenção**.
+3. Entre em **Cobranças** pelo menu lateral.
+4. Confirme os totais em aberto, atrasados, próximos de vencer e recebidos no mês.
+5. Selecione o filtro **Atrasadas** e clique em **Aplicar filtros**.
+6. Clique em **Abrir cliente** para conferir o acordo e suas parcelas.
