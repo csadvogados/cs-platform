@@ -7,7 +7,7 @@ PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
 WEB_CONCURRENCY="${WEB_CONCURRENCY:-1}"
 
-echo "[deploy] CS-Platform-v5.11.0"
+echo "[deploy] CS-Platform-v5.12.0"
 echo "[deploy] Waiting for database"
 python -m scripts.wait_for_database
 

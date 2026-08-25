@@ -5,7 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
-    collections: { summary: null, items: [], total: 0, filters: { q: "", status: "all", dueFrom: "", dueTo: "" }, selectedItem: null, actions: [] },
+    collections: { summary: null, items: [], total: 0, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all" }, selectedItem: null, selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -120,6 +120,7 @@
     block: "Desativou",
     unblock: "Reativou",
     complete: "Concluiu",
+    cancel: "Anulou",
     revoke: "Encerrou sessão",
     revoke_all: "Encerrou todas as sessões",
     accept: "Aceitou convite"
@@ -740,6 +741,8 @@
     if (filters.status && filters.status !== "all") params.set("status", filters.status);
     if (filters.dueFrom) params.set("due_from", filters.dueFrom);
     if (filters.dueTo) params.set("due_to", filters.dueTo);
+    if (filters.followUp && filters.followUp !== "all") params.set("follow_up_filter", filters.followUp);
+    if (filters.promise && filters.promise !== "all") params.set("promise_filter", filters.promise);
     return params;
   }
 
@@ -971,7 +974,7 @@
     $("#dashboard-open-amount").textContent = `${formatCurrency(summary.open_amount)} em aberto`;
     const followUps = Number(summary.follow_up_today_count || 0) + Number(summary.overdue_follow_up_count || 0);
     $("#dashboard-follow-up-count").textContent = followUps;
-    $("#dashboard-follow-up-detail").textContent = `${summary.overdue_follow_up_count || 0} atrasado(s), ${summary.follow_up_today_count || 0} para hoje`;
+    $("#dashboard-follow-up-detail").textContent = `${summary.overdue_follow_up_count || 0} atrasado(s), ${summary.follow_up_today_count || 0} hoje · ${summary.overdue_promises_count || 0} promessa(s) vencida(s)`;
     $("#dashboard-collections-alert")?.classList.toggle("has-overdue", Number(summary.overdue_count || 0) > 0);
   }
 
@@ -988,6 +991,8 @@
     $("#collection-paid-month-count").textContent = `${summary.paid_this_month_count || 0} pagamento(s)`;
     $("#collection-follow-up-today").textContent = `${summary.follow_up_today_count || 0} acompanhamento(s) para hoje`;
     $("#collection-follow-up-overdue").textContent = `${summary.overdue_follow_up_count || 0} acompanhamento(s) atrasado(s)`;
+    $("#collection-follow-up-upcoming").textContent = `${summary.upcoming_follow_up_count || 0} acompanhamento(s) futuro(s)`;
+    $("#collection-promise-alert").textContent = `${summary.open_promises_count || 0} promessa(s) aberta(s), ${summary.overdue_promises_count || 0} vencida(s)`;
     $("#collection-result-count").textContent = state.collections.total === 1 ? "1 cobrança" : `${state.collections.total} cobranças`;
     $("#collections-table").innerHTML = items.length ? items.map((item) => `<tr>
       <td><strong>${escapeHtml(item.client_name)}</strong></td>
@@ -996,7 +1001,7 @@
       <td>${escapeHtml(formatDate(item.due_date))}</td>
       <td>${formatCurrency(item.status === "paid" ? item.paid_amount : item.amount)}</td>
       <td><span class="badge ${collectionStatusClass(item.status)}">${escapeHtml(collectionStatusLabel(item.status))}</span>${item.status === "paid" && item.paid_at ? `<small class="collection-payment-date">Pago em ${escapeHtml(formatDate(item.paid_at, true))}</small>` : ""}</td>
-      <td class="collection-contact-cell">${item.last_contacted_at ? escapeHtml(formatDate(item.last_contacted_at, true)) : "Sem contato"}<small>${item.action_count || 0} registro(s)${item.next_follow_up_at ? ` · Próximo: ${escapeHtml(formatDate(item.next_follow_up_at, true))}` : ""}</small></td>
+      <td class="collection-contact-cell">${item.last_contacted_at ? escapeHtml(formatDate(item.last_contacted_at, true)) : "Sem contato"}<small>${item.action_count || 0} registro(s)${item.next_follow_up_at ? ` · Próximo: ${escapeHtml(formatDate(item.next_follow_up_at, true))}` : ""}</small>${item.latest_promise_date ? `<span class="collection-promise-note">Promessa: ${escapeHtml(formatDate(item.latest_promise_date))}${item.latest_promise_amount ? ` · ${formatCurrency(item.latest_promise_amount)}` : ""}</span>` : ""}</td>
       <td><div class="collection-row-actions">${!["paid", "cancelled"].includes(item.status) ? `<button class="primary-link" type="button" data-collection-action="${escapeHtml(item.id)}">Registrar contato</button>` : ""}<button class="text-link" type="button" data-collection-history="${escapeHtml(item.id)}">Histórico</button><button class="text-link" type="button" data-collection-client="${escapeHtml(item.client_id)}">Cliente</button></div></td>
     </tr>`).join("") : '<tr><td colspan="8" class="empty-cell">Nenhuma cobrança encontrada com estes filtros.</td></tr>';
     $$("[data-collection-client]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openClientDetail(button.dataset.collectionClient)));
@@ -1007,13 +1012,46 @@
   function renderCollectionActionHistory() {
     const actions = state.collections.actions || [];
     $("#collection-action-history").innerHTML = actions.length ? `<div class="collection-history-list">${actions.map((action) => `
-      <article class="collection-history-item">
-        <header><strong>${escapeHtml(collectionActionTypeLabels[action.action_type] || action.action_type)} · ${escapeHtml(collectionOutcomeLabels[action.outcome] || action.outcome)}</strong><span>${escapeHtml(formatDate(action.contacted_at, true))}</span></header>
+      <article class="collection-history-item ${action.cancelled_at ? "cancelled" : ""}">
+        <header><strong>${escapeHtml(collectionActionTypeLabels[action.action_type] || action.action_type)} · ${escapeHtml(collectionOutcomeLabels[action.outcome] || action.outcome)}${action.cancelled_at ? '<span class="collection-cancelled-badge">Anulado</span>' : ""}</strong><span>${escapeHtml(formatDate(action.contacted_at, true))}</span></header>
         <p>${escapeHtml(action.notes)}</p>
         ${action.promise_date ? `<p class="collection-history-promise">Promessa: ${escapeHtml(formatDate(action.promise_date))}${action.promise_amount ? ` · ${formatCurrency(action.promise_amount)}` : ""}</p>` : ""}
         ${action.next_follow_up_at ? `<p class="collection-history-meta">Próximo acompanhamento: ${escapeHtml(formatDate(action.next_follow_up_at, true))}</p>` : ""}
         <small class="collection-history-meta">Registrado por ${escapeHtml(action.created_by_name || "Equipe")}</small>
+        ${action.cancelled_at ? `<p class="collection-cancellation-reason"><strong>Anulado por ${escapeHtml(action.cancelled_by_name || "Administrador")} em ${escapeHtml(formatDate(action.cancelled_at, true))}:</strong> ${escapeHtml(action.cancellation_reason || "Sem motivo informado")}</p>` : ""}
+        ${!action.cancelled_at && (state.user?.role === "admin" || state.user?.is_superuser) ? `<div class="collection-history-actions"><button class="danger-link" type="button" data-cancel-collection-action="${escapeHtml(action.id)}">Anular registro</button></div>` : ""}
       </article>`).join("")}</div>` : '<div class="empty-state">Nenhuma ação de cobrança registrada para esta parcela.</div>';
+    $$("[data-cancel-collection-action]", $("#collection-action-history")).forEach((button) => button.addEventListener("click", () => openCollectionCancellation(button.dataset.cancelCollectionAction)));
+  }
+
+  function openCollectionCancellation(actionId) {
+    state.collections.selectedActionId = actionId;
+    const form = $("#collection-cancel-form");
+    form.reset();
+    $("#collection-cancel-dialog").showModal();
+    window.setTimeout(() => form.elements.reason.focus(), 30);
+  }
+
+  async function cancelCollectionAction(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !state.collections.selectedActionId || !state.collections.selectedItem) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Anulando…");
+    try {
+      await api(`/api/v1/financial/collections/actions/${state.collections.selectedActionId}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: form.elements.reason.value.trim() })
+      });
+      closeDialog($("#collection-cancel-dialog"));
+      await loadCollectionActionHistory(state.collections.selectedItem.id);
+      await loadCollections();
+      toast("Ação de cobrança anulada.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   async function loadCollectionActionHistory(installmentId) {
@@ -2667,17 +2705,20 @@
         q: String(raw.q || "").trim(),
         status: String(raw.status || "all"),
         dueFrom: String(raw.due_from || ""),
-        dueTo: String(raw.due_to || "")
+        dueTo: String(raw.due_to || ""),
+        followUp: String(raw.follow_up_filter || "all"),
+        promise: String(raw.promise_filter || "all")
       };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#clear-collection-filters").addEventListener("click", () => {
       $("#collection-filter-form").reset();
-      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "" };
+      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all" };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#collection-action-outcome").addEventListener("change", toggleCollectionPromiseFields);
     $("#collection-action-form").addEventListener("submit", saveCollectionAction);
+    $("#collection-cancel-form").addEventListener("submit", cancelCollectionAction);
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
     $("#client-import-template-button").addEventListener("click", downloadClientImportTemplate);

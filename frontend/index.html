@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.11.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.12.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -175,12 +175,14 @@
               <article><span>Próximos 7 dias</span><strong id="collection-due-soon-amount">—</strong><small id="collection-due-soon-count">0 parcelas</small></article>
               <article class="paid-summary"><span>Recebido no mês</span><strong id="collection-paid-month-amount">—</strong><small id="collection-paid-month-count">0 pagamentos</small></article>
             </div>
-            <div class="follow-up-summary" aria-live="polite"><strong id="collection-follow-up-today">0 acompanhamentos para hoje</strong><span id="collection-follow-up-overdue">0 acompanhamentos atrasados</span></div>
+            <div class="follow-up-summary" aria-live="polite"><strong id="collection-follow-up-today">0 acompanhamentos para hoje</strong><span id="collection-follow-up-overdue">0 acompanhamentos atrasados</span><span id="collection-follow-up-upcoming">0 acompanhamentos futuros</span><span id="collection-promise-alert">0 promessas abertas</span></div>
             <form id="collection-filter-form" class="collection-filter-bar">
               <label class="collection-search-field"><span>Buscar</span><input name="q" type="search" placeholder="Cliente ou acordo" autocomplete="off" /></label>
               <label><span>Situação</span><select name="status"><option value="all">Todas</option><option value="overdue">Atrasadas</option><option value="due_soon">Próximos 7 dias</option><option value="pending">Pendentes</option><option value="paid">Pagas</option><option value="cancelled">Canceladas</option></select></label>
               <label><span>Vencimento de</span><input name="due_from" type="date" /></label>
               <label><span>Até</span><input name="due_to" type="date" /></label>
+              <label><span>Acompanhamento</span><select name="follow_up_filter"><option value="all">Todos</option><option value="overdue">Atrasados</option><option value="today">Para hoje</option><option value="upcoming">Futuros</option><option value="none">Sem acompanhamento</option></select></label>
+              <label><span>Promessa</span><select name="promise_filter"><option value="all">Todas</option><option value="overdue">Promessa vencida</option><option value="today">Vence hoje</option><option value="upcoming">Futura</option><option value="none">Sem promessa</option></select></label>
               <button class="primary-button" type="submit">Aplicar filtros</button>
               <button id="clear-collection-filters" class="secondary-button" type="button">Limpar</button>
             </form>
@@ -282,7 +284,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.11.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.12.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -347,6 +349,15 @@
         </div>
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar ação</button></div>
         <section class="collection-history-panel"><h3>Histórico desta parcela</h3><div id="collection-action-history"><div class="loading-row">Carregando histórico…</div></div></section>
+      </form>
+    </dialog>
+
+    <dialog id="collection-cancel-dialog" class="modal small-modal">
+      <form id="collection-cancel-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">CORREÇÃO AUDITÁVEL</p><h2>Anular ação de cobrança</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <p class="form-help">O registro continuará visível como anulado, mas deixará de contar nos acompanhamentos e promessas.</p>
+        <div class="form-grid single"><label><span>Motivo da anulação *</span><textarea name="reason" rows="4" minlength="5" maxlength="1000" required placeholder="Explique por que este registro deve ser desconsiderado"></textarea></label></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="danger-button" value="default" type="submit">Confirmar anulação</button></div>
       </form>
     </dialog>
 
@@ -519,6 +530,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.11.0"></script>
+    <script src="./assets/app.js?v=5.12.0"></script>
   </body>
 </html>

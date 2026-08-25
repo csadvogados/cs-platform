@@ -1,6 +1,6 @@
 import calendar
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -17,6 +17,7 @@ from app.schemas.financial import (
     CreditorRead,
     CollectionItemRead,
     CollectionActionCreate,
+    CollectionActionCancel,
     CollectionActionRead,
     CollectionSummaryRead,
     CollectionsRead,
@@ -103,6 +104,8 @@ def collection_status(installment: PaymentInstallment, today: date) -> str:
 def list_collections(
     q: str = Query(default="", max_length=200),
     collection_status_filter: str = Query(default="all", alias="status"),
+    follow_up_filter: str = Query(default="all"),
+    promise_filter: str = Query(default="all"),
     due_from: date | None = None,
     due_to: date | None = None,
     db: Session = Depends(get_db),
@@ -113,6 +116,11 @@ def list_collections(
     allowed_statuses = {"all", "pending", "due_soon", "paid", "overdue", "cancelled"}
     if collection_status_filter not in allowed_statuses:
         raise HTTPException(status_code=422, detail="Situação de cobrança inválida")
+    allowed_tracking_filters = {"all", "overdue", "today", "upcoming", "none"}
+    if follow_up_filter not in allowed_tracking_filters:
+        raise HTTPException(status_code=422, detail="Filtro de acompanhamento inválido")
+    if promise_filter not in allowed_tracking_filters:
+        raise HTTPException(status_code=422, detail="Filtro de promessa inválido")
 
     rows = db.execute(
         select(PaymentInstallment, PaymentAgreement, Client)
@@ -128,9 +136,14 @@ def list_collections(
     ))
     action_counts: dict[uuid.UUID, int] = {}
     latest_actions: dict[uuid.UUID, CollectionAction] = {}
+    latest_promises: dict[uuid.UUID, CollectionAction] = {}
     for action in action_rows:
+        if action.cancelled_at:
+            continue
         action_counts[action.installment_id] = action_counts.get(action.installment_id, 0) + 1
         latest_actions.setdefault(action.installment_id, action)
+        if action.outcome == "promise_to_pay" and action.promise_date:
+            latest_promises.setdefault(action.installment_id, action)
     today = date.today()
     month_start = today.replace(day=1)
     normalized_query = q.strip().casefold()
@@ -144,6 +157,14 @@ def list_collections(
             installment.status = stored_status
             status_changed = True
         latest_action = latest_actions.get(installment.id)
+        latest_promise = latest_promises.get(installment.id)
+        follow_up_status = "none"
+        if latest_action and latest_action.next_follow_up_at:
+            follow_up_date = latest_action.next_follow_up_at.date()
+            follow_up_status = "overdue" if follow_up_date < today else "today" if follow_up_date == today else "upcoming"
+        promise_status = "none"
+        if latest_promise and effective_status in {"pending", "due_soon", "overdue"}:
+            promise_status = "overdue" if latest_promise.promise_date < today else "today" if latest_promise.promise_date == today else "upcoming"
         all_items.append(CollectionItemRead(
             id=installment.id,
             client_id=client.id,
@@ -161,6 +182,10 @@ def list_collections(
             last_contacted_at=latest_action.contacted_at if latest_action else None,
             next_follow_up_at=latest_action.next_follow_up_at if latest_action else None,
             latest_outcome=latest_action.outcome if latest_action else None,
+            follow_up_status=follow_up_status,
+            latest_promise_date=latest_promise.promise_date if latest_promise else None,
+            latest_promise_amount=latest_promise.promise_amount if latest_promise else None,
+            promise_status=promise_status,
         ))
     if status_changed:
         db.commit()
@@ -175,6 +200,7 @@ def list_collections(
     open_ids = {item.id for item in open_items}
     follow_up_today_count = 0
     overdue_follow_up_count = 0
+    upcoming_follow_up_count = 0
     for installment_id, action in latest_actions.items():
         if installment_id not in open_ids or not action.next_follow_up_at:
             continue
@@ -183,6 +209,10 @@ def list_collections(
             follow_up_today_count += 1
         elif follow_up_date < today:
             overdue_follow_up_count += 1
+        else:
+            upcoming_follow_up_count += 1
+    open_promises = [item for item in open_items if item.promise_status != "none"]
+    overdue_promises = [item for item in open_promises if item.promise_status == "overdue"]
     summary = CollectionSummaryRead(
         open_count=len(open_items),
         open_amount=sum((item.amount for item in open_items), Decimal("0")),
@@ -194,6 +224,9 @@ def list_collections(
         paid_this_month_amount=sum((item.paid_amount for item in paid_this_month), Decimal("0")),
         follow_up_today_count=follow_up_today_count,
         overdue_follow_up_count=overdue_follow_up_count,
+        upcoming_follow_up_count=upcoming_follow_up_count,
+        open_promises_count=len(open_promises),
+        overdue_promises_count=len(overdue_promises),
     )
 
     items = all_items
@@ -209,6 +242,10 @@ def list_collections(
         items = [item for item in items if item.due_date >= due_from]
     if due_to:
         items = [item for item in items if item.due_date <= due_to]
+    if follow_up_filter != "all":
+        items = [item for item in items if item.follow_up_status == follow_up_filter]
+    if promise_filter != "all":
+        items = [item for item in items if item.promise_status == promise_filter]
 
     return CollectionsRead(summary=summary, items=items, total=len(items))
 
@@ -227,7 +264,9 @@ def owned_collection_installment(
     return installment
 
 
-def collection_action_read(action: CollectionAction, user_name: str) -> CollectionActionRead:
+def collection_action_read(
+    action: CollectionAction, user_name: str, cancelled_by_name: str | None = None
+) -> CollectionActionRead:
     return CollectionActionRead(
         id=action.id,
         organization_id=action.organization_id,
@@ -244,6 +283,10 @@ def collection_action_read(action: CollectionAction, user_name: str) -> Collecti
         promise_amount=action.promise_amount,
         next_follow_up_at=action.next_follow_up_at,
         created_at=action.created_at,
+        cancelled_at=action.cancelled_at,
+        cancelled_by_user_id=action.cancelled_by_user_id,
+        cancelled_by_name=cancelled_by_name,
+        cancellation_reason=action.cancellation_reason,
     )
 
 
@@ -254,16 +297,24 @@ def list_collection_actions(
     actor: User = Depends(get_current_user),
 ):
     owned_collection_installment(db, installment_id, actor.organization_id)
-    rows = db.execute(
-        select(CollectionAction, User.full_name)
-        .join(User, User.id == CollectionAction.created_by_user_id)
+    actions = list(db.scalars(
+        select(CollectionAction)
         .where(
             CollectionAction.installment_id == installment_id,
             CollectionAction.organization_id == actor.organization_id,
         )
         .order_by(CollectionAction.contacted_at.desc(), CollectionAction.created_at.desc())
-    ).all()
-    return [collection_action_read(action, user_name) for action, user_name in rows]
+    ))
+    user_ids = {
+        user_id for action in actions
+        for user_id in (action.created_by_user_id, action.cancelled_by_user_id)
+        if user_id
+    }
+    names = dict(db.execute(select(User.id, User.full_name).where(User.id.in_(user_ids))).all()) if user_ids else {}
+    return [
+        collection_action_read(action, names.get(action.created_by_user_id, "Equipe"), names.get(action.cancelled_by_user_id))
+        for action in actions
+    ]
 
 
 @router.post(
@@ -309,6 +360,46 @@ def add_collection_action(
     db.commit()
     db.refresh(action)
     return collection_action_read(action, actor.full_name)
+
+
+@router.post(
+    "/collections/actions/{action_id}/cancel",
+    response_model=CollectionActionRead,
+)
+def cancel_collection_action(
+    action_id: uuid.UUID,
+    payload: CollectionActionCancel,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    if actor.role != "admin" and not actor.is_superuser:
+        raise HTTPException(status_code=403, detail="Somente administradores podem anular ações de cobrança")
+    action = db.scalar(
+        select(CollectionAction).where(
+            CollectionAction.id == action_id,
+            CollectionAction.organization_id == actor.organization_id,
+        )
+    )
+    if not action:
+        raise HTTPException(status_code=404, detail="Ação de cobrança não encontrada")
+    if action.cancelled_at:
+        raise HTTPException(status_code=409, detail="Esta ação de cobrança já foi anulada")
+    action.cancelled_at = datetime.now(timezone.utc)
+    action.cancelled_by_user_id = actor.id
+    action.cancellation_reason = payload.reason.strip()
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="collection_action",
+        entity_id=action.id,
+        action="cancel",
+        new_values={"reason": action.cancellation_reason, "installment_id": str(action.installment_id)},
+    )
+    db.commit()
+    db.refresh(action)
+    creator_name = db.scalar(select(User.full_name).where(User.id == action.created_by_user_id)) or "Equipe"
+    return collection_action_read(action, creator_name, actor.full_name)
 
 
 def owned_client(db: Session, client_id: uuid.UUID, org_id: uuid.UUID) -> Client:

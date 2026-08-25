@@ -116,6 +116,10 @@ class CollectionItemRead(BaseModel):
     last_contacted_at: datetime | None = None
     next_follow_up_at: datetime | None = None
     latest_outcome: CollectionOutcome | None = None
+    follow_up_status: Literal["none", "overdue", "today", "upcoming"] = "none"
+    latest_promise_date: date | None = None
+    latest_promise_amount: Decimal | None = None
+    promise_status: Literal["none", "overdue", "today", "upcoming"] = "none"
 
 
 class CollectionSummaryRead(BaseModel):
@@ -129,6 +133,9 @@ class CollectionSummaryRead(BaseModel):
     paid_this_month_amount: Decimal
     follow_up_today_count: int = 0
     overdue_follow_up_count: int = 0
+    upcoming_follow_up_count: int = 0
+    open_promises_count: int = 0
+    overdue_promises_count: int = 0
 
 
 class CollectionsRead(BaseModel):
@@ -165,3 +172,11 @@ class CollectionActionRead(CollectionActionCreate, ORM):
     created_by_user_id: uuid.UUID
     created_by_name: str
     created_at: datetime
+    cancelled_at: datetime | None = None
+    cancelled_by_user_id: uuid.UUID | None = None
+    cancelled_by_name: str | None = None
+    cancellation_reason: str | None = None
+
+
+class CollectionActionCancel(BaseModel):
+    reason: str = Field(min_length=5, max_length=1000)

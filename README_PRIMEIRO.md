@@ -1,49 +1,52 @@
-# CS Platform v5.11.0 — Ações de cobrança
+# CS Platform v5.12.0 — Central de cobranças
 
-Este pacote deve ser aplicado sobre a versão v5.10.0.
+Este pacote deve ser aplicado sobre a versão v5.11.0.
 
-## O que foi adicionado
+## Novidades
 
-- Registro de contatos de cobrança por parcela.
-- Canais: ligação, WhatsApp, e-mail, negociação e outros.
-- Resultados do contato, incluindo promessa de pagamento.
-- Data e valor prometidos.
-- Programação do próximo acompanhamento.
-- Histórico completo por parcela, com responsável e data.
-- Alertas de acompanhamentos para hoje e atrasados.
-- Registro das ações no Histórico de atividades.
+- Anulação segura de ações de cobrança por administrador.
+- Justificativa obrigatória para cada anulação.
+- Registro original preservado e identificado como anulado.
+- Administrador, data e motivo da anulação exibidos no histórico.
+- Registros anulados deixam de contar nos indicadores.
+- Filtros por acompanhamento atrasado, para hoje, futuro ou não agendado.
+- Filtros por promessa vencida, para hoje, futura ou inexistente.
+- Indicadores de acompanhamentos futuros e promessas abertas ou vencidas.
+- Promessa e valor exibidos diretamente na agenda.
+- Auditoria da anulação no Histórico de atividades.
 
 ## Arquivos
 
-Substitua ou adicione os 10 arquivos deste pacote exatamente nos mesmos caminhos do repositório.
+Substitua ou adicione os 9 arquivos exatamente nos mesmos caminhos do repositório.
 
-O arquivo novo abaixo deve ser criado no GitHub:
+Arquivo novo:
 
-`backend/alembic/versions/0011_collection_actions.py`
+`backend/alembic/versions/0012_collection_action_cancellation.py`
 
 ## Commit sugerido
 
-`feat: adicionar ações e lembretes de cobrança v5.11.0`
+`feat: ampliar central e anulação de cobranças v5.12.0`
 
 ## Deploy
 
-1. Envie todos os arquivos no mesmo commit.
+1. Envie os 9 arquivos no mesmo commit.
 2. Aguarde o deploy da API e do site.
-3. A API executará automaticamente a migração `0011_collection_actions` ao iniciar.
+3. A API executará automaticamente a migração `0012_collection_action_cancellation`.
 4. Não configure nem altere o campo Pre-deploy Command do Railway.
 
 ## Teste após o deploy
 
-1. Atualize o sistema com `Ctrl + F5` e entre novamente.
-2. Abra **Cobranças**.
-3. Clique em **Registrar contato** em uma parcela aberta.
-4. Escolha **Promessa de pagamento**, informe data, valor, próximo acompanhamento e observações.
-5. Salve e confirme que o registro aparece no histórico da parcela.
-6. Confirme que a coluna **Último contato** e os alertas de acompanhamento foram atualizados.
-7. Abra **Histórico** no menu e confirme o registro da ação de cobrança.
+1. Atualize com `Ctrl + F5` e entre novamente.
+2. Abra **Cobranças** e confirme os novos filtros de acompanhamento e promessa.
+3. Abra o histórico de uma parcela que tenha contato registrado.
+4. Como administrador, clique em **Anular registro**.
+5. Informe uma justificativa e confirme.
+6. Verifique se o registro permanece visível como **Anulado**.
+7. Confirme que ele deixou de contar nos indicadores e filtros.
+8. Abra **Histórico** no menu e confirme a atividade **Anulou — Ação de cobrança**.
 
-## Verificação do banco
+## Revisão do banco
 
 Nos logs da API, a revisão final deve aparecer como:
 
-`0011_collection_actions (head)`
+`0012_collection_action_cancellation (head)`
