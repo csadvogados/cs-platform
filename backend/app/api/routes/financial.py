@@ -18,6 +18,8 @@ from app.schemas.financial import (
     CreditorCreate,
     CreditorRead,
     CollectionAssignmentUpdate,
+    CollectionBulkAssignmentResult,
+    CollectionBulkAssignmentUpdate,
     CollectionItemRead,
     CollectionActionCreate,
     CollectionActionCancel,
@@ -523,6 +525,66 @@ def update_collection_assignment(
     db.commit()
     db.refresh(installment)
     return installment
+
+
+@router.put("/collections/assignment/bulk", response_model=CollectionBulkAssignmentResult)
+def update_collection_assignments_bulk(
+    payload: CollectionBulkAssignmentUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    if actor.role not in {"admin", "supervisor"} and not actor.is_superuser:
+        raise HTTPException(status_code=403, detail="Somente administradores e supervisores podem organizar a fila de cobranças")
+
+    requested_ids = set(payload.installment_ids)
+    installments = list(db.scalars(select(PaymentInstallment).where(
+        PaymentInstallment.id.in_(requested_ids),
+        PaymentInstallment.organization_id == actor.organization_id,
+    )))
+    if len(installments) != len(requested_ids):
+        raise HTTPException(status_code=404, detail="Uma ou mais cobranças selecionadas não foram encontradas")
+
+    changes_assignee = "assigned_user_id" in payload.model_fields_set
+    assignee = None
+    if changes_assignee and payload.assigned_user_id:
+        assignee = db.scalar(select(User).where(
+            User.id == payload.assigned_user_id,
+            User.organization_id == actor.organization_id,
+            User.deleted_at.is_(None),
+            User.status == "active",
+        ))
+        if not assignee:
+            raise HTTPException(status_code=422, detail="O responsável selecionado não está ativo nesta organização")
+
+    for installment in installments:
+        old_values = {
+            "assigned_user_id": str(installment.collection_assigned_user_id) if installment.collection_assigned_user_id else None,
+            "priority": installment.collection_priority,
+        }
+        if changes_assignee:
+            installment.collection_assigned_user_id = assignee.id if assignee else None
+        if payload.priority is not None:
+            installment.collection_priority = payload.priority
+        audit_values = {"previous": old_values, "bulk_update": True}
+        if changes_assignee:
+            audit_values.update({
+                "assigned_user_id": str(assignee.id) if assignee else None,
+                "assigned_user_name": assignee.full_name if assignee else None,
+            })
+        if payload.priority is not None:
+            audit_values["priority"] = installment.collection_priority
+        record_audit(
+            db,
+            organization_id=actor.organization_id,
+            user_id=actor.id,
+            entity_type="payment_installment",
+            entity_id=installment.id,
+            action="update",
+            new_values=audit_values,
+        )
+
+    db.commit()
+    return CollectionBulkAssignmentResult(updated_count=len(installments))
 
 
 def collection_action_read(

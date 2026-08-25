@@ -157,6 +157,23 @@ class CollectionAssignmentUpdate(BaseModel):
     priority: CollectionPriority = "normal"
 
 
+class CollectionBulkAssignmentUpdate(BaseModel):
+    installment_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    assigned_user_id: uuid.UUID | None = None
+    priority: CollectionPriority | None = None
+
+    @model_validator(mode="after")
+    def validate_changes(self):
+        if "assigned_user_id" not in self.model_fields_set and self.priority is None:
+            raise ValueError("Informe o responsável ou a prioridade que deve ser aplicada")
+        self.installment_ids = list(dict.fromkeys(self.installment_ids))
+        return self
+
+
+class CollectionBulkAssignmentResult(BaseModel):
+    updated_count: int
+
+
 class CollectionTeamPerformanceRead(BaseModel):
     user_id: uuid.UUID
     user_name: str
