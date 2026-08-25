@@ -1,7 +1,7 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, Uuid
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
@@ -77,6 +77,40 @@ class PaymentAgreement(TimestampMixin, Base):
 
     client = relationship("Client")
     debt = relationship("Debt")
+    installments = relationship(
+        "PaymentInstallment",
+        back_populates="agreement",
+        cascade="all, delete-orphan",
+        order_by="PaymentInstallment.installment_number",
+    )
+
+
+class PaymentInstallment(TimestampMixin, Base):
+    __tablename__ = "payment_installments"
+    __table_args__ = (
+        UniqueConstraint("agreement_id", "installment_number", name="uq_payment_installments_agreement_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"), index=True
+    )
+    agreement_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payment_agreements.id", ondelete="CASCADE"), index=True
+    )
+    installment_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending", index=True)
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_method: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    payment_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    agreement = relationship("PaymentAgreement", back_populates="installments")
 
 class Diagnosis(TimestampMixin, Base):
     __tablename__ = "diagnoses"

@@ -1,13 +1,16 @@
+import calendar
 import uuid
+from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.financial import Creditor, Debt, Expense, Income, PaymentAgreement
+from app.models.financial import Creditor, Debt, Expense, Income, PaymentAgreement, PaymentInstallment
 from app.models.user import User
 from app.schemas.financial import (
     CreditorCreate,
@@ -20,10 +23,65 @@ from app.schemas.financial import (
     IncomeRead,
     PaymentAgreementCreate,
     PaymentAgreementRead,
+    InstallmentPaymentCreate,
+    PaymentInstallmentRead,
 )
 from app.services.audit import record_audit
 
 router = APIRouter()
+
+CENT = Decimal("0.01")
+
+
+def add_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def build_installments(agreement: PaymentAgreement) -> list[PaymentInstallment]:
+    count = max(1, agreement.installment_count)
+    total = max(Decimal("0"), Decimal(agreement.negotiated_amount) - Decimal(agreement.down_payment))
+    if total <= 0:
+        return []
+    regular = Decimal(agreement.installment_amount or 0).quantize(CENT, rounding=ROUND_HALF_UP)
+    equal_amount = (total / count).quantize(CENT, rounding=ROUND_HALF_UP)
+    if regular <= 0 or regular * (count - 1) >= total:
+        regular = equal_amount
+    start = agreement.first_due_date or date.today()
+    installments: list[PaymentInstallment] = []
+    allocated = Decimal("0")
+    for number in range(1, count + 1):
+        amount = regular if number < count else (total - allocated).quantize(CENT, rounding=ROUND_HALF_UP)
+        if amount <= 0:
+            amount = equal_amount
+        allocated += amount
+        installments.append(PaymentInstallment(
+            organization_id=agreement.organization_id,
+            client_id=agreement.client_id,
+            agreement_id=agreement.id,
+            installment_number=number,
+            due_date=add_months(start, number - 1),
+            amount=amount,
+            status="pending",
+            paid_amount=Decimal("0"),
+        ))
+    return installments
+
+
+def sync_installment_statuses(agreement: PaymentAgreement) -> bool:
+    changed = False
+    today = date.today()
+    for installment in agreement.installments:
+        if installment.status in {"paid", "cancelled"}:
+            continue
+        expected = "overdue" if installment.due_date < today else "pending"
+        if installment.status != expected:
+            installment.status = expected
+            changed = True
+    return changed
 
 
 def owned_client(db: Session, client_id: uuid.UUID, org_id: uuid.UUID) -> Client:
@@ -426,7 +484,7 @@ def owned_agreement(
     organization_id: uuid.UUID,
 ) -> PaymentAgreement:
     agreement = db.scalar(
-        select(PaymentAgreement).where(
+        select(PaymentAgreement).options(selectinload(PaymentAgreement.installments)).where(
             PaymentAgreement.id == agreement_id,
             PaymentAgreement.client_id == client_id,
             PaymentAgreement.organization_id == organization_id,
@@ -476,6 +534,7 @@ def add_payment_agreement(
     )
     db.add(agreement)
     db.flush()
+    agreement.installments.extend(build_installments(agreement))
     record_audit(
         db,
         organization_id=actor.organization_id,
@@ -491,8 +550,7 @@ def add_payment_agreement(
         },
     )
     db.commit()
-    db.refresh(agreement)
-    return agreement
+    return owned_agreement(db, client_id, agreement.id, actor.organization_id)
 
 
 @router.get(
@@ -505,9 +563,9 @@ def list_payment_agreements(
     actor: User = Depends(get_current_user),
 ):
     owned_client(db, client_id, actor.organization_id)
-    return list(
+    agreements = list(
         db.scalars(
-            select(PaymentAgreement)
+            select(PaymentAgreement).options(selectinload(PaymentAgreement.installments))
             .where(
                 PaymentAgreement.client_id == client_id,
                 PaymentAgreement.organization_id == actor.organization_id,
@@ -515,6 +573,12 @@ def list_payment_agreements(
             .order_by(PaymentAgreement.created_at.desc(), PaymentAgreement.id)
         )
     )
+    statuses_changed = False
+    for agreement in agreements:
+        statuses_changed = sync_installment_statuses(agreement) or statuses_changed
+    if statuses_changed:
+        db.commit()
+    return agreements
 
 
 @router.put(
@@ -531,8 +595,19 @@ def update_payment_agreement(
     owned_client(db, client_id, actor.organization_id)
     validate_agreement_debt(db, client_id, payload.debt_id, actor.organization_id)
     agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
+    schedule_fields = {"negotiated_amount", "down_payment", "installment_count", "installment_amount", "first_due_date"}
+    schedule_changed = any(getattr(agreement, field) != getattr(payload, field) for field in schedule_fields)
+    if schedule_changed and any(item.status == "paid" for item in agreement.installments):
+        raise HTTPException(
+            status_code=409,
+            detail="O plano não pode ser alterado porque já existem parcelas pagas. Estorne os pagamentos antes de modificar valores ou vencimentos.",
+        )
     for field, value in payload.model_dump().items():
         setattr(agreement, field, value)
+    if schedule_changed:
+        agreement.installments.clear()
+        db.flush()
+        agreement.installments.extend(build_installments(agreement))
     record_audit(
         db,
         organization_id=actor.organization_id,
@@ -548,8 +623,137 @@ def update_payment_agreement(
         },
     )
     db.commit()
-    db.refresh(agreement)
-    return agreement
+    return owned_agreement(db, client_id, agreement.id, actor.organization_id)
+
+
+@router.post(
+    "/clients/{client_id}/agreements/{agreement_id}/installments/generate",
+    response_model=list[PaymentInstallmentRead],
+)
+def generate_payment_installments(
+    client_id: uuid.UUID,
+    agreement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
+    if agreement.installments:
+        raise HTTPException(status_code=409, detail="Este acordo já possui parcelas geradas")
+    agreement.installments.extend(build_installments(agreement))
+    if not agreement.installments:
+        raise HTTPException(status_code=422, detail="O acordo não possui saldo parcelável")
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="payment_installment",
+        entity_id=agreement.id,
+        action="create",
+        new_values={"title": agreement.title, "count": len(agreement.installments)},
+    )
+    db.commit()
+    return agreement.installments
+
+
+def owned_installment(
+    agreement: PaymentAgreement,
+    installment_id: uuid.UUID,
+) -> PaymentInstallment:
+    installment = next((item for item in agreement.installments if item.id == installment_id), None)
+    if not installment:
+        raise HTTPException(status_code=404, detail="Parcela não encontrada")
+    return installment
+
+
+@router.put(
+    "/clients/{client_id}/agreements/{agreement_id}/installments/{installment_id}/payment",
+    response_model=PaymentInstallmentRead,
+)
+def register_installment_payment(
+    client_id: uuid.UUID,
+    agreement_id: uuid.UUID,
+    installment_id: uuid.UUID,
+    payload: InstallmentPaymentCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
+    installment = owned_installment(agreement, installment_id)
+    if payload.paid_amount > installment.amount:
+        raise HTTPException(
+            status_code=422,
+            detail="O valor pago não pode ser maior que o valor da parcela",
+        )
+    installment.paid_amount = payload.paid_amount
+    installment.paid_at = payload.paid_at
+    installment.payment_method = payload.payment_method
+    installment.payment_notes = payload.payment_notes
+    installment.status = "paid"
+    db.flush()
+    if agreement.installments and all(item.status == "paid" for item in agreement.installments):
+        agreement.status = "completed"
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="payment_installment",
+        entity_id=installment.id,
+        action="update",
+        new_values={
+            "title": agreement.title,
+            "installment_number": installment.installment_number,
+            "amount": str(installment.paid_amount),
+            "payment_method": installment.payment_method,
+            "status": installment.status,
+        },
+    )
+    db.commit()
+    db.refresh(installment)
+    return installment
+
+
+@router.delete(
+    "/clients/{client_id}/agreements/{agreement_id}/installments/{installment_id}/payment",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def reverse_installment_payment(
+    client_id: uuid.UUID,
+    agreement_id: uuid.UUID,
+    installment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+):
+    owned_client(db, client_id, actor.organization_id)
+    agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
+    installment = owned_installment(agreement, installment_id)
+    if installment.status != "paid":
+        raise HTTPException(status_code=409, detail="Esta parcela não possui pagamento para estornar")
+    previous_amount = installment.paid_amount
+    installment.paid_amount = Decimal("0")
+    installment.paid_at = None
+    installment.payment_method = None
+    installment.payment_notes = None
+    installment.status = "overdue" if installment.due_date < date.today() else "pending"
+    if agreement.status == "completed":
+        agreement.status = "active"
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="payment_installment",
+        entity_id=installment.id,
+        action="delete",
+        new_values={
+            "title": agreement.title,
+            "installment_number": installment.installment_number,
+            "amount": str(previous_amount),
+            "status": installment.status,
+        },
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete(
@@ -564,6 +768,11 @@ def delete_payment_agreement(
 ):
     owned_client(db, client_id, actor.organization_id)
     agreement = owned_agreement(db, client_id, agreement_id, actor.organization_id)
+    if any(item.status == "paid" for item in agreement.installments):
+        raise HTTPException(
+            status_code=409,
+            detail="Este acordo possui pagamentos registrados. Estorne os pagamentos antes de apagar o acordo.",
+        )
     record_audit(
         db,
         organization_id=actor.organization_id,

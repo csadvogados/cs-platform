@@ -10,6 +10,7 @@ PaymentMethod = Literal[
     "debit_card", "automatic_debit", "other",
 ]
 AgreementStatus = Literal["draft", "active", "completed", "defaulted", "cancelled"]
+InstallmentStatus = Literal["pending", "paid", "overdue", "cancelled"]
 
 class ORM(BaseModel): model_config = ConfigDict(from_attributes=True)
 class IncomeCreate(BaseModel):
@@ -62,9 +63,34 @@ class PaymentAgreementCreate(BaseModel):
         return self
 
 
+class PaymentInstallmentRead(ORM):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    client_id: uuid.UUID
+    agreement_id: uuid.UUID
+    installment_number: int
+    due_date: date
+    amount: Decimal
+    status: InstallmentStatus
+    paid_amount: Decimal
+    paid_at: datetime | None
+    payment_method: PaymentMethod | None
+    payment_notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class InstallmentPaymentCreate(BaseModel):
+    paid_amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    paid_at: datetime
+    payment_method: PaymentMethod
+    payment_notes: str | None = Field(default=None, max_length=10000)
+
+
 class PaymentAgreementRead(PaymentAgreementCreate, ORM):
     id: uuid.UUID
     organization_id: uuid.UUID
     client_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    installments: list[PaymentInstallmentRead] = Field(default_factory=list)

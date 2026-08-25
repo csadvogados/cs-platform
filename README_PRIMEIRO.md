@@ -1,74 +1,57 @@
-# CS Platform v5.8.0 — Acordos e formas de pagamento
+# CS Platform v5.9.0 — Controle de parcelas e pagamentos
 
-Este pacote deve ser aplicado sobre a **v5.7.6 já instalada**.
+Este pacote atualiza a versão v5.8.0 já instalada. Ele não apaga clientes, dívidas, acordos ou outros dados existentes.
 
-## O que esta versão acrescenta
+## O que foi adicionado
 
-- cadastro de acordos de pagamento dentro dos detalhes do cliente;
-- vínculo opcional do acordo com uma dívida já cadastrada;
-- formas de pagamento: Pix, boleto, transferência, dinheiro, cartões, débito automático e outra;
-- valor original, valor negociado, entrada, quantidade e valor das parcelas;
-- cálculo automático da parcela;
-- primeiro vencimento e situação do acordo;
-- edição e exclusão com confirmação;
-- registro das operações no Histórico de atividades;
-- correção de datas sem horário que podiam aparecer um dia antes;
-- migration `0009_payment_agreements.py` aplicada automaticamente no deploy da API.
+- geração automática das parcelas ao cadastrar um acordo;
+- geração de parcelas para acordos antigos que ainda não possuem grade;
+- situações **Pendente**, **Paga**, **Atrasada** e **Cancelada**;
+- registro de valor, data, forma e observação do pagamento;
+- estorno de pagamento;
+- cálculo automático do total recebido e do saldo restante;
+- conclusão automática do acordo quando todas as parcelas forem pagas;
+- histórico das operações na auditoria;
+- proteção contra alteração ou exclusão de acordo com pagamentos registrados.
 
-## Como instalar
+## Arquivos que devem ser substituídos
 
-1. Extraia este ZIP no computador.
-2. Abra o repositório `csadvogados/cs-platform` no GitHub.
-3. Copie os **10 arquivos** do pacote para o projeto, mantendo exatamente as mesmas pastas. Nove arquivos serão substituídos.
-4. O décimo arquivo é novo e deve ser adicionado neste caminho:
+Copie os 10 arquivos abaixo para os mesmos caminhos do repositório no GitHub:
 
-   `backend/alembic/versions/0009_payment_agreements.py`
+1. `backend/alembic/versions/0010_payment_installments.py` — arquivo novo
+2. `backend/app/api/routes/financial.py`
+3. `backend/app/core/constants.py`
+4. `backend/app/models/__init__.py`
+5. `backend/app/models/financial.py`
+6. `backend/app/schemas/financial.py`
+7. `backend/docker-entrypoint.sh`
+8. `frontend/index.html`
+9. `frontend/assets/app.js`
+10. `frontend/assets/styles.css`
 
-5. Faça um único commit com o nome:
+Não apague a migração anterior `0009_payment_agreements.py`.
 
-   `feat: adicionar acordos e formas de pagamento v5.8.0`
+## Nome sugerido para o commit
 
-6. Aguarde os dois deployments do Railway:
+`feat: adicionar controle de parcelas e pagamentos v5.9.0`
 
-   - `cs-platform-api`
-   - `cs-platform-web`
+## Deploy
 
-7. Não altere variáveis, comandos ou configurações do Railway. A migration será executada pelo `docker-entrypoint.sh` da API.
+Depois do commit, aguarde o Railway concluir os dois serviços:
 
-## Teste depois do deploy
+- `cs-platform-api`;
+- `cs-platform-web`.
 
-1. Abra `https://cs-platform-api-production.up.railway.app/api/v1/health` e confirme:
+A API executará automaticamente a migração `0010_payment_installments` durante a inicialização. Não coloque comando adicional em **Pre-deploy Command**.
 
-   `{"status":"ok","database":"ok"}`
+## Teste após o deploy
 
-2. Entre em `https://cs-platform-web-production.up.railway.app/`.
-3. Abra **Clientes** e depois **Ver detalhes** em um cliente que possua dívida.
-4. Localize **Acordos de pagamento** e clique em **Novo acordo**.
-5. Selecione a dívida. O título e o valor original devem ser preenchidos automaticamente.
-6. Informe, para um teste simples:
+1. Abra a plataforma e pressione `Ctrl + F5`.
+2. Entre em **Clientes** e abra **Ver detalhes**.
+3. Cadastre um novo acordo com 2 parcelas.
+4. Confirme que as duas parcelas aparecem com seus vencimentos.
+5. Na primeira parcela, clique em **Registrar pagamento**.
+6. Confirme que ela muda para **Paga**, o total recebido aumenta e o saldo restante diminui.
+7. Clique em **Estornar** e confirme que a parcela volta para **Pendente** ou **Atrasada**.
 
-   - forma: `Boleto`;
-   - valor negociado: `7000`;
-   - entrada: `1000`;
-   - parcelas: `12`;
-   - primeiro vencimento: uma data futura.
-
-7. Clique em **Calcular parcela**. O resultado esperado é `12 parcela(s) de R$ 500`.
-8. Clique em **Salvar acordo** e confirme que ele aparece na tabela.
-9. Teste **Editar**, alterando a situação para **Concluído**.
-10. Teste **Apagar** e confirme que o registro desaparece.
-
-## Arquivos incluídos
-
-- `backend/alembic/versions/0009_payment_agreements.py`
-- `backend/app/api/routes/financial.py`
-- `backend/app/core/constants.py`
-- `backend/app/models/__init__.py`
-- `backend/app/models/financial.py`
-- `backend/app/schemas/financial.py`
-- `backend/docker-entrypoint.sh`
-- `frontend/index.html`
-- `frontend/assets/app.js`
-- `frontend/assets/styles.css`
-
-Não copie `README_PRIMEIRO.md` nem `SHA256SUMS.txt` para o repositório; eles servem apenas como instrução e verificação do pacote.
+Para um acordo criado na v5.8.0, clique em **Gerar parcelas** uma única vez.

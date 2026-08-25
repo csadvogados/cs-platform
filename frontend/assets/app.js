@@ -15,6 +15,7 @@
     clientImport: { filename: "", clients: [], preview: null },
     financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], diagnosis: null, history: [] },
     editingFinancial: null,
+    installmentPaymentTarget: null,
     editingUserId: null,
     users: [],
     organization: null,
@@ -96,6 +97,7 @@
     creditor: "Credor",
     debt: "Dívida",
     payment_agreement: "Acordo de pagamento",
+    payment_installment: "Parcela e pagamento",
     diagnosis: "Diagnóstico",
     crm_contact: "Contato CRM",
     crm_interaction: "Atendimento",
@@ -144,7 +146,8 @@
     eligibility_result: "Resultado",
     count: "Quantidade",
     query: "Pesquisa",
-    source_filename: "Arquivo"
+    source_filename: "Arquivo",
+    installment_number: "Parcela"
   };
 
   const crmDefinitions = {
@@ -201,6 +204,13 @@
     completed: "Concluído",
     defaulted: "Inadimplente",
     cancelled: "Cancelado"
+  };
+
+  const installmentStatusLabels = {
+    pending: "Pendente",
+    paid: "Paga",
+    overdue: "Atrasada",
+    cancelled: "Cancelada"
   };
 
   const financialDefinitions = {
@@ -1234,6 +1244,61 @@
     return debt ? `${debtNatureLabel(debt.nature)} · ${creditorName(debt.creditor_id)}` : "Sem dívida vinculada";
   }
 
+  function installmentStatusLabel(value) {
+    return installmentStatusLabels[String(value || "").toLowerCase()] || value || "Pendente";
+  }
+
+  function installmentStatusClass(value) {
+    const normalized = String(value || "").toLowerCase();
+    if (normalized === "overdue") return "danger";
+    if (["cancelled", "pending"].includes(normalized)) return "neutral";
+    return "";
+  }
+
+  function agreementPaymentSummary(agreement) {
+    const installments = Array.isArray(agreement.installments) ? agreement.installments : [];
+    const paid = installments.reduce((total, item) => total + Number(item.paid_amount || 0), 0);
+    const installmentBalance = Math.max(0, Number(agreement.negotiated_amount || 0) - Number(agreement.down_payment || 0));
+    return {
+      paid,
+      remaining: Math.max(0, installmentBalance - paid),
+      paidCount: installments.filter((item) => item.status === "paid").length,
+      installments
+    };
+  }
+
+  function renderAgreementCard(agreement) {
+    const summary = agreementPaymentSummary(agreement);
+    const installmentsBody = summary.installments.length
+      ? summary.installments.map((item) => `<tr>
+          <td>${escapeHtml(item.installment_number)}</td>
+          <td>${escapeHtml(formatDate(item.due_date))}</td>
+          <td>${formatCurrency(item.amount)}</td>
+          <td><span class="badge ${installmentStatusClass(item.status)}">${escapeHtml(installmentStatusLabel(item.status))}</span></td>
+          <td>${item.status === "paid" ? `${formatCurrency(item.paid_amount)}<small>${escapeHtml(formatDate(item.paid_at, true))} · ${escapeHtml(paymentMethodLabel(item.payment_method))}</small>` : "—"}</td>
+          <td><span class="financial-actions">${item.status === "paid"
+            ? `<button class="delete-button" type="button" data-reverse-installment="${escapeHtml(item.id)}" data-agreement-id="${escapeHtml(agreement.id)}">Estornar</button>`
+            : `<button class="edit-button" type="button" data-pay-installment="${escapeHtml(item.id)}" data-agreement-id="${escapeHtml(agreement.id)}">Registrar pagamento</button>`}</span></td>
+        </tr>`).join("")
+      : '<tr><td colspan="6" class="empty-cell">As parcelas ainda não foram geradas.</td></tr>';
+    return `<details class="agreement-item" open>
+      <summary>
+        <span><strong>${escapeHtml(agreement.title)}</strong><small>${escapeHtml(agreementDebtLabel(agreement.debt_id))}</small></span>
+        <span><small>Valor negociado</small><strong>${formatCurrency(agreement.negotiated_amount)}</strong></span>
+        <span><small>Recebido</small><strong>${formatCurrency(summary.paid)}</strong></span>
+        <span><small>Saldo restante</small><strong>${formatCurrency(summary.remaining)}</strong></span>
+        <span><span class="badge ${agreementStatusClass(agreement.status)}">${escapeHtml(agreementStatusLabel(agreement.status))}</span></span>
+      </summary>
+      <div class="agreement-item-content">
+        <div class="agreement-toolbar">
+          <p>${summary.paidCount} de ${summary.installments.length || agreement.installment_count} parcela(s) paga(s) · ${escapeHtml(paymentMethodLabel(agreement.payment_method))}</p>
+          <span class="financial-actions">${!summary.installments.length ? `<button class="edit-button" type="button" data-generate-installments="${escapeHtml(agreement.id)}">Gerar parcelas</button>` : ""}<button class="edit-button" type="button" data-edit-financial="agreement" data-edit-id="${escapeHtml(agreement.id)}">Editar acordo</button><button class="delete-button" type="button" data-delete-financial="agreement" data-delete-id="${escapeHtml(agreement.id)}">Apagar acordo</button></span>
+        </div>
+        <div class="table-wrap compact-table installment-table"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Pagamento</th><th>Ações</th></tr></thead><tbody>${installmentsBody}</tbody></table></div>
+      </div>
+    </details>`;
+  }
+
   function setSelectValue(select, value, label = value) {
     if (!select) return;
     const normalized = value == null ? "" : String(value);
@@ -1398,10 +1463,7 @@
 
       <section class="panel agreement-panel">
         <div class="panel-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h3>Acordos de pagamento</h3></div><div class="button-row"><span class="result-count">${agreements.length} ${agreements.length === 1 ? "acordo" : "acordos"}</span><button class="primary-button" type="button" data-open-dialog="agreement-dialog">Novo acordo</button></div></div>
-        <div class="table-wrap compact-table">
-          <table><thead><tr><th>Acordo</th><th>Dívida vinculada</th><th>Forma</th><th>Valor negociado</th><th>Parcelamento</th><th>1º vencimento</th><th>Status</th><th>Ações</th></tr></thead>
-          <tbody>${agreements.length ? agreements.map((item) => `<tr><td><strong>${escapeHtml(item.title)}</strong>${Number(item.down_payment || 0) > 0 ? `<small>Entrada: ${escapeHtml(formatCurrency(item.down_payment))}</small>` : ""}</td><td>${escapeHtml(agreementDebtLabel(item.debt_id))}</td><td>${escapeHtml(paymentMethodLabel(item.payment_method))}</td><td>${formatCurrency(item.negotiated_amount)}</td><td>${escapeHtml(item.installment_count)} × ${formatCurrency(item.installment_amount)}</td><td>${escapeHtml(formatDate(item.first_due_date))}</td><td><span class="badge ${agreementStatusClass(item.status)}">${escapeHtml(agreementStatusLabel(item.status))}</span></td><td><span class="financial-actions"><button class="edit-button" type="button" data-edit-financial="agreement" data-edit-id="${escapeHtml(item.id)}">Editar</button><button class="delete-button" type="button" data-delete-financial="agreement" data-delete-id="${escapeHtml(item.id)}">Apagar</button></span></td></tr>`).join("") : '<tr><td colspan="8" class="empty-cell">Nenhum acordo de pagamento cadastrado.</td></tr>'}</tbody></table>
-        </div>
+        <div class="agreement-list">${agreements.length ? agreements.map(renderAgreementCard).join("") : '<div class="empty-state">Nenhum acordo de pagamento cadastrado.</div>'}</div>
       </section>
 
       <section class="panel diagnosis-panel">
@@ -1434,6 +1496,9 @@
     $$("[data-open-dialog]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-edit-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openFinancialEditor(button.dataset.editFinancial, button.dataset.editId)));
     $$("[data-delete-financial]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => deleteFinancial(button.dataset.deleteFinancial, button.dataset.deleteId, button)));
+    $$("[data-generate-installments]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => generateInstallments(button.dataset.generateInstallments, button)));
+    $$("[data-pay-installment]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openInstallmentPayment(button.dataset.agreementId, button.dataset.payInstallment)));
+    $$("[data-reverse-installment]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => reverseInstallmentPayment(button.dataset.agreementId, button.dataset.reverseInstallment, button)));
     $("#open-current-report")?.addEventListener("click", (event) => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/report`, event.currentTarget));
     $$("[data-open-saved-report]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/history/${button.dataset.openSavedReport}/report`, button)));
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
@@ -2085,6 +2150,76 @@
     }
   }
 
+  async function generateInstallments(agreementId, button) {
+    if (!state.selectedClient || !agreementId) return;
+    setBusy(button, true, "Gerando…");
+    try {
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/agreements/${agreementId}/installments/generate`, { method: "POST" });
+      await refreshFinancial("Parcelas geradas com sucesso.");
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
+  }
+
+  function openInstallmentPayment(agreementId, installmentId) {
+    const agreement = state.financial.agreements.find((item) => String(item.id) === String(agreementId));
+    const installment = agreement?.installments?.find((item) => String(item.id) === String(installmentId));
+    const dialog = $("#installment-payment-dialog");
+    const form = $("#installment-payment-form");
+    if (!agreement || !installment || !dialog || !form) {
+      toast("Não foi possível localizar a parcela.", "error");
+      return;
+    }
+    form.reset();
+    state.installmentPaymentTarget = { agreementId: agreement.id, installmentId: installment.id };
+    form.elements.paid_amount.value = Number(installment.amount || 0).toFixed(2);
+    form.elements.paid_at.value = toLocalDateTimeValue(new Date());
+    setSelectValue(form.elements.payment_method, agreement.payment_method || "pix", paymentMethodLabel(agreement.payment_method));
+    $("#installment-payment-description").textContent = `${agreement.title} · Parcela ${installment.installment_number} · Vencimento ${formatDate(installment.due_date)}`;
+    dialog.showModal();
+  }
+
+  async function submitInstallmentPayment(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const target = state.installmentPaymentTarget;
+    if (!form.reportValidity() || !state.selectedClient || !target) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Confirmando…");
+    try {
+      const raw = Object.fromEntries(new FormData(form));
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/agreements/${target.agreementId}/installments/${target.installmentId}/payment`, {
+        method: "PUT",
+        body: JSON.stringify({
+          paid_amount: Number(raw.paid_amount || 0),
+          paid_at: new Date(raw.paid_at).toISOString(),
+          payment_method: raw.payment_method,
+          payment_notes: raw.payment_notes || null
+        })
+      });
+      closeDialog(form.closest("dialog"));
+      state.installmentPaymentTarget = null;
+      await refreshFinancial("Pagamento registrado com sucesso.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function reverseInstallmentPayment(agreementId, installmentId, button) {
+    if (!state.selectedClient || !window.confirm("Deseja estornar este pagamento? A parcela voltará a ficar pendente ou atrasada.")) return;
+    setBusy(button, true, "Estornando…");
+    try {
+      await api(`/api/v1/financial/clients/${state.selectedClient.id}/agreements/${agreementId}/installments/${installmentId}/payment`, { method: "DELETE" });
+      await refreshFinancial("Pagamento estornado. A parcela voltou a ficar em aberto.");
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
+  }
+
   async function refreshDiagnosis() {
     if (!state.selectedClient) return;
     const button = $("#refresh-diagnosis");
@@ -2419,6 +2554,7 @@
     $("#expense-form").addEventListener("submit", submitExpense);
     $("#debt-form").addEventListener("submit", submitDebt);
     $("#agreement-form").addEventListener("submit", submitAgreement);
+    $("#installment-payment-form").addEventListener("submit", submitInstallmentPayment);
     $("#agreement-calculate-button").addEventListener("click", applyAgreementCalculation);
     ["negotiated_amount", "down_payment", "installment_count", "installment_amount"].forEach((name) => {
       $("#agreement-form").elements[name].addEventListener("input", updateAgreementInstallmentPreview);
