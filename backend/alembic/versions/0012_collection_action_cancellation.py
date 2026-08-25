@@ -1,6 +1,6 @@
 """Add auditable collection action cancellation.
 
-Revision ID: 0012_collection_action_cancellation
+Revision ID: 0012_action_cancellation
 Revises: 0011_collection_actions
 Create Date: 2026-08-25
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0012_collection_action_cancellation"
+revision = "0012_action_cancellation"
 down_revision = "0011_collection_actions"
 branch_labels = None
 depends_on = None
