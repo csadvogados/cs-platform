@@ -8,7 +8,6 @@
     ]
   },
   "deploy": {
-    "preDeployCommand": [],
     "startCommand": "/app/docker-entrypoint.sh",
     "healthcheckPath": "/api/v1/health",
     "healthcheckTimeout": 300,
