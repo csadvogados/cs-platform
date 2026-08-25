@@ -11,7 +11,6 @@ PaymentMethod = Literal[
 ]
 AgreementStatus = Literal["draft", "active", "completed", "defaulted", "cancelled"]
 InstallmentStatus = Literal["pending", "paid", "overdue", "cancelled"]
-CollectionStatus = Literal["pending", "due_soon", "paid", "overdue", "cancelled"]
 
 class ORM(BaseModel): model_config = ConfigDict(from_attributes=True)
 class IncomeCreate(BaseModel):
@@ -95,35 +94,3 @@ class PaymentAgreementRead(PaymentAgreementCreate, ORM):
     created_at: datetime
     updated_at: datetime
     installments: list[PaymentInstallmentRead] = Field(default_factory=list)
-
-
-class CollectionItemRead(BaseModel):
-    id: uuid.UUID
-    client_id: uuid.UUID
-    client_name: str
-    agreement_id: uuid.UUID
-    agreement_title: str
-    installment_number: int
-    due_date: date
-    amount: Decimal
-    status: CollectionStatus
-    paid_amount: Decimal
-    paid_at: datetime | None
-    payment_method: PaymentMethod | None
-
-
-class CollectionSummaryRead(BaseModel):
-    open_count: int
-    open_amount: Decimal
-    overdue_count: int
-    overdue_amount: Decimal
-    due_soon_count: int
-    due_soon_amount: Decimal
-    paid_this_month_count: int
-    paid_this_month_amount: Decimal
-
-
-class CollectionsRead(BaseModel):
-    summary: CollectionSummaryRead
-    items: list[CollectionItemRead]
-    total: int
