@@ -155,9 +155,17 @@ class CollectionWorkloadRead(BaseModel):
     open_amount: Decimal = Decimal("0")
 
 
+class CollectionAgingRead(BaseModel):
+    bucket: Literal["days_1_7", "days_8_30", "days_31_60", "days_61_plus"]
+    label: str
+    count: int = 0
+    amount: Decimal = Decimal("0")
+
+
 class CollectionsRead(BaseModel):
     summary: CollectionSummaryRead
     workload: list[CollectionWorkloadRead] = Field(default_factory=list)
+    aging: list[CollectionAgingRead] = Field(default_factory=list)
     items: list[CollectionItemRead]
     total: int
 

@@ -5,7 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
-    collections: { summary: null, workload: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
+    collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -749,6 +749,7 @@
     if (filters.promise && filters.promise !== "all") params.set("promise_filter", filters.promise);
     if (filters.responsible && filters.responsible !== "all") params.set("responsible_filter", filters.responsible);
     if (filters.priority && filters.priority !== "all") params.set("priority_filter", filters.priority);
+    if (filters.aging && filters.aging !== "all") params.set("aging_filter", filters.aging);
     return params;
   }
 
@@ -767,6 +768,7 @@
     ]);
     state.collections.summary = response.summary || null;
     state.collections.workload = Array.isArray(response.workload) ? response.workload : [];
+    state.collections.aging = Array.isArray(response.aging) ? response.aging : [];
     state.collections.items = Array.isArray(response.items) ? response.items : [];
     state.collections.total = Number(response.total || 0);
     state.collections.selectedIds = [];
@@ -1032,6 +1034,33 @@
     $("#dashboard-collections-alert")?.classList.toggle("has-overdue", Number(summary.overdue_count || 0) > 0);
   }
 
+  function renderCollectionAging() {
+    const rows = state.collections.aging || [];
+    const grid = $("#collection-aging-grid");
+    const activeBucket = state.collections.filters.aging || "all";
+    grid.innerHTML = rows.length ? rows.map((row) => `<button class="collection-aging-card${activeBucket === row.bucket ? " active" : ""}" type="button" data-aging-bucket="${escapeHtml(row.bucket)}" data-aging-label="${escapeHtml(row.label)}" aria-pressed="${activeBucket === row.bucket ? "true" : "false"}">
+      <span>${escapeHtml(row.label)}</span>
+      <strong>${formatCurrency(row.amount)}</strong>
+      <small>${row.count === 1 ? "1 cobrança atrasada" : `${escapeHtml(row.count || 0)} cobranças atrasadas`}</small>
+    </button>`).join("") : '<div class="loading-row">Nenhuma faixa de atraso disponível.</div>';
+    $$("[data-aging-bucket]", grid).forEach((button) => button.addEventListener("click", async () => {
+      const bucket = String(button.dataset.agingBucket || "all");
+      const label = String(button.dataset.agingLabel || "atraso");
+      const form = $("#collection-filter-form");
+      state.collections.filters.aging = bucket;
+      state.collections.filters.status = "all";
+      form.elements.aging_filter.value = bucket;
+      form.elements.status.value = "all";
+      try {
+        await loadCollections();
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+        toast(`Faixa de ${label} exibida: ${state.collections.total} cobrança(s).`);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }));
+  }
+
   function renderCollectionWorkload() {
     const rows = state.collections.workload || [];
     const body = $("#collection-workload-body");
@@ -1102,6 +1131,7 @@
     $("#collection-urgent-count").textContent = `${summary.urgent_count || 0} cobrança(s) urgente(s)`;
     $("#collection-unassigned-count").textContent = `${summary.unassigned_count || 0} cobrança(s) sem responsável`;
     $("#collection-result-count").textContent = state.collections.total === 1 ? "1 cobrança" : `${state.collections.total} cobranças`;
+    renderCollectionAging();
     renderCollectionWorkload();
     $("#collections-table").innerHTML = items.length ? items.map((item) => `<tr>
       <td class="collection-select-cell">${canManageCollectionQueue() && !["paid", "cancelled"].includes(item.status) ? `<input type="checkbox" data-collection-select="${escapeHtml(item.id)}" aria-label="Selecionar cobrança de ${escapeHtml(item.client_name)}" />` : ""}</td>
@@ -3037,13 +3067,14 @@
         followUp: String(raw.follow_up_filter || "all"),
         promise: String(raw.promise_filter || "all"),
         responsible: String(raw.responsible_filter || "all"),
-        priority: String(raw.priority_filter || "all")
+        priority: String(raw.priority_filter || "all"),
+        aging: String(raw.aging_filter || "all")
       };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#clear-collection-filters").addEventListener("click", () => {
       $("#collection-filter-form").reset();
-      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all" };
+      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all" };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#collection-select-all").addEventListener("change", (event) => {

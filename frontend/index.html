@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.16.1" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.17.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -175,6 +175,10 @@
               <article><span>Próximos 7 dias</span><strong id="collection-due-soon-amount">—</strong><small id="collection-due-soon-count">0 parcelas</small></article>
               <article class="paid-summary"><span>Recebido no mês</span><strong id="collection-paid-month-amount">—</strong><small id="collection-paid-month-count">0 pagamentos</small></article>
             </div>
+            <section class="collection-aging-panel" aria-labelledby="collection-aging-heading">
+              <div class="panel-header"><div><p class="eyebrow dark">TEMPO DE ATRASO</p><h2 id="collection-aging-heading">Envelhecimento da inadimplência</h2></div><span>Selecione uma faixa para abrir a fila</span></div>
+              <div id="collection-aging-grid" class="collection-aging-grid"><div class="loading-row">Calculando faixas de atraso…</div></div>
+            </section>
             <details class="collection-workload-panel" open>
               <summary><span><small>GESTÃO DA EQUIPE</small><strong>Carga atual de cobranças</strong></span><span>Distribuição da carteira em aberto</span></summary>
               <div class="collection-workload-content">
@@ -214,6 +218,7 @@
               <label><span>Promessa</span><select name="promise_filter"><option value="all">Todas</option><option value="overdue">Promessa vencida</option><option value="today">Vence hoje</option><option value="upcoming">Futura</option><option value="none">Sem promessa</option></select></label>
               <label><span>Responsável</span><select id="collection-responsible-filter" name="responsible_filter"><option value="all">Todos</option><option value="mine">Minhas cobranças</option><option value="unassigned">Sem responsável</option></select></label>
               <label><span>Prioridade</span><select name="priority_filter"><option value="all">Todas</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baixa</option></select></label>
+              <label><span>Tempo de atraso</span><select id="collection-aging-filter" name="aging_filter"><option value="all">Todas as faixas</option><option value="days_1_7">1 a 7 dias</option><option value="days_8_30">8 a 30 dias</option><option value="days_31_60">31 a 60 dias</option><option value="days_61_plus">Mais de 60 dias</option></select></label>
               <button class="primary-button" type="submit">Aplicar filtros</button>
               <button id="clear-collection-filters" class="secondary-button" type="button">Limpar</button>
             </form>
@@ -320,7 +325,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.16.1</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.17.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -602,6 +607,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.16.1"></script>
+    <script src="./assets/app.js?v=5.17.0"></script>
   </body>
 </html>

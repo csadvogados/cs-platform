@@ -27,6 +27,7 @@ from app.schemas.financial import (
     CollectionActionCreate,
     CollectionActionCancel,
     CollectionActionRead,
+    CollectionAgingRead,
     CollectionReportRead,
     CollectionSummaryRead,
     CollectionTeamPerformanceRead,
@@ -109,6 +110,19 @@ def collection_status(installment: PaymentInstallment, today: date) -> str:
     if installment.due_date <= today + timedelta(days=7):
         return "due_soon"
     return "pending"
+
+
+def collection_aging_bucket(due_date: date, today: date) -> str | None:
+    overdue_days = (today - due_date).days
+    if overdue_days < 1:
+        return None
+    if overdue_days <= 7:
+        return "days_1_7"
+    if overdue_days <= 30:
+        return "days_8_30"
+    if overdue_days <= 60:
+        return "days_31_60"
+    return "days_61_plus"
 
 
 def collection_report_data(
@@ -288,6 +302,7 @@ def list_collections(
     promise_filter: str = Query(default="all"),
     responsible_filter: str = Query(default="all"),
     priority_filter: str = Query(default="all"),
+    aging_filter: str = Query(default="all"),
     due_from: date | None = None,
     due_to: date | None = None,
     db: Session = Depends(get_db),
@@ -306,6 +321,9 @@ def list_collections(
     allowed_priorities = {"all", "low", "normal", "high", "urgent"}
     if priority_filter not in allowed_priorities:
         raise HTTPException(status_code=422, detail="Prioridade de cobrança inválida")
+    allowed_aging_filters = {"all", "days_1_7", "days_8_30", "days_31_60", "days_61_plus"}
+    if aging_filter not in allowed_aging_filters:
+        raise HTTPException(status_code=422, detail="Faixa de atraso inválida")
     responsible_id: uuid.UUID | None = None
     if responsible_filter not in {"all", "mine", "unassigned"}:
         try:
@@ -442,6 +460,18 @@ def list_collections(
             open_amount=sum((item.amount for item in unassigned_items), Decimal("0")),
         ))
     workload.sort(key=lambda row: (-row.urgent_count, -row.overdue_count, -row.open_count, row.user_name.casefold()))
+    aging_definitions = (
+        ("days_1_7", "1 a 7 dias"),
+        ("days_8_30", "8 a 30 dias"),
+        ("days_31_60", "31 a 60 dias"),
+        ("days_61_plus", "Mais de 60 dias"),
+    )
+    aging = [CollectionAgingRead(
+        bucket=bucket,
+        label=label,
+        count=sum(1 for item in overdue_items if collection_aging_bucket(item.due_date, today) == bucket),
+        amount=sum((item.amount for item in overdue_items if collection_aging_bucket(item.due_date, today) == bucket), Decimal("0")),
+    ) for bucket, label in aging_definitions]
     summary = CollectionSummaryRead(
         open_count=len(open_items),
         open_amount=sum((item.amount for item in open_items), Decimal("0")),
@@ -485,8 +515,10 @@ def list_collections(
         items = [item for item in items if item.assigned_user_id == responsible_id]
     if priority_filter != "all":
         items = [item for item in items if item.priority == priority_filter]
+    if aging_filter != "all":
+        items = [item for item in items if item.status == "overdue" and collection_aging_bucket(item.due_date, today) == aging_filter]
 
-    return CollectionsRead(summary=summary, workload=workload, items=items, total=len(items))
+    return CollectionsRead(summary=summary, workload=workload, aging=aging, items=items, total=len(items))
 
 
 def owned_collection_installment(
