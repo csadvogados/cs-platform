@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.12.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.13.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -175,6 +175,29 @@
               <article><span>Próximos 7 dias</span><strong id="collection-due-soon-amount">—</strong><small id="collection-due-soon-count">0 parcelas</small></article>
               <article class="paid-summary"><span>Recebido no mês</span><strong id="collection-paid-month-amount">—</strong><small id="collection-paid-month-count">0 pagamentos</small></article>
             </div>
+            <details class="collection-report-panel" open>
+              <summary><span><small>GESTÃO E RESULTADOS</small><strong>Relatório gerencial de cobranças</strong></span><span>Indicadores do período</span></summary>
+              <div class="collection-report-content">
+                <form id="collection-report-form" class="collection-report-toolbar">
+                  <label><span>Período de</span><input id="collection-report-from" name="date_from" type="date" required /></label>
+                  <label><span>Até</span><input id="collection-report-to" name="date_to" type="date" required /></label>
+                  <button class="primary-button" type="submit">Atualizar relatório</button>
+                  <button id="collection-report-export" class="secondary-button" type="button">Exportar CSV</button>
+                </form>
+                <div class="collection-report-grid">
+                  <article><span>Vencimentos no período</span><strong id="report-due-amount">—</strong><small id="report-due-count">0 parcelas</small></article>
+                  <article class="paid-summary"><span>Recebido no período</span><strong id="report-received-amount">—</strong><small id="report-received-count">0 pagamentos</small></article>
+                  <article><span>Índice de recebimento</span><strong id="report-recovery-rate">—</strong><small>Recebido ÷ vencimentos</small></article>
+                  <article><span>Promessas registradas</span><strong id="report-promise-amount">—</strong><small id="report-promise-count">0 promessas</small></article>
+                  <article><span>Ações realizadas</span><strong id="report-action-count">—</strong><small id="report-client-count">0 clientes</small></article>
+                  <article class="danger-summary"><span>Atraso atual</span><strong id="report-overdue-amount">—</strong><small id="report-overdue-count">0 parcelas</small></article>
+                </div>
+                <div class="collection-team-report">
+                  <h3>Atuação da equipe no período</h3>
+                  <div class="table-wrap"><table><thead><tr><th>Responsável</th><th>Ações</th><th>Clientes</th><th>Promessas</th><th>Valor prometido</th><th>Acompanhamentos</th></tr></thead><tbody id="collection-team-report-body"><tr><td colspan="6" class="empty-cell">Carregando relatório…</td></tr></tbody></table></div>
+                </div>
+              </div>
+            </details>
             <div class="follow-up-summary" aria-live="polite"><strong id="collection-follow-up-today">0 acompanhamentos para hoje</strong><span id="collection-follow-up-overdue">0 acompanhamentos atrasados</span><span id="collection-follow-up-upcoming">0 acompanhamentos futuros</span><span id="collection-promise-alert">0 promessas abertas</span></div>
             <form id="collection-filter-form" class="collection-filter-bar">
               <label class="collection-search-field"><span>Buscar</span><input name="q" type="search" placeholder="Cliente ou acordo" autocomplete="off" /></label>
@@ -284,7 +307,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.12.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.13.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -530,6 +553,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.12.0"></script>
+    <script src="./assets/app.js?v=5.13.0"></script>
   </body>
 </html>

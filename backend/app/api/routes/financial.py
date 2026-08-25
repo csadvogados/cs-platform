@@ -1,6 +1,8 @@
 import calendar
+import csv
+import io
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -19,7 +21,9 @@ from app.schemas.financial import (
     CollectionActionCreate,
     CollectionActionCancel,
     CollectionActionRead,
+    CollectionReportRead,
     CollectionSummaryRead,
+    CollectionTeamPerformanceRead,
     CollectionsRead,
     DebtCreate,
     DebtRead,
@@ -98,6 +102,175 @@ def collection_status(installment: PaymentInstallment, today: date) -> str:
     if installment.due_date <= today + timedelta(days=7):
         return "due_soon"
     return "pending"
+
+
+def collection_report_data(
+    db: Session,
+    organization_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+) -> CollectionReportRead:
+    if date_from > date_to:
+        raise HTTPException(status_code=422, detail="A data inicial não pode ser posterior à data final")
+    if (date_to - date_from).days > 731:
+        raise HTTPException(status_code=422, detail="O período máximo do relatório é de 24 meses")
+
+    start_at = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+    end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    installments = list(db.scalars(
+        select(PaymentInstallment).where(PaymentInstallment.organization_id == organization_id)
+    ))
+    due_items = [
+        item for item in installments
+        if date_from <= item.due_date <= date_to and item.status != "cancelled"
+    ]
+    received_items = [
+        item for item in installments
+        if item.status == "paid" and item.paid_at and start_at <= item.paid_at < end_at
+    ]
+    today = date.today()
+    overdue_items = [
+        item for item in installments
+        if item.status not in {"paid", "cancelled"} and item.due_date < today
+    ]
+
+    actions = list(db.scalars(
+        select(CollectionAction)
+        .where(
+            CollectionAction.organization_id == organization_id,
+            CollectionAction.cancelled_at.is_(None),
+            CollectionAction.contacted_at >= start_at,
+            CollectionAction.contacted_at < end_at,
+        )
+        .order_by(CollectionAction.contacted_at.desc(), CollectionAction.created_at.desc())
+    ))
+    user_ids = {action.created_by_user_id for action in actions}
+    names = dict(db.execute(
+        select(User.id, User.full_name).where(
+            User.organization_id == organization_id,
+            User.id.in_(user_ids),
+        )
+    ).all()) if user_ids else {}
+
+    latest_promises: dict[uuid.UUID, CollectionAction] = {}
+    for action in actions:
+        if action.outcome == "promise_to_pay" and action.promise_date:
+            latest_promises.setdefault(action.installment_id, action)
+
+    team_rows: list[CollectionTeamPerformanceRead] = []
+    for user_id in sorted(user_ids, key=lambda value: names.get(value, "").casefold()):
+        user_actions = [action for action in actions if action.created_by_user_id == user_id]
+        user_promises: dict[uuid.UUID, CollectionAction] = {}
+        for action in user_actions:
+            if action.outcome == "promise_to_pay" and action.promise_date:
+                user_promises.setdefault(action.installment_id, action)
+        team_rows.append(CollectionTeamPerformanceRead(
+            user_id=user_id,
+            user_name=names.get(user_id, "Equipe"),
+            action_count=len(user_actions),
+            contacted_clients=len({action.client_id for action in user_actions}),
+            promise_count=len(user_promises),
+            promise_amount=sum((Decimal(action.promise_amount or 0) for action in user_promises.values()), Decimal("0")),
+            follow_up_count=sum(1 for action in user_actions if action.next_follow_up_at),
+        ))
+
+    due_amount = sum((Decimal(item.amount or 0) for item in due_items), Decimal("0"))
+    received_amount = sum((Decimal(item.paid_amount or 0) for item in received_items), Decimal("0"))
+    recovery_rate = (
+        (received_amount / due_amount * Decimal("100")).quantize(CENT, rounding=ROUND_HALF_UP)
+        if due_amount > 0 else Decimal("0")
+    )
+    return CollectionReportRead(
+        date_from=date_from,
+        date_to=date_to,
+        due_count=len(due_items),
+        due_amount=due_amount,
+        received_count=len(received_items),
+        received_amount=received_amount,
+        overdue_count=len(overdue_items),
+        overdue_amount=sum((Decimal(item.amount or 0) for item in overdue_items), Decimal("0")),
+        action_count=len(actions),
+        contacted_clients=len({action.client_id for action in actions}),
+        promise_count=len(latest_promises),
+        promise_amount=sum((Decimal(action.promise_amount or 0) for action in latest_promises.values()), Decimal("0")),
+        recovery_rate=recovery_rate,
+        team=team_rows,
+    )
+
+
+@router.get("/collections/report", response_model=CollectionReportRead)
+def collection_report(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    today = date.today()
+    return collection_report_data(
+        db,
+        actor.organization_id,
+        date_from or today.replace(day=1),
+        date_to or today,
+    )
+
+
+@router.get("/collections/report.csv")
+def export_collection_report(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    today = date.today()
+    report = collection_report_data(
+        db,
+        actor.organization_id,
+        date_from or today.replace(day=1),
+        date_to or today,
+    )
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(["Relatório gerencial de cobranças"])
+    writer.writerow(["Período", report.date_from.strftime("%d/%m/%Y"), report.date_to.strftime("%d/%m/%Y")])
+    writer.writerow([])
+    writer.writerow(["Indicador", "Quantidade", "Valor"])
+    writer.writerow(["Vencimentos no período", report.due_count, f"{report.due_amount:.2f}"])
+    writer.writerow(["Recebimentos no período", report.received_count, f"{report.received_amount:.2f}"])
+    writer.writerow(["Parcelas atualmente atrasadas", report.overdue_count, f"{report.overdue_amount:.2f}"])
+    writer.writerow(["Promessas registradas", report.promise_count, f"{report.promise_amount:.2f}"])
+    writer.writerow(["Ações de cobrança", report.action_count, ""])
+    writer.writerow(["Clientes contatados", report.contacted_clients, ""])
+    writer.writerow(["Índice de recebimento", "", f"{report.recovery_rate:.2f}%"])
+    writer.writerow([])
+    writer.writerow(["Responsável", "Ações", "Clientes", "Promessas", "Valor prometido", "Acompanhamentos"])
+    for row in report.team:
+        writer.writerow([
+            row.user_name,
+            row.action_count,
+            row.contacted_clients,
+            row.promise_count,
+            f"{row.promise_amount:.2f}",
+            row.follow_up_count,
+        ])
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="collection_action",
+        entity_id=None,
+        action="export",
+        new_values={"date_from": str(report.date_from), "date_to": str(report.date_to)},
+    )
+    db.commit()
+    filename = f"relatorio_cobrancas_{report.date_from}_{report.date_to}.csv"
+    return Response(
+        content=("\ufeff" + stream.getvalue()).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get("/collections", response_model=CollectionsRead)

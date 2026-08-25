@@ -5,7 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
-    collections: { summary: null, items: [], total: 0, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all" }, selectedItem: null, selectedActionId: null, actions: [] },
+    collections: { summary: null, items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all" }, selectedItem: null, selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -746,12 +746,25 @@
     return params;
   }
 
+  function collectionReportParams() {
+    const filters = state.collections.reportFilters;
+    const params = new URLSearchParams();
+    if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+    if (filters.dateTo) params.set("date_to", filters.dateTo);
+    return params;
+  }
+
   async function loadCollections(showNotice = false) {
-    const response = await api(`/api/v1/financial/collections?${collectionParams().toString()}`);
+    const [response, report] = await Promise.all([
+      api(`/api/v1/financial/collections?${collectionParams().toString()}`),
+      api(`/api/v1/financial/collections/report?${collectionReportParams().toString()}`)
+    ]);
     state.collections.summary = response.summary || null;
     state.collections.items = Array.isArray(response.items) ? response.items : [];
     state.collections.total = Number(response.total || 0);
+    state.collections.report = report || null;
     renderCollections();
+    renderCollectionReport();
     renderDashboardCollections();
     if (showNotice) toast("Cobranças atualizadas.");
   }
@@ -1007,6 +1020,56 @@
     $$("[data-collection-client]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openClientDetail(button.dataset.collectionClient)));
     $$("[data-collection-action]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionActionDialog(button.dataset.collectionAction, false)));
     $$("[data-collection-history]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionActionDialog(button.dataset.collectionHistory, true)));
+  }
+
+  function renderCollectionReport() {
+    const report = state.collections.report || {};
+    const team = Array.isArray(report.team) ? report.team : [];
+    $("#report-due-amount").textContent = formatCurrency(report.due_amount);
+    $("#report-due-count").textContent = `${report.due_count || 0} parcela(s)`;
+    $("#report-received-amount").textContent = formatCurrency(report.received_amount);
+    $("#report-received-count").textContent = `${report.received_count || 0} pagamento(s)`;
+    $("#report-recovery-rate").textContent = `${Number(report.recovery_rate || 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`;
+    $("#report-promise-amount").textContent = formatCurrency(report.promise_amount);
+    $("#report-promise-count").textContent = `${report.promise_count || 0} promessa(s)`;
+    $("#report-action-count").textContent = report.action_count || 0;
+    $("#report-client-count").textContent = `${report.contacted_clients || 0} cliente(s) contatado(s)`;
+    $("#report-overdue-amount").textContent = formatCurrency(report.overdue_amount);
+    $("#report-overdue-count").textContent = `${report.overdue_count || 0} parcela(s)`;
+    $("#collection-team-report-body").innerHTML = team.length ? team.map((row) => `<tr>
+      <td><strong>${escapeHtml(row.user_name)}</strong></td>
+      <td>${row.action_count || 0}</td>
+      <td>${row.contacted_clients || 0}</td>
+      <td>${row.promise_count || 0}</td>
+      <td>${formatCurrency(row.promise_amount)}</td>
+      <td>${row.follow_up_count || 0}</td>
+    </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhuma ação de cobrança registrada neste período.</td></tr>';
+  }
+
+  async function exportCollectionReport() {
+    const button = $("#collection-report-export");
+    setBusy(button, true, "Gerando…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const query = collectionReportParams().toString();
+      const response = await fetch(`${API_BASE}/api/v1/financial/collections/report.csv${query ? `?${query}` : ""}`, { headers });
+      if (response.status === 401) {
+        clearSession();
+        showLogin("Sua sessão expirou. Entre novamente.");
+        throw new Error("Sessão expirada.");
+      }
+      if (!response.ok) throw new Error(await readError(response));
+      const from = state.collections.reportFilters.dateFrom || "inicio";
+      const to = state.collections.reportFilters.dateTo || "hoje";
+      saveBlob(await response.blob(), `relatorio_cobrancas_${from}_${to}.csv`);
+      toast("Relatório de cobranças exportado em CSV.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function renderCollectionActionHistory() {
@@ -2694,6 +2757,20 @@
       loadClientPage(state.clientPage.page + 1).catch((error) => toast(error.message, "error"));
     });
     $("#collections-refresh").addEventListener("click", () => loadCollections(true).catch((error) => toast(error.message, "error")));
+    $("#collection-report-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const raw = Object.fromEntries(new FormData(event.currentTarget));
+      if (raw.date_from && raw.date_to && raw.date_from > raw.date_to) {
+        toast("A data inicial não pode ser posterior à data final.", "error");
+        return;
+      }
+      state.collections.reportFilters = {
+        dateFrom: String(raw.date_from || ""),
+        dateTo: String(raw.date_to || "")
+      };
+      loadCollections().then(() => toast("Relatório gerencial atualizado.")).catch((error) => toast(error.message, "error"));
+    });
+    $("#collection-report-export").addEventListener("click", exportCollectionReport);
     $("#collection-filter-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const raw = Object.fromEntries(new FormData(event.currentTarget));
@@ -2886,9 +2963,22 @@
     }));
   }
 
+  function localDateValue(value) {
+    return [
+      value.getFullYear(),
+      String(value.getMonth() + 1).padStart(2, "0"),
+      String(value.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
   async function boot() {
     $("#today-date").textContent = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long" }).format(new Date());
     $("#api-address").textContent = API_BASE || "Não configurada";
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    state.collections.reportFilters = { dateFrom: localDateValue(monthStart), dateTo: localDateValue(today) };
+    $("#collection-report-from").value = state.collections.reportFilters.dateFrom;
+    $("#collection-report-to").value = state.collections.reportFilters.dateTo;
     wireEvents();
     if (!API_BASE) {
       showLogin("A API ainda não foi configurada no arquivo config.js.");

@@ -144,6 +144,33 @@ class CollectionsRead(BaseModel):
     total: int
 
 
+class CollectionTeamPerformanceRead(BaseModel):
+    user_id: uuid.UUID
+    user_name: str
+    action_count: int = 0
+    contacted_clients: int = 0
+    promise_count: int = 0
+    promise_amount: Decimal = Decimal("0")
+    follow_up_count: int = 0
+
+
+class CollectionReportRead(BaseModel):
+    date_from: date
+    date_to: date
+    due_count: int = 0
+    due_amount: Decimal = Decimal("0")
+    received_count: int = 0
+    received_amount: Decimal = Decimal("0")
+    overdue_count: int = 0
+    overdue_amount: Decimal = Decimal("0")
+    action_count: int = 0
+    contacted_clients: int = 0
+    promise_count: int = 0
+    promise_amount: Decimal = Decimal("0")
+    recovery_rate: Decimal = Decimal("0")
+    team: list[CollectionTeamPerformanceRead] = Field(default_factory=list)
+
+
 class CollectionActionCreate(BaseModel):
     action_type: CollectionActionType
     outcome: CollectionOutcome
