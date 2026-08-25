@@ -1041,14 +1041,21 @@
       <td><span class="${Number(row.overdue_count || 0) > 0 ? "danger-text" : ""}">${escapeHtml(row.overdue_count || 0)}</span></td>
       <td><span class="${Number(row.urgent_count || 0) > 0 ? "danger-text" : ""}">${escapeHtml(row.urgent_count || 0)}</span></td>
       <td>${formatCurrency(row.open_amount)}</td>
-      <td><button class="text-link" type="button" data-workload-user="${escapeHtml(row.user_id || "unassigned")}">Ver fila</button></td>
+      <td><button class="text-link" type="button" data-workload-user="${escapeHtml(row.user_id || "unassigned")}" data-workload-name="${escapeHtml(row.user_name || "Sem responsável")}">Ver fila</button></td>
     </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum responsável ativo encontrado.</td></tr>';
-    $$("[data-workload-user]", body).forEach((button) => button.addEventListener("click", () => {
+    $$("[data-workload-user]", body).forEach((button) => button.addEventListener("click", async () => {
       const responsible = String(button.dataset.workloadUser || "all");
+      const responsibleName = String(button.dataset.workloadName || "responsável");
       state.collections.filters.responsible = responsible;
       const filter = $("#collection-responsible-filter");
       if (Array.from(filter.options).some((option) => option.value === responsible)) filter.value = responsible;
-      loadCollections().catch((error) => toast(error.message, "error"));
+      try {
+        await loadCollections();
+        $("#collection-filter-form").scrollIntoView({ behavior: "smooth", block: "start" });
+        toast(`Fila de ${responsibleName} exibida: ${state.collections.total} cobrança(s).`);
+      } catch (error) {
+        toast(error.message, "error");
+      }
     }));
   }
 
