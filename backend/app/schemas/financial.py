@@ -146,8 +146,18 @@ class CollectionSummaryRead(BaseModel):
     unassigned_count: int = 0
 
 
+class CollectionWorkloadRead(BaseModel):
+    user_id: uuid.UUID | None = None
+    user_name: str
+    open_count: int = 0
+    overdue_count: int = 0
+    urgent_count: int = 0
+    open_amount: Decimal = Decimal("0")
+
+
 class CollectionsRead(BaseModel):
     summary: CollectionSummaryRead
+    workload: list[CollectionWorkloadRead] = Field(default_factory=list)
     items: list[CollectionItemRead]
     total: int
 
@@ -172,6 +182,33 @@ class CollectionBulkAssignmentUpdate(BaseModel):
 
 class CollectionBulkAssignmentResult(BaseModel):
     updated_count: int
+
+
+class CollectionDistributionCreate(BaseModel):
+    installment_ids: list[uuid.UUID] = Field(min_length=2, max_length=500)
+    user_ids: list[uuid.UUID] = Field(min_length=2, max_length=100)
+    priority: CollectionPriority | None = None
+
+    @model_validator(mode="after")
+    def unique_values(self):
+        self.installment_ids = list(dict.fromkeys(self.installment_ids))
+        self.user_ids = list(dict.fromkeys(self.user_ids))
+        if len(self.installment_ids) < 2:
+            raise ValueError("Selecione pelo menos duas cobranças")
+        if len(self.user_ids) < 2:
+            raise ValueError("Selecione pelo menos dois responsáveis")
+        return self
+
+
+class CollectionDistributionUserResult(BaseModel):
+    user_id: uuid.UUID
+    user_name: str
+    assigned_count: int
+
+
+class CollectionDistributionResult(BaseModel):
+    updated_count: int
+    distribution: list[CollectionDistributionUserResult]
 
 
 class CollectionTeamPerformanceRead(BaseModel):

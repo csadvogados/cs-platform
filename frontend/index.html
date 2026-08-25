@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.15.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.16.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -175,6 +175,12 @@
               <article><span>Próximos 7 dias</span><strong id="collection-due-soon-amount">—</strong><small id="collection-due-soon-count">0 parcelas</small></article>
               <article class="paid-summary"><span>Recebido no mês</span><strong id="collection-paid-month-amount">—</strong><small id="collection-paid-month-count">0 pagamentos</small></article>
             </div>
+            <details class="collection-workload-panel" open>
+              <summary><span><small>GESTÃO DA EQUIPE</small><strong>Carga atual de cobranças</strong></span><span>Distribuição da carteira em aberto</span></summary>
+              <div class="collection-workload-content">
+                <div class="table-wrap"><table><thead><tr><th>Responsável</th><th>Em aberto</th><th>Atrasadas</th><th>Urgentes</th><th>Valor em aberto</th><th>Fila</th></tr></thead><tbody id="collection-workload-body"><tr><td colspan="6" class="empty-cell">Carregando carga da equipe…</td></tr></tbody></table></div>
+              </div>
+            </details>
             <details class="collection-report-panel" open>
               <summary><span><small>GESTÃO E RESULTADOS</small><strong>Relatório gerencial de cobranças</strong></span><span>Indicadores do período</span></summary>
               <div class="collection-report-content">
@@ -215,7 +221,7 @@
             <div id="collection-bulk-toolbar" class="collection-bulk-toolbar" hidden>
               <label><input id="collection-select-all" type="checkbox" /> Selecionar todas as cobranças visíveis</label>
               <strong id="collection-selected-count">0 selecionadas</strong>
-              <div class="button-row"><button id="clear-collection-selection" class="secondary-button" type="button" disabled>Limpar seleção</button><button id="organize-selected-collections" class="primary-button" type="button" disabled>Organizar selecionadas</button></div>
+              <div class="button-row"><button id="clear-collection-selection" class="secondary-button" type="button" disabled>Limpar seleção</button><button id="distribute-selected-collections" class="secondary-button" type="button" disabled>Distribuir selecionadas</button><button id="organize-selected-collections" class="primary-button" type="button" disabled>Organizar selecionadas</button></div>
             </div>
             <div class="table-wrap collection-table-wrap"><table><thead><tr><th class="collection-select-column"><span class="sr-only">Selecionar</span></th><th>Cliente</th><th>Acordo</th><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Responsável</th><th>Último contato</th><th>Ações</th></tr></thead><tbody id="collections-table"><tr><td colspan="10" class="empty-cell">Carregando cobranças…</td></tr></tbody></table></div>
           </section>
@@ -314,7 +320,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.15.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.16.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -412,6 +418,18 @@
           <label><span>Prioridade</span><select name="priority"><option value="__keep__">Manter prioridade atual</option><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
         </div>
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Aplicar organização</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="collection-distribution-dialog" class="modal small-modal">
+      <form id="collection-distribution-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">DISTRIBUIÇÃO EQUILIBRADA</p><h2>Distribuir cobranças selecionadas</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <p id="collection-distribution-description" class="form-help">Selecione pelo menos dois responsáveis. O sistema distribuirá as cobranças começando por quem possui a menor carga atual.</p>
+        <fieldset class="distribution-users-fieldset"><legend>Responsáveis que participarão da distribuição *</legend><div id="collection-distribution-users" class="distribution-user-list"></div></fieldset>
+        <div class="form-grid single">
+          <label><span>Prioridade</span><select name="priority"><option value="__keep__">Manter prioridade atual</option><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Confirmar distribuição</button></div>
       </form>
     </dialog>
 
@@ -584,6 +602,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.15.0"></script>
+    <script src="./assets/app.js?v=5.16.0"></script>
   </body>
 </html>

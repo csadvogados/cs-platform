@@ -5,7 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
-    collections: { summary: null, items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
+    collections: { summary: null, workload: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -766,6 +766,7 @@
       api(`/api/v1/financial/collections/report?${collectionReportParams().toString()}`)
     ]);
     state.collections.summary = response.summary || null;
+    state.collections.workload = Array.isArray(response.workload) ? response.workload : [];
     state.collections.items = Array.isArray(response.items) ? response.items : [];
     state.collections.total = Number(response.total || 0);
     state.collections.selectedIds = [];
@@ -1031,6 +1032,26 @@
     $("#dashboard-collections-alert")?.classList.toggle("has-overdue", Number(summary.overdue_count || 0) > 0);
   }
 
+  function renderCollectionWorkload() {
+    const rows = state.collections.workload || [];
+    const body = $("#collection-workload-body");
+    body.innerHTML = rows.length ? rows.map((row) => `<tr>
+      <td><strong>${escapeHtml(row.user_name || "Sem responsável")}</strong></td>
+      <td>${escapeHtml(row.open_count || 0)}</td>
+      <td><span class="${Number(row.overdue_count || 0) > 0 ? "danger-text" : ""}">${escapeHtml(row.overdue_count || 0)}</span></td>
+      <td><span class="${Number(row.urgent_count || 0) > 0 ? "danger-text" : ""}">${escapeHtml(row.urgent_count || 0)}</span></td>
+      <td>${formatCurrency(row.open_amount)}</td>
+      <td><button class="text-link" type="button" data-workload-user="${escapeHtml(row.user_id || "unassigned")}">Ver fila</button></td>
+    </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum responsável ativo encontrado.</td></tr>';
+    $$("[data-workload-user]", body).forEach((button) => button.addEventListener("click", () => {
+      const responsible = String(button.dataset.workloadUser || "all");
+      state.collections.filters.responsible = responsible;
+      const filter = $("#collection-responsible-filter");
+      if (Array.from(filter.options).some((option) => option.value === responsible)) filter.value = responsible;
+      loadCollections().catch((error) => toast(error.message, "error"));
+    }));
+  }
+
   function selectableCollectionIds() {
     return state.collections.items
       .filter((item) => !["paid", "cancelled"].includes(item.status))
@@ -1045,6 +1066,7 @@
     if (toolbar) toolbar.hidden = !canManage;
     $("#collection-selected-count").textContent = selected.size === 1 ? "1 selecionada" : `${selected.size} selecionadas`;
     $("#organize-selected-collections").disabled = !canManage || selected.size === 0;
+    $("#distribute-selected-collections").disabled = !canManage || selected.size < 2;
     $("#clear-collection-selection").disabled = selected.size === 0;
     const selectAll = $("#collection-select-all");
     selectAll.disabled = !canManage || selectable.length === 0;
@@ -1073,6 +1095,7 @@
     $("#collection-urgent-count").textContent = `${summary.urgent_count || 0} cobrança(s) urgente(s)`;
     $("#collection-unassigned-count").textContent = `${summary.unassigned_count || 0} cobrança(s) sem responsável`;
     $("#collection-result-count").textContent = state.collections.total === 1 ? "1 cobrança" : `${state.collections.total} cobranças`;
+    renderCollectionWorkload();
     $("#collections-table").innerHTML = items.length ? items.map((item) => `<tr>
       <td class="collection-select-cell">${canManageCollectionQueue() && !["paid", "cancelled"].includes(item.status) ? `<input type="checkbox" data-collection-select="${escapeHtml(item.id)}" aria-label="Selecionar cobrança de ${escapeHtml(item.client_name)}" />` : ""}</td>
       <td><strong>${escapeHtml(item.client_name)}</strong></td>
@@ -1179,6 +1202,58 @@
       await loadCollections();
       const updated = Number(response.updated_count || installmentIds.length);
       toast(updated === 1 ? "1 cobrança organizada." : `${updated} cobranças organizadas.`);
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  function openCollectionDistribution() {
+    if (!canManageCollectionQueue() || state.collections.selectedIds.length < 2) return;
+    const activeUsers = state.users.filter((user) => String(user.status || "active") === "active");
+    if (activeUsers.length < 2) {
+      toast("Cadastre pelo menos dois usuários ativos para distribuir a fila.", "error");
+      return;
+    }
+    const form = $("#collection-distribution-form");
+    form.reset();
+    form.elements.priority.value = "__keep__";
+    $("#collection-distribution-description").textContent = `${state.collections.selectedIds.length} cobranças serão distribuídas começando por quem possui a menor carga atual.`;
+    $("#collection-distribution-users").innerHTML = activeUsers.map((user) => `<label><input type="checkbox" name="user_ids" value="${escapeHtml(user.id)}" checked /><span><strong>${escapeHtml(user.full_name || user.email)}</strong><small>${escapeHtml(userRoleLabels[user.role] || user.role || "Equipe")}</small></span></label>`).join("");
+    $("#collection-distribution-dialog").showModal();
+  }
+
+  async function saveCollectionDistribution(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const userIds = $$("input[name='user_ids']:checked", form).map((input) => input.value);
+    if (userIds.length < 2) {
+      toast("Selecione pelo menos dois responsáveis.", "error");
+      return;
+    }
+    const installmentIds = state.collections.selectedIds.slice();
+    if (installmentIds.length < 2) {
+      toast("Selecione pelo menos duas cobranças.", "error");
+      return;
+    }
+    const payload = { installment_ids: installmentIds, user_ids: userIds };
+    if (form.elements.priority.value !== "__keep__") payload.priority = form.elements.priority.value;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Distribuindo…");
+    try {
+      const response = await api("/api/v1/financial/collections/distribution/balanced", {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      closeDialog($("#collection-distribution-dialog"));
+      state.collections.selectedIds = [];
+      await loadCollections();
+      const detail = (response.distribution || [])
+        .filter((row) => Number(row.assigned_count || 0) > 0)
+        .map((row) => `${row.user_name}: ${row.assigned_count}`)
+        .join(" · ");
+      toast(`Distribuição concluída${detail ? ` — ${detail}` : "."}`);
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -2972,12 +3047,14 @@
       state.collections.selectedIds = [];
       updateCollectionBulkToolbar();
     });
+    $("#distribute-selected-collections").addEventListener("click", openCollectionDistribution);
     $("#organize-selected-collections").addEventListener("click", openBulkCollectionAssignment);
     $("#collection-action-outcome").addEventListener("change", toggleCollectionPromiseFields);
     $("#collection-action-form").addEventListener("submit", saveCollectionAction);
     $("#collection-cancel-form").addEventListener("submit", cancelCollectionAction);
     $("#collection-assignment-form").addEventListener("submit", saveCollectionAssignment);
     $("#collection-bulk-assignment-form").addEventListener("submit", saveBulkCollectionAssignment);
+    $("#collection-distribution-form").addEventListener("submit", saveCollectionDistribution);
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
     $("#client-import-template-button").addEventListener("click", downloadClientImportTemplate);

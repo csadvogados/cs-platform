@@ -20,6 +20,9 @@ from app.schemas.financial import (
     CollectionAssignmentUpdate,
     CollectionBulkAssignmentResult,
     CollectionBulkAssignmentUpdate,
+    CollectionDistributionCreate,
+    CollectionDistributionResult,
+    CollectionDistributionUserResult,
     CollectionItemRead,
     CollectionActionCreate,
     CollectionActionCancel,
@@ -27,6 +30,7 @@ from app.schemas.financial import (
     CollectionReportRead,
     CollectionSummaryRead,
     CollectionTeamPerformanceRead,
+    CollectionWorkloadRead,
     CollectionsRead,
     DebtCreate,
     DebtRead,
@@ -323,17 +327,12 @@ def list_collections(
         .where(PaymentInstallment.organization_id == actor.organization_id)
         .order_by(PaymentInstallment.due_date, Client.full_name, PaymentInstallment.installment_number)
     ).all()
-    assigned_user_ids = {
-        installment.collection_assigned_user_id
-        for installment, _agreement, _client in rows
-        if installment.collection_assigned_user_id
-    }
-    assigned_names = dict(db.execute(
-        select(User.id, User.full_name).where(
-            User.organization_id == actor.organization_id,
-            User.id.in_(assigned_user_ids),
-        )
-    ).all()) if assigned_user_ids else {}
+    queue_users = list(db.scalars(select(User).where(
+        User.organization_id == actor.organization_id,
+        User.deleted_at.is_(None),
+        User.status == "active",
+    ).order_by(User.full_name, User.id)))
+    assigned_names = {user.id: user.full_name for user in queue_users}
     action_rows = list(db.scalars(
         select(CollectionAction)
         .where(CollectionAction.organization_id == actor.organization_id)
@@ -421,6 +420,28 @@ def list_collections(
             upcoming_follow_up_count += 1
     open_promises = [item for item in open_items if item.promise_status != "none"]
     overdue_promises = [item for item in open_promises if item.promise_status == "overdue"]
+    workload: list[CollectionWorkloadRead] = []
+    for user in queue_users:
+        user_items = [item for item in open_items if item.assigned_user_id == user.id]
+        workload.append(CollectionWorkloadRead(
+            user_id=user.id,
+            user_name=user.full_name,
+            open_count=len(user_items),
+            overdue_count=sum(1 for item in user_items if item.status == "overdue"),
+            urgent_count=sum(1 for item in user_items if item.priority == "urgent"),
+            open_amount=sum((item.amount for item in user_items), Decimal("0")),
+        ))
+    unassigned_items = [item for item in open_items if item.assigned_user_id is None]
+    if unassigned_items:
+        workload.append(CollectionWorkloadRead(
+            user_id=None,
+            user_name="Sem responsável",
+            open_count=len(unassigned_items),
+            overdue_count=sum(1 for item in unassigned_items if item.status == "overdue"),
+            urgent_count=sum(1 for item in unassigned_items if item.priority == "urgent"),
+            open_amount=sum((item.amount for item in unassigned_items), Decimal("0")),
+        ))
+    workload.sort(key=lambda row: (-row.urgent_count, -row.overdue_count, -row.open_count, row.user_name.casefold()))
     summary = CollectionSummaryRead(
         open_count=len(open_items),
         open_amount=sum((item.amount for item in open_items), Decimal("0")),
@@ -465,7 +486,7 @@ def list_collections(
     if priority_filter != "all":
         items = [item for item in items if item.priority == priority_filter]
 
-    return CollectionsRead(summary=summary, items=items, total=len(items))
+    return CollectionsRead(summary=summary, workload=workload, items=items, total=len(items))
 
 
 def owned_collection_installment(
@@ -585,6 +606,92 @@ def update_collection_assignments_bulk(
 
     db.commit()
     return CollectionBulkAssignmentResult(updated_count=len(installments))
+
+
+@router.put("/collections/distribution/balanced", response_model=CollectionDistributionResult)
+def distribute_collections_balanced(
+    payload: CollectionDistributionCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    if actor.role not in {"admin", "supervisor"} and not actor.is_superuser:
+        raise HTTPException(status_code=403, detail="Somente administradores e supervisores podem distribuir cobranças")
+
+    requested_ids = set(payload.installment_ids)
+    installments = list(db.scalars(select(PaymentInstallment).where(
+        PaymentInstallment.id.in_(requested_ids),
+        PaymentInstallment.organization_id == actor.organization_id,
+    )))
+    if len(installments) != len(requested_ids):
+        raise HTTPException(status_code=404, detail="Uma ou mais cobranças selecionadas não foram encontradas")
+    if any(installment.status in {"paid", "cancelled"} for installment in installments):
+        raise HTTPException(status_code=422, detail="Cobranças pagas ou canceladas não podem ser distribuídas")
+
+    requested_user_ids = set(payload.user_ids)
+    users = list(db.scalars(select(User).where(
+        User.id.in_(requested_user_ids),
+        User.organization_id == actor.organization_id,
+        User.deleted_at.is_(None),
+        User.status == "active",
+    ).order_by(User.full_name, User.id)))
+    if len(users) != len(requested_user_ids):
+        raise HTTPException(status_code=422, detail="Um ou mais responsáveis não estão ativos nesta organização")
+
+    baseline_assignments = list(db.scalars(select(PaymentInstallment.collection_assigned_user_id).where(
+        PaymentInstallment.organization_id == actor.organization_id,
+        PaymentInstallment.status.notin_({"paid", "cancelled"}),
+        PaymentInstallment.id.notin_(requested_ids),
+        PaymentInstallment.collection_assigned_user_id.in_(requested_user_ids),
+    )))
+    load = {user.id: baseline_assignments.count(user.id) for user in users}
+    distributed = {user.id: 0 for user in users}
+    priority_order = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
+    installments.sort(key=lambda item: (
+        priority_order.get(item.collection_priority or "normal", 2),
+        item.due_date,
+        item.installment_number,
+        str(item.id),
+    ))
+
+    for installment in installments:
+        assignee = min(users, key=lambda user: (load[user.id], user.full_name.casefold(), str(user.id)))
+        old_values = {
+            "assigned_user_id": str(installment.collection_assigned_user_id) if installment.collection_assigned_user_id else None,
+            "priority": installment.collection_priority,
+        }
+        installment.collection_assigned_user_id = assignee.id
+        if payload.priority is not None:
+            installment.collection_priority = payload.priority
+        load[assignee.id] += 1
+        distributed[assignee.id] += 1
+        record_audit(
+            db,
+            organization_id=actor.organization_id,
+            user_id=actor.id,
+            entity_type="payment_installment",
+            entity_id=installment.id,
+            action="update",
+            new_values={
+                "previous": old_values,
+                "assigned_user_id": str(assignee.id),
+                "assigned_user_name": assignee.full_name,
+                "priority": installment.collection_priority,
+                "balanced_distribution": True,
+            },
+        )
+
+    db.commit()
+    return CollectionDistributionResult(
+        updated_count=len(installments),
+        distribution=[
+            CollectionDistributionUserResult(
+                user_id=user.id,
+                user_name=user.full_name,
+                assigned_count=distributed[user.id],
+            )
+            for user in users
+        ],
+    )
 
 
 def collection_action_read(

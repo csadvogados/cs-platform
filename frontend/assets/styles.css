@@ -240,6 +240,18 @@ tr:last-child td { border-bottom: 0; }
 .collection-summary-grid small { color: #7e8782; }
 .collection-summary-grid .danger-summary strong { color: var(--danger); }
 .collection-summary-grid .paid-summary strong { color: #27734f; }
+.collection-workload-panel { margin: 0 0 22px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); }
+.collection-workload-panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; cursor: pointer; list-style: none; }
+.collection-workload-panel > summary::-webkit-details-marker { display: none; }
+.collection-workload-panel > summary::after { content: "+"; color: var(--forest-2); font-size: 22px; font-weight: 800; }
+.collection-workload-panel[open] > summary::after { content: "−"; }
+.collection-workload-panel > summary > span:first-child { display: grid; gap: 4px; }
+.collection-workload-panel > summary small { color: var(--forest-2); font-size: 10px; font-weight: 850; letter-spacing: .1em; }
+.collection-workload-panel > summary strong { font-size: 17px; }
+.collection-workload-panel > summary > span:nth-child(2) { margin-left: auto; color: var(--ink-soft); font-size: 11px; }
+.collection-workload-content { padding: 0 20px 20px; border-top: 1px solid var(--line); }
+.collection-workload-content .table-wrap { margin-top: 16px; box-shadow: none; }
+.collection-workload-content th, .collection-workload-content td { padding: 11px 13px; }
 .collection-report-panel { margin: 0 0 22px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); }
 .collection-report-panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; cursor: pointer; list-style: none; }
 .collection-report-panel > summary::-webkit-details-marker { display: none; }
@@ -279,6 +291,14 @@ tr:last-child td { border-bottom: 0; }
 .collection-bulk-toolbar input, .collection-select-cell input { width: 17px; height: 17px; accent-color: var(--forest-2); }
 .collection-bulk-toolbar strong { color: var(--forest-2); font-size: 12px; }
 .collection-select-column, .collection-select-cell { width: 42px; min-width: 42px; text-align: center; }
+.distribution-users-fieldset { margin: 18px 0; padding: 14px; border: 1px solid var(--line); }
+.distribution-users-fieldset legend { padding: 0 6px; color: var(--forest-2); font-size: 11px; font-weight: 850; }
+.distribution-user-list { display: grid; gap: 8px; max-height: 240px; overflow: auto; }
+.distribution-user-list label { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); background: #f7f5ef; cursor: pointer; }
+.distribution-user-list input { width: 17px; height: 17px; accent-color: var(--forest-2); }
+.distribution-user-list span { display: grid; gap: 2px; }
+.distribution-user-list strong { font-size: 12px; }
+.distribution-user-list small { color: var(--ink-soft); font-size: 10px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .collection-payment-date { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 10px; }
 .follow-up-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: -8px 0 18px; padding: 12px 16px; border-left: 3px solid var(--gold); background: #f0ede5; color: var(--ink-soft); font-size: 12px; }
@@ -633,6 +653,7 @@ tr:last-child td { border-bottom: 0; }
   .collection-report-toolbar { align-items: stretch; flex-direction: column; }
   .collection-report-toolbar label { min-width: 0; }
   .collection-report-panel > summary > span:nth-child(2) { display: none; }
+  .collection-workload-panel > summary > span:nth-child(2) { display: none; }
   .collection-alert, .collection-summary-grid article, .collection-summary-grid article:nth-child(2) { border-right: 0; border-bottom: 1px solid var(--line); }
   .collection-alert:last-child, .collection-summary-grid article:last-child { border-bottom: 0; }
   .collection-list-header { align-items: flex-start; flex-direction: column; }

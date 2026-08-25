@@ -1,20 +1,10 @@
-# CS Platform v5.15.0 — Organização em massa da fila de cobranças
+# CS Platform v5.16.0 — Gestão de carga da equipe
 
-Esta versão permite organizar várias cobranças abertas ao mesmo tempo, preservando os recursos validados na v5.14.0.
+Este pacote contém somente os 7 arquivos que devem ser substituídos no GitHub.
 
-## Novidades
+## Como aplicar
 
-- seleção individual de cobranças abertas;
-- opção **Selecionar todas as cobranças visíveis**;
-- contador de cobranças selecionadas;
-- atribuição em massa de responsável;
-- alteração em massa de prioridade;
-- opções para manter o responsável ou a prioridade atual;
-- cobranças pagas e canceladas não entram na seleção em massa;
-- cada cobrança alterada continua registrada individualmente no histórico;
-- organização em massa restrita a administradores e supervisores.
-
-## Arquivos para substituir
+No repositório `csadvogados/cs-platform`, substitua os arquivos mantendo exatamente as mesmas pastas:
 
 1. `backend/app/api/routes/financial.py`
 2. `backend/app/core/constants.py`
@@ -24,19 +14,22 @@ Esta versão permite organizar várias cobranças abertas ao mesmo tempo, preser
 6. `frontend/assets/app.js`
 7. `frontend/assets/styles.css`
 
-Não há nova migração de banco nesta versão.
+Use este nome no commit:
 
-## Commit sugerido
+`feat: adicionar gestão de carga e distribuição de cobranças v5.16.0`
 
-`feat: adicionar organização em massa de cobranças v5.15.0`
+Não há nova migração de banco nesta versão. Não altere comandos, variáveis ou configurações do Railway.
 
-## Teste após o deploy
+## Depois do commit
 
-1. Abra **Cobranças**.
-2. Marque duas cobranças abertas ou use **Selecionar todas as cobranças visíveis**.
-3. Confira o contador de selecionadas.
-4. Clique em **Organizar selecionadas**.
-5. Escolha um responsável e a prioridade **Alta**.
-6. Clique em **Aplicar organização**.
-7. Confirme que todas as cobranças selecionadas exibem o responsável e a prioridade escolhidos.
-8. Confirme que cobranças pagas não foram alteradas.
+1. Aguarde os deployments `cs-platform-api` e `cs-platform-web` ficarem verdes.
+2. Abra o sistema e pressione `Ctrl + F5`.
+3. Entre como administrador ou supervisor e abra **Cobranças**.
+4. Expanda **Carga da equipe**.
+5. Marque pelo menos duas cobranças abertas e clique em **Distribuir selecionadas**.
+6. Escolha pelo menos dois responsáveis e confirme.
+7. Confira se a fila foi dividida e se os totais foram atualizados automaticamente.
+8. Use **Ver fila** para conferir as cobranças de cada responsável.
+9. Confira no **Histórico** o registro individual das alterações.
+
+Cobranças pagas e canceladas não entram na distribuição.
