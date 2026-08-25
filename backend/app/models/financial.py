@@ -111,6 +111,43 @@ class PaymentInstallment(TimestampMixin, Base):
     payment_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     agreement = relationship("PaymentAgreement", back_populates="installments")
+    collection_actions = relationship(
+        "CollectionAction",
+        back_populates="installment",
+        cascade="all, delete-orphan",
+        order_by="CollectionAction.contacted_at.desc()",
+    )
+
+
+class CollectionAction(TimestampMixin, Base):
+    __tablename__ = "collection_actions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"), index=True
+    )
+    agreement_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payment_agreements.id", ondelete="CASCADE"), index=True
+    )
+    installment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payment_installments.id", ondelete="CASCADE"), index=True
+    )
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    action_type: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    outcome: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    contacted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=False)
+    promise_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    promise_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    next_follow_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    installment = relationship("PaymentInstallment", back_populates="collection_actions")
+    created_by = relationship("User")
 
 class Diagnosis(TimestampMixin, Base):
     __tablename__ = "diagnoses"

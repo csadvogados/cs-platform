@@ -1,57 +1,49 @@
-# CS Platform v5.9.0 — Controle de parcelas e pagamentos
+# CS Platform v5.11.0 — Ações de cobrança
 
-Este pacote atualiza a versão v5.8.0 já instalada. Ele não apaga clientes, dívidas, acordos ou outros dados existentes.
+Este pacote deve ser aplicado sobre a versão v5.10.0.
 
 ## O que foi adicionado
 
-- geração automática das parcelas ao cadastrar um acordo;
-- geração de parcelas para acordos antigos que ainda não possuem grade;
-- situações **Pendente**, **Paga**, **Atrasada** e **Cancelada**;
-- registro de valor, data, forma e observação do pagamento;
-- estorno de pagamento;
-- cálculo automático do total recebido e do saldo restante;
-- conclusão automática do acordo quando todas as parcelas forem pagas;
-- histórico das operações na auditoria;
-- proteção contra alteração ou exclusão de acordo com pagamentos registrados.
+- Registro de contatos de cobrança por parcela.
+- Canais: ligação, WhatsApp, e-mail, negociação e outros.
+- Resultados do contato, incluindo promessa de pagamento.
+- Data e valor prometidos.
+- Programação do próximo acompanhamento.
+- Histórico completo por parcela, com responsável e data.
+- Alertas de acompanhamentos para hoje e atrasados.
+- Registro das ações no Histórico de atividades.
 
-## Arquivos que devem ser substituídos
+## Arquivos
 
-Copie os 10 arquivos abaixo para os mesmos caminhos do repositório no GitHub:
+Substitua ou adicione os 10 arquivos deste pacote exatamente nos mesmos caminhos do repositório.
 
-1. `backend/alembic/versions/0010_payment_installments.py` — arquivo novo
-2. `backend/app/api/routes/financial.py`
-3. `backend/app/core/constants.py`
-4. `backend/app/models/__init__.py`
-5. `backend/app/models/financial.py`
-6. `backend/app/schemas/financial.py`
-7. `backend/docker-entrypoint.sh`
-8. `frontend/index.html`
-9. `frontend/assets/app.js`
-10. `frontend/assets/styles.css`
+O arquivo novo abaixo deve ser criado no GitHub:
 
-Não apague a migração anterior `0009_payment_agreements.py`.
+`backend/alembic/versions/0011_collection_actions.py`
 
-## Nome sugerido para o commit
+## Commit sugerido
 
-`feat: adicionar controle de parcelas e pagamentos v5.9.0`
+`feat: adicionar ações e lembretes de cobrança v5.11.0`
 
 ## Deploy
 
-Depois do commit, aguarde o Railway concluir os dois serviços:
-
-- `cs-platform-api`;
-- `cs-platform-web`.
-
-A API executará automaticamente a migração `0010_payment_installments` durante a inicialização. Não coloque comando adicional em **Pre-deploy Command**.
+1. Envie todos os arquivos no mesmo commit.
+2. Aguarde o deploy da API e do site.
+3. A API executará automaticamente a migração `0011_collection_actions` ao iniciar.
+4. Não configure nem altere o campo Pre-deploy Command do Railway.
 
 ## Teste após o deploy
 
-1. Abra a plataforma e pressione `Ctrl + F5`.
-2. Entre em **Clientes** e abra **Ver detalhes**.
-3. Cadastre um novo acordo com 2 parcelas.
-4. Confirme que as duas parcelas aparecem com seus vencimentos.
-5. Na primeira parcela, clique em **Registrar pagamento**.
-6. Confirme que ela muda para **Paga**, o total recebido aumenta e o saldo restante diminui.
-7. Clique em **Estornar** e confirme que a parcela volta para **Pendente** ou **Atrasada**.
+1. Atualize o sistema com `Ctrl + F5` e entre novamente.
+2. Abra **Cobranças**.
+3. Clique em **Registrar contato** em uma parcela aberta.
+4. Escolha **Promessa de pagamento**, informe data, valor, próximo acompanhamento e observações.
+5. Salve e confirme que o registro aparece no histórico da parcela.
+6. Confirme que a coluna **Último contato** e os alertas de acompanhamento foram atualizados.
+7. Abra **Histórico** no menu e confirme o registro da ação de cobrança.
 
-Para um acordo criado na v5.8.0, clique em **Gerar parcelas** uma única vez.
+## Verificação do banco
+
+Nos logs da API, a revisão final deve aparecer como:
+
+`0011_collection_actions (head)`

@@ -11,6 +11,9 @@ PaymentMethod = Literal[
 ]
 AgreementStatus = Literal["draft", "active", "completed", "defaulted", "cancelled"]
 InstallmentStatus = Literal["pending", "paid", "overdue", "cancelled"]
+CollectionStatus = Literal["pending", "due_soon", "paid", "overdue", "cancelled"]
+CollectionActionType = Literal["phone", "whatsapp", "email", "negotiation", "other"]
+CollectionOutcome = Literal["contacted", "no_answer", "promise_to_pay", "refused", "other"]
 
 class ORM(BaseModel): model_config = ConfigDict(from_attributes=True)
 class IncomeCreate(BaseModel):
@@ -94,3 +97,71 @@ class PaymentAgreementRead(PaymentAgreementCreate, ORM):
     created_at: datetime
     updated_at: datetime
     installments: list[PaymentInstallmentRead] = Field(default_factory=list)
+
+
+class CollectionItemRead(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID
+    client_name: str
+    agreement_id: uuid.UUID
+    agreement_title: str
+    installment_number: int
+    due_date: date
+    amount: Decimal
+    status: CollectionStatus
+    paid_amount: Decimal
+    paid_at: datetime | None
+    payment_method: PaymentMethod | None
+    action_count: int = 0
+    last_contacted_at: datetime | None = None
+    next_follow_up_at: datetime | None = None
+    latest_outcome: CollectionOutcome | None = None
+
+
+class CollectionSummaryRead(BaseModel):
+    open_count: int
+    open_amount: Decimal
+    overdue_count: int
+    overdue_amount: Decimal
+    due_soon_count: int
+    due_soon_amount: Decimal
+    paid_this_month_count: int
+    paid_this_month_amount: Decimal
+    follow_up_today_count: int = 0
+    overdue_follow_up_count: int = 0
+
+
+class CollectionsRead(BaseModel):
+    summary: CollectionSummaryRead
+    items: list[CollectionItemRead]
+    total: int
+
+
+class CollectionActionCreate(BaseModel):
+    action_type: CollectionActionType
+    outcome: CollectionOutcome
+    contacted_at: datetime
+    notes: str = Field(min_length=2, max_length=10000)
+    promise_date: date | None = None
+    promise_amount: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+    next_follow_up_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_promise(self):
+        if self.outcome == "promise_to_pay" and self.promise_date is None:
+            raise ValueError("Informe a data prometida para pagamento")
+        if self.outcome != "promise_to_pay":
+            self.promise_date = None
+            self.promise_amount = None
+        return self
+
+
+class CollectionActionRead(CollectionActionCreate, ORM):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    client_id: uuid.UUID
+    agreement_id: uuid.UUID
+    installment_id: uuid.UUID
+    created_by_user_id: uuid.UUID
+    created_by_name: str
+    created_at: datetime

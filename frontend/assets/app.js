@@ -5,6 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
+    collections: { summary: null, items: [], total: 0, filters: { q: "", status: "all", dueFrom: "", dueTo: "" }, selectedItem: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -39,6 +40,7 @@
   const viewMeta = {
     dashboard: ["VISÃO GERAL", "Painel de operação", "Novo cliente"],
     clients: ["RELACIONAMENTO", "Clientes", "Novo cliente"],
+    collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
     crm: ["DESENVOLVIMENTO DE NEGÓCIOS", "CRM", "Nova oportunidade"],
     users: ["ORGANIZAÇÃO", "Equipe", "Atualizar"],
@@ -98,6 +100,7 @@
     debt: "Dívida",
     payment_agreement: "Acordo de pagamento",
     payment_installment: "Parcela e pagamento",
+    collection_action: "Ação de cobrança",
     diagnosis: "Diagnóstico",
     crm_contact: "Contato CRM",
     crm_interaction: "Atendimento",
@@ -211,6 +214,30 @@
     paid: "Paga",
     overdue: "Atrasada",
     cancelled: "Cancelada"
+  };
+
+  const collectionStatusLabels = {
+    pending: "Pendente",
+    due_soon: "Vence em breve",
+    paid: "Paga",
+    overdue: "Atrasada",
+    cancelled: "Cancelada"
+  };
+
+  const collectionActionTypeLabels = {
+    phone: "Ligação",
+    whatsapp: "WhatsApp",
+    email: "E-mail",
+    negotiation: "Negociação",
+    other: "Outro canal"
+  };
+
+  const collectionOutcomeLabels = {
+    contacted: "Cliente contatado",
+    no_answer: "Sem resposta",
+    promise_to_pay: "Promessa de pagamento",
+    refused: "Recusou o pagamento",
+    other: "Outro resultado"
   };
 
   const financialDefinitions = {
@@ -454,7 +481,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = view === "audit";
+    $("#top-action-button").hidden = ["audit", "collections"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -681,6 +708,7 @@
     setBusy(button, true, "Atualizando…");
     const loaders = [
       loadDashboard(),
+      loadCollections(),
       loadClients(),
       loadCrm(),
       loadUsers(),
@@ -703,6 +731,26 @@
   async function loadDashboard() {
     state.dashboard = await api("/api/v1/dashboard");
     renderDashboard();
+  }
+
+  function collectionParams() {
+    const filters = state.collections.filters;
+    const params = new URLSearchParams();
+    if (filters.q) params.set("q", filters.q);
+    if (filters.status && filters.status !== "all") params.set("status", filters.status);
+    if (filters.dueFrom) params.set("due_from", filters.dueFrom);
+    if (filters.dueTo) params.set("due_to", filters.dueTo);
+    return params;
+  }
+
+  async function loadCollections(showNotice = false) {
+    const response = await api(`/api/v1/financial/collections?${collectionParams().toString()}`);
+    state.collections.summary = response.summary || null;
+    state.collections.items = Array.isArray(response.items) ? response.items : [];
+    state.collections.total = Number(response.total || 0);
+    renderCollections();
+    renderDashboardCollections();
+    if (showNotice) toast("Cobranças atualizadas.");
   }
 
   async function loadClientOptions() {
@@ -900,6 +948,139 @@
       .sort((a, b) => new Date(a.due_at || "2999-01-01") - new Date(b.due_at || "2999-01-01"))
       .slice(0, 5);
     $("#dashboard-tasks").innerHTML = tasks.length ? tasks.map(taskRow).join("") : '<div class="empty-state">Nenhuma tarefa pendente. Boa notícia.</div>';
+  }
+
+  function collectionStatusClass(value) {
+    const normalized = String(value || "").toLowerCase();
+    if (normalized === "overdue") return "danger";
+    if (["pending", "cancelled"].includes(normalized)) return "neutral";
+    return "";
+  }
+
+  function collectionStatusLabel(value) {
+    return collectionStatusLabels[String(value || "").toLowerCase()] || value || "Pendente";
+  }
+
+  function renderDashboardCollections() {
+    const summary = state.collections.summary || {};
+    $("#dashboard-overdue-count").textContent = summary.overdue_count ?? 0;
+    $("#dashboard-overdue-amount").textContent = `${formatCurrency(summary.overdue_amount)} em atraso`;
+    $("#dashboard-due-soon-count").textContent = summary.due_soon_count ?? 0;
+    $("#dashboard-due-soon-amount").textContent = `${formatCurrency(summary.due_soon_amount)} a vencer`;
+    $("#dashboard-open-count").textContent = summary.open_count ?? 0;
+    $("#dashboard-open-amount").textContent = `${formatCurrency(summary.open_amount)} em aberto`;
+    const followUps = Number(summary.follow_up_today_count || 0) + Number(summary.overdue_follow_up_count || 0);
+    $("#dashboard-follow-up-count").textContent = followUps;
+    $("#dashboard-follow-up-detail").textContent = `${summary.overdue_follow_up_count || 0} atrasado(s), ${summary.follow_up_today_count || 0} para hoje`;
+    $("#dashboard-collections-alert")?.classList.toggle("has-overdue", Number(summary.overdue_count || 0) > 0);
+  }
+
+  function renderCollections() {
+    const summary = state.collections.summary || {};
+    const items = state.collections.items || [];
+    $("#collection-open-amount").textContent = formatCurrency(summary.open_amount);
+    $("#collection-open-count").textContent = `${summary.open_count || 0} parcela(s)`;
+    $("#collection-overdue-amount").textContent = formatCurrency(summary.overdue_amount);
+    $("#collection-overdue-count").textContent = `${summary.overdue_count || 0} parcela(s)`;
+    $("#collection-due-soon-amount").textContent = formatCurrency(summary.due_soon_amount);
+    $("#collection-due-soon-count").textContent = `${summary.due_soon_count || 0} parcela(s)`;
+    $("#collection-paid-month-amount").textContent = formatCurrency(summary.paid_this_month_amount);
+    $("#collection-paid-month-count").textContent = `${summary.paid_this_month_count || 0} pagamento(s)`;
+    $("#collection-follow-up-today").textContent = `${summary.follow_up_today_count || 0} acompanhamento(s) para hoje`;
+    $("#collection-follow-up-overdue").textContent = `${summary.overdue_follow_up_count || 0} acompanhamento(s) atrasado(s)`;
+    $("#collection-result-count").textContent = state.collections.total === 1 ? "1 cobrança" : `${state.collections.total} cobranças`;
+    $("#collections-table").innerHTML = items.length ? items.map((item) => `<tr>
+      <td><strong>${escapeHtml(item.client_name)}</strong></td>
+      <td>${escapeHtml(item.agreement_title)}</td>
+      <td>${escapeHtml(item.installment_number)}</td>
+      <td>${escapeHtml(formatDate(item.due_date))}</td>
+      <td>${formatCurrency(item.status === "paid" ? item.paid_amount : item.amount)}</td>
+      <td><span class="badge ${collectionStatusClass(item.status)}">${escapeHtml(collectionStatusLabel(item.status))}</span>${item.status === "paid" && item.paid_at ? `<small class="collection-payment-date">Pago em ${escapeHtml(formatDate(item.paid_at, true))}</small>` : ""}</td>
+      <td class="collection-contact-cell">${item.last_contacted_at ? escapeHtml(formatDate(item.last_contacted_at, true)) : "Sem contato"}<small>${item.action_count || 0} registro(s)${item.next_follow_up_at ? ` · Próximo: ${escapeHtml(formatDate(item.next_follow_up_at, true))}` : ""}</small></td>
+      <td><div class="collection-row-actions">${!["paid", "cancelled"].includes(item.status) ? `<button class="primary-link" type="button" data-collection-action="${escapeHtml(item.id)}">Registrar contato</button>` : ""}<button class="text-link" type="button" data-collection-history="${escapeHtml(item.id)}">Histórico</button><button class="text-link" type="button" data-collection-client="${escapeHtml(item.client_id)}">Cliente</button></div></td>
+    </tr>`).join("") : '<tr><td colspan="8" class="empty-cell">Nenhuma cobrança encontrada com estes filtros.</td></tr>';
+    $$("[data-collection-client]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openClientDetail(button.dataset.collectionClient)));
+    $$("[data-collection-action]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionActionDialog(button.dataset.collectionAction, false)));
+    $$("[data-collection-history]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionActionDialog(button.dataset.collectionHistory, true)));
+  }
+
+  function renderCollectionActionHistory() {
+    const actions = state.collections.actions || [];
+    $("#collection-action-history").innerHTML = actions.length ? `<div class="collection-history-list">${actions.map((action) => `
+      <article class="collection-history-item">
+        <header><strong>${escapeHtml(collectionActionTypeLabels[action.action_type] || action.action_type)} · ${escapeHtml(collectionOutcomeLabels[action.outcome] || action.outcome)}</strong><span>${escapeHtml(formatDate(action.contacted_at, true))}</span></header>
+        <p>${escapeHtml(action.notes)}</p>
+        ${action.promise_date ? `<p class="collection-history-promise">Promessa: ${escapeHtml(formatDate(action.promise_date))}${action.promise_amount ? ` · ${formatCurrency(action.promise_amount)}` : ""}</p>` : ""}
+        ${action.next_follow_up_at ? `<p class="collection-history-meta">Próximo acompanhamento: ${escapeHtml(formatDate(action.next_follow_up_at, true))}</p>` : ""}
+        <small class="collection-history-meta">Registrado por ${escapeHtml(action.created_by_name || "Equipe")}</small>
+      </article>`).join("")}</div>` : '<div class="empty-state">Nenhuma ação de cobrança registrada para esta parcela.</div>';
+  }
+
+  async function loadCollectionActionHistory(installmentId) {
+    state.collections.actions = await api(`/api/v1/financial/collections/${installmentId}/actions`);
+    renderCollectionActionHistory();
+  }
+
+  async function openCollectionActionDialog(installmentId, historyOnly = false) {
+    const item = state.collections.items.find((entry) => String(entry.id) === String(installmentId));
+    if (!item) return;
+    state.collections.selectedItem = item;
+    const form = $("#collection-action-form");
+    form.reset();
+    form.elements.contacted_at.value = toLocalDateTimeValue(new Date());
+    $("#collection-action-description").textContent = `${item.client_name} · ${item.agreement_title} · parcela ${item.installment_number}`;
+    $("#collection-promise-fields").hidden = true;
+    $(".form-grid", form).hidden = historyOnly;
+    $('button[type="submit"]', form).hidden = historyOnly;
+    $("#collection-action-history").innerHTML = '<div class="loading-row">Carregando histórico…</div>';
+    $("#collection-action-dialog").showModal();
+    try {
+      await loadCollectionActionHistory(installmentId);
+    } catch (error) {
+      $("#collection-action-history").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+    }
+  }
+
+  function toggleCollectionPromiseFields() {
+    const form = $("#collection-action-form");
+    const promised = form.elements.outcome.value === "promise_to_pay";
+    $("#collection-promise-fields").hidden = !promised;
+    form.elements.promise_date.required = promised;
+    if (!promised) {
+      form.elements.promise_date.value = "";
+      form.elements.promise_amount.value = "";
+    }
+  }
+
+  async function saveCollectionAction(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !state.collections.selectedItem) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Salvando…");
+    try {
+      const data = compactObject(Object.fromEntries(new FormData(form)));
+      const payload = {
+        action_type: data.action_type,
+        outcome: data.outcome,
+        contacted_at: new Date(data.contacted_at).toISOString(),
+        notes: data.notes,
+        promise_date: data.promise_date || null,
+        promise_amount: data.promise_amount ? Number(data.promise_amount) : null,
+        next_follow_up_at: data.next_follow_up_at ? new Date(data.next_follow_up_at).toISOString() : null
+      };
+      await api(`/api/v1/financial/collections/${state.collections.selectedItem.id}/actions`, { method: "POST", body: JSON.stringify(payload) });
+      await loadCollectionActionHistory(state.collections.selectedItem.id);
+      await loadCollections();
+      toast("Ação de cobrança registrada.");
+      form.reset();
+      form.elements.contacted_at.value = toLocalDateTimeValue(new Date());
+      toggleCollectionPromiseFields();
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function renderClients() {
@@ -1998,7 +2179,7 @@
   async function refreshFinancial(message = "Dados financeiros atualizados.") {
     if (!state.selectedClient) return;
     await loadClientDetail(state.selectedClient.id);
-    await Promise.allSettled([loadDashboard(), loadClients()]);
+    await Promise.allSettled([loadDashboard(), loadCollections(), loadClients()]);
     if (message) toast(message);
   }
 
@@ -2437,6 +2618,7 @@
     const actions = {
       dashboard: () => openDialog("client-dialog"),
       clients: () => openDialog("client-dialog"),
+      collections: () => loadCollections(true),
       clientDetail: () => openDialog("income-dialog"),
       crm: () => openDialog("opportunity-dialog"),
       users: () => refreshAll(true),
@@ -2473,6 +2655,29 @@
     $("#client-next-page").addEventListener("click", () => {
       loadClientPage(state.clientPage.page + 1).catch((error) => toast(error.message, "error"));
     });
+    $("#collections-refresh").addEventListener("click", () => loadCollections(true).catch((error) => toast(error.message, "error")));
+    $("#collection-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const raw = Object.fromEntries(new FormData(event.currentTarget));
+      if (raw.due_from && raw.due_to && raw.due_from > raw.due_to) {
+        toast("A data inicial não pode ser posterior à data final.", "error");
+        return;
+      }
+      state.collections.filters = {
+        q: String(raw.q || "").trim(),
+        status: String(raw.status || "all"),
+        dueFrom: String(raw.due_from || ""),
+        dueTo: String(raw.due_to || "")
+      };
+      loadCollections().catch((error) => toast(error.message, "error"));
+    });
+    $("#clear-collection-filters").addEventListener("click", () => {
+      $("#collection-filter-form").reset();
+      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "" };
+      loadCollections().catch((error) => toast(error.message, "error"));
+    });
+    $("#collection-action-outcome").addEventListener("change", toggleCollectionPromiseFields);
+    $("#collection-action-form").addEventListener("submit", saveCollectionAction);
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
     $("#client-import-template-button").addEventListener("click", downloadClientImportTemplate);
@@ -2615,10 +2820,14 @@
     });
     $$("[data-view]").forEach((button) => button.addEventListener("click", () => {
       setView(button.dataset.view);
+      if (button.dataset.view === "collections") loadCollections().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));
-    $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
+    $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => {
+      setView(button.dataset.viewLink);
+      if (button.dataset.viewLink === "collections") loadCollections().catch((error) => toast(error.message, "error"));
+    }));
     $$("[data-open-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
     $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => closeDialog(button.closest("dialog"))));
     $("#client-dialog").addEventListener("close", resetClientDialog);

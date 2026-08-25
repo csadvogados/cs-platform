@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.9.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.11.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -67,6 +67,7 @@
           <nav class="nav-list" aria-label="Navegação principal">
             <button class="nav-item active" data-view="dashboard"><span aria-hidden="true">⌂</span> Visão geral</button>
             <button class="nav-item" data-view="clients"><span aria-hidden="true">◎</span> Clientes</button>
+            <button class="nav-item" data-view="collections"><span aria-hidden="true">▣</span> Cobranças</button>
             <button class="nav-item" data-view="crm"><span aria-hidden="true">◇</span> CRM</button>
             <button class="nav-item" data-view="users"><span aria-hidden="true">♙</span> Equipe</button>
             <button id="audit-nav-item" class="nav-item" data-view="audit" hidden><span aria-hidden="true">◷</span> Histórico</button>
@@ -127,6 +128,15 @@
                 <div class="panel-dark-footer"><span><strong id="pending-tasks">—</strong> tarefas pendentes</span><span><strong id="overdue-tasks">—</strong> atrasadas</span></div>
               </section>
             </div>
+            <section id="dashboard-collections-alert" class="panel collection-alert-panel">
+              <div class="panel-header"><div><p class="eyebrow dark">AGENDA FINANCEIRA</p><h3>Cobranças que exigem atenção</h3></div><button class="text-link" data-view-link="collections">Ver cobranças</button></div>
+              <div class="collection-alert-grid">
+                <article class="collection-alert overdue"><span>Parcelas atrasadas</span><strong id="dashboard-overdue-count">—</strong><small id="dashboard-overdue-amount">Carregando…</small></article>
+                <article class="collection-alert due-soon"><span>Vencem em até 7 dias</span><strong id="dashboard-due-soon-count">—</strong><small id="dashboard-due-soon-amount">Carregando…</small></article>
+                <article class="collection-alert"><span>Total em aberto</span><strong id="dashboard-open-count">—</strong><small id="dashboard-open-amount">Carregando…</small></article>
+                <article class="collection-alert follow-up"><span>Acompanhamentos</span><strong id="dashboard-follow-up-count">—</strong><small id="dashboard-follow-up-detail">Carregando…</small></article>
+              </div>
+            </section>
           </section>
 
           <section id="view-clients" class="page-view" aria-labelledby="clients-heading">
@@ -155,6 +165,27 @@
 
           <section id="view-clientDetail" class="page-view" aria-label="Detalhes do cliente">
             <div id="client-detail-content"><div class="loading-row">Carregando dados do cliente…</div></div>
+          </section>
+
+          <section id="view-collections" class="page-view" aria-labelledby="collections-heading">
+            <div class="section-intro"><div><p class="eyebrow dark">AGENDA FINANCEIRA</p><h1 id="collections-heading">Cobranças</h1><p>Acompanhe vencimentos, atrasos e pagamentos dos acordos.</p></div><button id="collections-refresh" class="primary-button" type="button">Atualizar cobranças</button></div>
+            <div class="collection-summary-grid">
+              <article><span>Em aberto</span><strong id="collection-open-amount">—</strong><small id="collection-open-count">0 parcelas</small></article>
+              <article class="danger-summary"><span>Em atraso</span><strong id="collection-overdue-amount">—</strong><small id="collection-overdue-count">0 parcelas</small></article>
+              <article><span>Próximos 7 dias</span><strong id="collection-due-soon-amount">—</strong><small id="collection-due-soon-count">0 parcelas</small></article>
+              <article class="paid-summary"><span>Recebido no mês</span><strong id="collection-paid-month-amount">—</strong><small id="collection-paid-month-count">0 pagamentos</small></article>
+            </div>
+            <div class="follow-up-summary" aria-live="polite"><strong id="collection-follow-up-today">0 acompanhamentos para hoje</strong><span id="collection-follow-up-overdue">0 acompanhamentos atrasados</span></div>
+            <form id="collection-filter-form" class="collection-filter-bar">
+              <label class="collection-search-field"><span>Buscar</span><input name="q" type="search" placeholder="Cliente ou acordo" autocomplete="off" /></label>
+              <label><span>Situação</span><select name="status"><option value="all">Todas</option><option value="overdue">Atrasadas</option><option value="due_soon">Próximos 7 dias</option><option value="pending">Pendentes</option><option value="paid">Pagas</option><option value="cancelled">Canceladas</option></select></label>
+              <label><span>Vencimento de</span><input name="due_from" type="date" /></label>
+              <label><span>Até</span><input name="due_to" type="date" /></label>
+              <button class="primary-button" type="submit">Aplicar filtros</button>
+              <button id="clear-collection-filters" class="secondary-button" type="button">Limpar</button>
+            </form>
+            <div class="collection-list-header"><strong id="collection-result-count">0 cobranças</strong><span>Vencimentos próximos consideram os próximos 7 dias.</span></div>
+            <div class="table-wrap collection-table-wrap"><table><thead><tr><th>Cliente</th><th>Acordo</th><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Último contato</th><th>Ações</th></tr></thead><tbody id="collections-table"><tr><td colspan="8" class="empty-cell">Carregando cobranças…</td></tr></tbody></table></div>
           </section>
 
           <section id="view-crm" class="page-view" aria-labelledby="crm-heading">
@@ -251,7 +282,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.9.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.11.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -290,12 +321,32 @@
         <div class="modal-header"><div><p class="eyebrow dark">RECEBIMENTO</p><h2>Registrar pagamento</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
         <p id="installment-payment-description" class="form-help">Informe os dados do pagamento recebido.</p>
         <div class="form-grid">
-          <label><span>Valor pago *</span><input name="paid_amount" type="number" min="0.01" step="0.01" required /></label>
+          <label><span>Valor pago *</span><input name="paid_amount" type="number" min="0.01" step="0.01" required readonly /></label>
           <label><span>Data e hora do pagamento *</span><input name="paid_at" type="datetime-local" required /></label>
           <label class="wide"><span>Forma de pagamento *</span><select name="payment_method" required><option value="pix">Pix</option><option value="bank_slip">Boleto</option><option value="bank_transfer">Transferência bancária</option><option value="cash">Dinheiro</option><option value="credit_card">Cartão de crédito</option><option value="debit_card">Cartão de débito</option><option value="automatic_debit">Débito automático</option><option value="other">Outra forma</option></select></label>
           <label class="wide"><span>Observações</span><textarea name="payment_notes" rows="3" maxlength="10000" placeholder="Comprovante, referência ou outra informação"></textarea></label>
         </div>
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Confirmar pagamento</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="collection-action-dialog" class="modal collection-action-modal">
+      <form id="collection-action-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">ACOMPANHAMENTO</p><h2>Registrar ação de cobrança</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <p id="collection-action-description" class="form-help">Registre o contato e programe o próximo acompanhamento.</p>
+        <div class="form-grid">
+          <label><span>Canal utilizado *</span><select name="action_type" required><option value="phone">Ligação</option><option value="whatsapp">WhatsApp</option><option value="email">E-mail</option><option value="negotiation">Negociação</option><option value="other">Outro</option></select></label>
+          <label><span>Resultado *</span><select id="collection-action-outcome" name="outcome" required><option value="contacted">Cliente contatado</option><option value="no_answer">Sem resposta</option><option value="promise_to_pay">Promessa de pagamento</option><option value="refused">Recusou o pagamento</option><option value="other">Outro resultado</option></select></label>
+          <label><span>Data e hora do contato *</span><input name="contacted_at" type="datetime-local" required /></label>
+          <label><span>Próximo acompanhamento</span><input name="next_follow_up_at" type="datetime-local" /></label>
+          <div id="collection-promise-fields" class="form-grid nested-grid wide" hidden>
+            <label><span>Data prometida *</span><input name="promise_date" type="date" /></label>
+            <label><span>Valor prometido</span><input name="promise_amount" type="number" min="0.01" step="0.01" /></label>
+          </div>
+          <label class="wide"><span>Observações *</span><textarea name="notes" rows="3" minlength="2" maxlength="10000" required placeholder="Resumo do contato e providências combinadas"></textarea></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar ação</button></div>
+        <section class="collection-history-panel"><h3>Histórico desta parcela</h3><div id="collection-action-history"><div class="loading-row">Carregando histórico…</div></div></section>
       </form>
     </dialog>
 
@@ -468,6 +519,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.9.0"></script>
+    <script src="./assets/app.js?v=5.11.0"></script>
   </body>
 </html>
