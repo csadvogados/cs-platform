@@ -1,49 +1,26 @@
-# CS Platform v5.14.0 — Fila de trabalho de cobranças
+# Correção da v5.14.0 — erro 500 ao salvar organização
 
-Esta versão transforma a Central de cobranças em uma fila organizada de trabalho da equipe.
+Esta correção substitui somente um arquivo da API.
 
-## Novidades
+## Arquivo a substituir no GitHub
 
-- definição de responsável para cada cobrança;
-- prioridades **Baixa**, **Normal**, **Alta** e **Urgente**;
-- botão **Minhas cobranças**;
-- filtros por responsável e prioridade;
-- indicadores de cobranças urgentes e sem responsável;
-- exibição do responsável e da prioridade na lista;
-- alteração da fila restrita a administradores e supervisores;
-- registro das mudanças no Histórico de atividades;
-- manutenção dos relatórios gerenciais da v5.13.0.
+`backend/app/api/routes/financial.py`
 
-## Migração do banco
+Use o arquivo de mesmo caminho existente neste pacote.
 
-A versão inclui a migração `0013_collection_queue`, ligada à migração `0012_action_cancellation`.
+## Commit sugerido
 
-O Railway executará essa migração automaticamente durante a inicialização da API.
+`fix: corrigir salvamento da fila de cobranças v5.14.0`
 
-## Arquivos que devem ser substituídos
+Depois do commit, aguarde apenas o deploy do serviço `cs-platform-api` no Railway.
+Não é necessário alterar variáveis, comandos ou o banco de dados.
 
-1. `backend/alembic/versions/0013_collection_queue.py`
-2. `backend/app/api/routes/financial.py`
-3. `backend/app/core/constants.py`
-4. `backend/app/models/financial.py`
-5. `backend/app/schemas/financial.py`
-6. `backend/docker-entrypoint.sh`
-7. `frontend/index.html`
-8. `frontend/assets/app.js`
-9. `frontend/assets/styles.css`
+## Teste após o deploy
 
-Use no commit:
+1. Atualize a página da plataforma.
+2. Abra **Cobranças**.
+3. Clique em **Organizar**.
+4. Escolha um responsável e uma prioridade.
+5. Clique em **Salvar organização**.
 
-`feat: adicionar fila de trabalho de cobranças v5.14.0`
-
-## Teste recomendado
-
-1. Abra **Cobranças**.
-2. Clique em **Organizar** em uma cobrança aberta.
-3. Escolha um responsável, selecione **Urgente** e salve.
-4. Confirme o nome e a prioridade na lista.
-5. Confira se o indicador de cobranças urgentes aumentou.
-6. Teste **Minhas cobranças**.
-7. Teste os filtros por responsável e prioridade.
-8. Remova o responsável e confirme o indicador **sem responsável**.
-9. Abra **Histórico** e confirme o registro da atualização da parcela.
+O nome do responsável e a prioridade devem aparecer na cobrança sem erro 500.

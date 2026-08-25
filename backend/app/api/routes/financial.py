@@ -513,8 +513,8 @@ def update_collection_assignment(
         entity_type="payment_installment",
         entity_id=installment.id,
         action="update",
-        old_values=old_values,
         new_values={
+            "previous": old_values,
             "assigned_user_id": str(assignee.id) if assignee else None,
             "assigned_user_name": assignee.full_name if assignee else None,
             "priority": installment.collection_priority,
