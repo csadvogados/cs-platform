@@ -109,8 +109,13 @@ class PaymentInstallment(TimestampMixin, Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_method: Mapped[str | None] = mapped_column(String(40), nullable=True)
     payment_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    collection_assigned_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    collection_priority: Mapped[str] = mapped_column(String(20), nullable=False, default="normal", index=True)
 
     agreement = relationship("PaymentAgreement", back_populates="installments")
+    collection_assigned_user = relationship("User", foreign_keys=[collection_assigned_user_id])
     collection_actions = relationship(
         "CollectionAction",
         back_populates="installment",

@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.financial import (
     CreditorCreate,
     CreditorRead,
+    CollectionAssignmentUpdate,
     CollectionItemRead,
     CollectionActionCreate,
     CollectionActionCancel,
@@ -279,6 +280,8 @@ def list_collections(
     collection_status_filter: str = Query(default="all", alias="status"),
     follow_up_filter: str = Query(default="all"),
     promise_filter: str = Query(default="all"),
+    responsible_filter: str = Query(default="all"),
+    priority_filter: str = Query(default="all"),
     due_from: date | None = None,
     due_to: date | None = None,
     db: Session = Depends(get_db),
@@ -294,6 +297,22 @@ def list_collections(
         raise HTTPException(status_code=422, detail="Filtro de acompanhamento inválido")
     if promise_filter not in allowed_tracking_filters:
         raise HTTPException(status_code=422, detail="Filtro de promessa inválido")
+    allowed_priorities = {"all", "low", "normal", "high", "urgent"}
+    if priority_filter not in allowed_priorities:
+        raise HTTPException(status_code=422, detail="Prioridade de cobrança inválida")
+    responsible_id: uuid.UUID | None = None
+    if responsible_filter not in {"all", "mine", "unassigned"}:
+        try:
+            responsible_id = uuid.UUID(responsible_filter)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Responsável pela cobrança inválido") from exc
+        responsible_exists = db.scalar(select(User.id).where(
+            User.id == responsible_id,
+            User.organization_id == actor.organization_id,
+            User.deleted_at.is_(None),
+        ))
+        if not responsible_exists:
+            raise HTTPException(status_code=422, detail="Responsável pela cobrança não pertence à organização")
 
     rows = db.execute(
         select(PaymentInstallment, PaymentAgreement, Client)
@@ -302,6 +321,17 @@ def list_collections(
         .where(PaymentInstallment.organization_id == actor.organization_id)
         .order_by(PaymentInstallment.due_date, Client.full_name, PaymentInstallment.installment_number)
     ).all()
+    assigned_user_ids = {
+        installment.collection_assigned_user_id
+        for installment, _agreement, _client in rows
+        if installment.collection_assigned_user_id
+    }
+    assigned_names = dict(db.execute(
+        select(User.id, User.full_name).where(
+            User.organization_id == actor.organization_id,
+            User.id.in_(assigned_user_ids),
+        )
+    ).all()) if assigned_user_ids else {}
     action_rows = list(db.scalars(
         select(CollectionAction)
         .where(CollectionAction.organization_id == actor.organization_id)
@@ -359,6 +389,9 @@ def list_collections(
             latest_promise_date=latest_promise.promise_date if latest_promise else None,
             latest_promise_amount=latest_promise.promise_amount if latest_promise else None,
             promise_status=promise_status,
+            assigned_user_id=installment.collection_assigned_user_id,
+            assigned_user_name=assigned_names.get(installment.collection_assigned_user_id),
+            priority=installment.collection_priority or "normal",
         ))
     if status_changed:
         db.commit()
@@ -400,6 +433,8 @@ def list_collections(
         upcoming_follow_up_count=upcoming_follow_up_count,
         open_promises_count=len(open_promises),
         overdue_promises_count=len(overdue_promises),
+        urgent_count=sum(1 for item in open_items if item.priority == "urgent"),
+        unassigned_count=sum(1 for item in open_items if item.assigned_user_id is None),
     )
 
     items = all_items
@@ -419,6 +454,14 @@ def list_collections(
         items = [item for item in items if item.follow_up_status == follow_up_filter]
     if promise_filter != "all":
         items = [item for item in items if item.promise_status == promise_filter]
+    if responsible_filter == "mine":
+        items = [item for item in items if item.assigned_user_id == actor.id]
+    elif responsible_filter == "unassigned":
+        items = [item for item in items if item.assigned_user_id is None]
+    elif responsible_id:
+        items = [item for item in items if item.assigned_user_id == responsible_id]
+    if priority_filter != "all":
+        items = [item for item in items if item.priority == priority_filter]
 
     return CollectionsRead(summary=summary, items=items, total=len(items))
 
@@ -434,6 +477,51 @@ def owned_collection_installment(
     )
     if not installment:
         raise HTTPException(status_code=404, detail="Parcela não encontrada")
+    return installment
+
+
+@router.put("/collections/{installment_id}/assignment", response_model=PaymentInstallmentRead)
+def update_collection_assignment(
+    installment_id: uuid.UUID,
+    payload: CollectionAssignmentUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    if actor.role not in {"admin", "supervisor"} and not actor.is_superuser:
+        raise HTTPException(status_code=403, detail="Somente administradores e supervisores podem organizar a fila de cobranças")
+    installment = owned_collection_installment(db, installment_id, actor.organization_id)
+    assignee = None
+    if payload.assigned_user_id:
+        assignee = db.scalar(select(User).where(
+            User.id == payload.assigned_user_id,
+            User.organization_id == actor.organization_id,
+            User.deleted_at.is_(None),
+            User.status == "active",
+        ))
+        if not assignee:
+            raise HTTPException(status_code=422, detail="O responsável selecionado não está ativo nesta organização")
+    old_values = {
+        "assigned_user_id": str(installment.collection_assigned_user_id) if installment.collection_assigned_user_id else None,
+        "priority": installment.collection_priority,
+    }
+    installment.collection_assigned_user_id = assignee.id if assignee else None
+    installment.collection_priority = payload.priority
+    record_audit(
+        db,
+        organization_id=actor.organization_id,
+        user_id=actor.id,
+        entity_type="payment_installment",
+        entity_id=installment.id,
+        action="update",
+        old_values=old_values,
+        new_values={
+            "assigned_user_id": str(assignee.id) if assignee else None,
+            "assigned_user_name": assignee.full_name if assignee else None,
+            "priority": installment.collection_priority,
+        },
+    )
+    db.commit()
+    db.refresh(installment)
     return installment
 
 

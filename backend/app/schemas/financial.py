@@ -14,6 +14,7 @@ InstallmentStatus = Literal["pending", "paid", "overdue", "cancelled"]
 CollectionStatus = Literal["pending", "due_soon", "paid", "overdue", "cancelled"]
 CollectionActionType = Literal["phone", "whatsapp", "email", "negotiation", "other"]
 CollectionOutcome = Literal["contacted", "no_answer", "promise_to_pay", "refused", "other"]
+CollectionPriority = Literal["low", "normal", "high", "urgent"]
 
 class ORM(BaseModel): model_config = ConfigDict(from_attributes=True)
 class IncomeCreate(BaseModel):
@@ -79,6 +80,8 @@ class PaymentInstallmentRead(ORM):
     paid_at: datetime | None
     payment_method: PaymentMethod | None
     payment_notes: str | None
+    collection_assigned_user_id: uuid.UUID | None = None
+    collection_priority: CollectionPriority = "normal"
     created_at: datetime
     updated_at: datetime
 
@@ -120,6 +123,9 @@ class CollectionItemRead(BaseModel):
     latest_promise_date: date | None = None
     latest_promise_amount: Decimal | None = None
     promise_status: Literal["none", "overdue", "today", "upcoming"] = "none"
+    assigned_user_id: uuid.UUID | None = None
+    assigned_user_name: str | None = None
+    priority: CollectionPriority = "normal"
 
 
 class CollectionSummaryRead(BaseModel):
@@ -136,12 +142,19 @@ class CollectionSummaryRead(BaseModel):
     upcoming_follow_up_count: int = 0
     open_promises_count: int = 0
     overdue_promises_count: int = 0
+    urgent_count: int = 0
+    unassigned_count: int = 0
 
 
 class CollectionsRead(BaseModel):
     summary: CollectionSummaryRead
     items: list[CollectionItemRead]
     total: int
+
+
+class CollectionAssignmentUpdate(BaseModel):
+    assigned_user_id: uuid.UUID | None = None
+    priority: CollectionPriority = "normal"
 
 
 class CollectionTeamPerformanceRead(BaseModel):

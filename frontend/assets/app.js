@@ -5,7 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
-    collections: { summary: null, items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all" }, selectedItem: null, selectedActionId: null, actions: [] },
+    collections: { summary: null, items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all" }, selectedItem: null, selectedAssignmentItem: null, selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -340,6 +340,10 @@
   function canDeleteClients() {
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("client.delete");
+  }
+
+  function canManageCollectionQueue() {
+    return Boolean(state.user?.is_superuser) || ["admin", "supervisor"].includes(String(state.user?.role || ""));
   }
 
   function calculateWeightedPipeline(opportunities) {
@@ -743,6 +747,8 @@
     if (filters.dueTo) params.set("due_to", filters.dueTo);
     if (filters.followUp && filters.followUp !== "all") params.set("follow_up_filter", filters.followUp);
     if (filters.promise && filters.promise !== "all") params.set("promise_filter", filters.promise);
+    if (filters.responsible && filters.responsible !== "all") params.set("responsible_filter", filters.responsible);
+    if (filters.priority && filters.priority !== "all") params.set("priority_filter", filters.priority);
     return params;
   }
 
@@ -884,6 +890,25 @@
     state.users = Array.isArray(response) ? response : response.items || [];
     renderUsers();
     fillAuditUserFilter();
+    fillCollectionUserSelects();
+  }
+
+  function fillCollectionUserSelects() {
+    const activeUsers = state.users.filter((user) => String(user.status || "active") === "active");
+    const filter = $("#collection-responsible-filter");
+    const assignment = $("#collection-assignment-user");
+    if (filter) {
+      const selected = state.collections.filters.responsible || "all";
+      filter.innerHTML = '<option value="all">Todos</option><option value="mine">Minhas cobranças</option><option value="unassigned">Sem responsável</option>' + activeUsers.map((user) =>
+        `<option value="${escapeHtml(user.id)}">${escapeHtml(user.full_name || user.email)}</option>`
+      ).join("");
+      filter.value = Array.from(filter.options).some((option) => option.value === selected) ? selected : "all";
+    }
+    if (assignment) {
+      assignment.innerHTML = '<option value="">Sem responsável</option>' + activeUsers.map((user) =>
+        `<option value="${escapeHtml(user.id)}">${escapeHtml(user.full_name || user.email)}</option>`
+      ).join("");
+    }
   }
 
   function fillAuditUserFilter() {
@@ -977,6 +1002,14 @@
     return collectionStatusLabels[String(value || "").toLowerCase()] || value || "Pendente";
   }
 
+  function collectionPriorityClass(value) {
+    const priority = String(value || "normal").toLowerCase();
+    if (priority === "urgent") return "danger";
+    if (priority === "high") return "priority-high";
+    if (priority === "low") return "neutral";
+    return "";
+  }
+
   function renderDashboardCollections() {
     const summary = state.collections.summary || {};
     $("#dashboard-overdue-count").textContent = summary.overdue_count ?? 0;
@@ -1006,6 +1039,8 @@
     $("#collection-follow-up-overdue").textContent = `${summary.overdue_follow_up_count || 0} acompanhamento(s) atrasado(s)`;
     $("#collection-follow-up-upcoming").textContent = `${summary.upcoming_follow_up_count || 0} acompanhamento(s) futuro(s)`;
     $("#collection-promise-alert").textContent = `${summary.open_promises_count || 0} promessa(s) aberta(s), ${summary.overdue_promises_count || 0} vencida(s)`;
+    $("#collection-urgent-count").textContent = `${summary.urgent_count || 0} cobrança(s) urgente(s)`;
+    $("#collection-unassigned-count").textContent = `${summary.unassigned_count || 0} cobrança(s) sem responsável`;
     $("#collection-result-count").textContent = state.collections.total === 1 ? "1 cobrança" : `${state.collections.total} cobranças`;
     $("#collections-table").innerHTML = items.length ? items.map((item) => `<tr>
       <td><strong>${escapeHtml(item.client_name)}</strong></td>
@@ -1014,12 +1049,53 @@
       <td>${escapeHtml(formatDate(item.due_date))}</td>
       <td>${formatCurrency(item.status === "paid" ? item.paid_amount : item.amount)}</td>
       <td><span class="badge ${collectionStatusClass(item.status)}">${escapeHtml(collectionStatusLabel(item.status))}</span>${item.status === "paid" && item.paid_at ? `<small class="collection-payment-date">Pago em ${escapeHtml(formatDate(item.paid_at, true))}</small>` : ""}</td>
+      <td class="collection-owner-cell"><strong>${escapeHtml(item.assigned_user_name || "Sem responsável")}</strong><span class="badge ${collectionPriorityClass(item.priority)}">${escapeHtml(priorityLabels[item.priority] || "Normal")}</span></td>
       <td class="collection-contact-cell">${item.last_contacted_at ? escapeHtml(formatDate(item.last_contacted_at, true)) : "Sem contato"}<small>${item.action_count || 0} registro(s)${item.next_follow_up_at ? ` · Próximo: ${escapeHtml(formatDate(item.next_follow_up_at, true))}` : ""}</small>${item.latest_promise_date ? `<span class="collection-promise-note">Promessa: ${escapeHtml(formatDate(item.latest_promise_date))}${item.latest_promise_amount ? ` · ${formatCurrency(item.latest_promise_amount)}` : ""}</span>` : ""}</td>
-      <td><div class="collection-row-actions">${!["paid", "cancelled"].includes(item.status) ? `<button class="primary-link" type="button" data-collection-action="${escapeHtml(item.id)}">Registrar contato</button>` : ""}<button class="text-link" type="button" data-collection-history="${escapeHtml(item.id)}">Histórico</button><button class="text-link" type="button" data-collection-client="${escapeHtml(item.client_id)}">Cliente</button></div></td>
-    </tr>`).join("") : '<tr><td colspan="8" class="empty-cell">Nenhuma cobrança encontrada com estes filtros.</td></tr>';
+      <td><div class="collection-row-actions">${canManageCollectionQueue() ? `<button class="edit-button" type="button" data-collection-assignment="${escapeHtml(item.id)}">Organizar</button>` : ""}${!["paid", "cancelled"].includes(item.status) ? `<button class="primary-link" type="button" data-collection-action="${escapeHtml(item.id)}">Registrar contato</button>` : ""}<button class="text-link" type="button" data-collection-history="${escapeHtml(item.id)}">Histórico</button><button class="text-link" type="button" data-collection-client="${escapeHtml(item.client_id)}">Cliente</button></div></td>
+    </tr>`).join("") : '<tr><td colspan="9" class="empty-cell">Nenhuma cobrança encontrada com estes filtros.</td></tr>';
     $$("[data-collection-client]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openClientDetail(button.dataset.collectionClient)));
     $$("[data-collection-action]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionActionDialog(button.dataset.collectionAction, false)));
     $$("[data-collection-history]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionActionDialog(button.dataset.collectionHistory, true)));
+    $$("[data-collection-assignment]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionAssignment(button.dataset.collectionAssignment)));
+  }
+
+  function openCollectionAssignment(installmentId) {
+    if (!canManageCollectionQueue()) return;
+    const item = state.collections.items.find((entry) => String(entry.id) === String(installmentId));
+    if (!item) return;
+    state.collections.selectedAssignmentItem = item;
+    const form = $("#collection-assignment-form");
+    form.reset();
+    form.elements.assigned_user_id.value = item.assigned_user_id || "";
+    form.elements.priority.value = item.priority || "normal";
+    $("#collection-assignment-description").textContent = `${item.client_name} · ${item.agreement_title} · parcela ${item.installment_number}`;
+    $("#collection-assignment-dialog").showModal();
+  }
+
+  async function saveCollectionAssignment(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const item = state.collections.selectedAssignmentItem;
+    if (!form.reportValidity() || !item) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Salvando…");
+    try {
+      await api(`/api/v1/financial/collections/${item.id}/assignment`, {
+        method: "PUT",
+        body: JSON.stringify({
+          assigned_user_id: form.elements.assigned_user_id.value || null,
+          priority: form.elements.priority.value
+        })
+      });
+      closeDialog($("#collection-assignment-dialog"));
+      state.collections.selectedAssignmentItem = null;
+      await loadCollections();
+      toast("Fila de cobranças atualizada.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function renderCollectionReport() {
@@ -2757,6 +2833,11 @@
       loadClientPage(state.clientPage.page + 1).catch((error) => toast(error.message, "error"));
     });
     $("#collections-refresh").addEventListener("click", () => loadCollections(true).catch((error) => toast(error.message, "error")));
+    $("#my-collections-button").addEventListener("click", () => {
+      state.collections.filters.responsible = "mine";
+      $("#collection-responsible-filter").value = "mine";
+      loadCollections().catch((error) => toast(error.message, "error"));
+    });
     $("#collection-report-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const raw = Object.fromEntries(new FormData(event.currentTarget));
@@ -2784,18 +2865,21 @@
         dueFrom: String(raw.due_from || ""),
         dueTo: String(raw.due_to || ""),
         followUp: String(raw.follow_up_filter || "all"),
-        promise: String(raw.promise_filter || "all")
+        promise: String(raw.promise_filter || "all"),
+        responsible: String(raw.responsible_filter || "all"),
+        priority: String(raw.priority_filter || "all")
       };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#clear-collection-filters").addEventListener("click", () => {
       $("#collection-filter-form").reset();
-      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all" };
+      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all" };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#collection-action-outcome").addEventListener("change", toggleCollectionPromiseFields);
     $("#collection-action-form").addEventListener("submit", saveCollectionAction);
     $("#collection-cancel-form").addEventListener("submit", cancelCollectionAction);
+    $("#collection-assignment-form").addEventListener("submit", saveCollectionAssignment);
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
     $("#client-import-template-button").addEventListener("click", downloadClientImportTemplate);

@@ -1,42 +1,49 @@
-# CS Platform v5.13.0 — Relatórios de cobrança
+# CS Platform v5.14.0 — Fila de trabalho de cobranças
 
-Esta versão acrescenta gestão de resultados à Central de cobranças, mantendo todos os recursos já validados na v5.12.0.
+Esta versão transforma a Central de cobranças em uma fila organizada de trabalho da equipe.
 
 ## Novidades
 
-- relatório por período, inicialmente preenchido com o mês atual;
-- valores vencidos e recebidos no período;
-- índice de recebimento, calculado sobre os vencimentos do período;
-- total atual de parcelas atrasadas;
-- ações, clientes contatados e promessas registradas;
-- quadro de atuação por responsável;
-- exportação do relatório em CSV;
-- registro da exportação no Histórico de atividades.
+- definição de responsável para cada cobrança;
+- prioridades **Baixa**, **Normal**, **Alta** e **Urgente**;
+- botão **Minhas cobranças**;
+- filtros por responsável e prioridade;
+- indicadores de cobranças urgentes e sem responsável;
+- exibição do responsável e da prioridade na lista;
+- alteração da fila restrita a administradores e supervisores;
+- registro das mudanças no Histórico de atividades;
+- manutenção dos relatórios gerenciais da v5.13.0.
 
-Não existe migração nova nesta versão. A migração mais recente continua sendo `0012_action_cancellation`.
+## Migração do banco
+
+A versão inclui a migração `0013_collection_queue`, ligada à migração `0012_action_cancellation`.
+
+O Railway executará essa migração automaticamente durante a inicialização da API.
 
 ## Arquivos que devem ser substituídos
 
-1. `backend/app/api/routes/financial.py`
-2. `backend/app/core/constants.py`
-3. `backend/app/schemas/financial.py`
-4. `backend/docker-entrypoint.sh`
-5. `frontend/index.html`
-6. `frontend/assets/app.js`
-7. `frontend/assets/styles.css`
+1. `backend/alembic/versions/0013_collection_queue.py`
+2. `backend/app/api/routes/financial.py`
+3. `backend/app/core/constants.py`
+4. `backend/app/models/financial.py`
+5. `backend/app/schemas/financial.py`
+6. `backend/docker-entrypoint.sh`
+7. `frontend/index.html`
+8. `frontend/assets/app.js`
+9. `frontend/assets/styles.css`
 
 Use no commit:
 
-`feat: adicionar relatórios gerenciais de cobrança v5.13.0`
-
-Após os deployments da API e da Web ficarem verdes, abra o sistema e pressione `Ctrl + F5`.
+`feat: adicionar fila de trabalho de cobranças v5.14.0`
 
 ## Teste recomendado
 
 1. Abra **Cobranças**.
-2. Localize o novo quadro **Relatório gerencial de cobranças**.
-3. Confirme que o período começa no primeiro dia do mês e termina na data atual.
-4. Altere as datas e clique em **Atualizar relatório**.
-5. Confira os valores, ações, promessas e o quadro da equipe.
-6. Clique em **Exportar CSV** e abra o arquivo baixado.
-7. No menu **Histórico**, confirme o registro da exportação.
+2. Clique em **Organizar** em uma cobrança aberta.
+3. Escolha um responsável, selecione **Urgente** e salve.
+4. Confirme o nome e a prioridade na lista.
+5. Confira se o indicador de cobranças urgentes aumentou.
+6. Teste **Minhas cobranças**.
+7. Teste os filtros por responsável e prioridade.
+8. Remova o responsável e confirme o indicador **sem responsável**.
+9. Abra **Histórico** e confirme o registro da atualização da parcela.
