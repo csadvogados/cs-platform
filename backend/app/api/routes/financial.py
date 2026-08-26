@@ -39,6 +39,7 @@ from app.schemas.financial import (
     OperationalAgendaItemRead,
     OperationalAgendaRead,
     OperationalAgendaSummaryRead,
+    OperationalAgendaWorkloadRead,
     DebtCreate,
     DebtRead,
     ExpenseCreate,
@@ -708,7 +709,9 @@ def list_operational_agenda(
                 id=f"follow-up:{collection.id}", kind="follow_up", title="Acompanhamento de cobrança",
                 client_id=collection.client_id, client_name=collection.client_name,
                 due_at=collection.next_follow_up_at, status=agenda_status(collection.next_follow_up_at.date()),
-                priority=collection.priority, target_filter=f"follow_up:{collection.follow_up_status}",
+                priority=collection.priority, assigned_user_id=collection.assigned_user_id,
+                assigned_user_name=collection.assigned_user_name,
+                target_filter=f"follow_up:{collection.follow_up_status}",
             ))
         if collection.latest_promise_date and date_from <= collection.latest_promise_date <= date_to:
             items.append(OperationalAgendaItemRead(
@@ -716,12 +719,18 @@ def list_operational_agenda(
                 client_id=collection.client_id, client_name=collection.client_name,
                 due_at=datetime.combine(collection.latest_promise_date, time(12), tzinfo=timezone.utc),
                 status=agenda_status(collection.latest_promise_date), priority=collection.priority,
+                assigned_user_id=collection.assigned_user_id, assigned_user_name=collection.assigned_user_name,
                 target_filter=f"promise:{collection.promise_status}",
             ))
 
     client_names = dict(db.execute(select(Client.id, Client.full_name).where(
         Client.organization_id == actor.organization_id,
     )).all())
+    agenda_users = list(db.scalars(select(User).where(
+        User.organization_id == actor.organization_id,
+        User.deleted_at.is_(None), User.status == "active",
+    ).order_by(User.full_name, User.id)))
+    user_names = {user.id: user.full_name for user in agenda_users}
     for task in db.scalars(select(CRMTask).where(
         CRMTask.organization_id == actor.organization_id,
         CRMTask.status.in_({"pending", "in_progress"}),
@@ -735,18 +744,37 @@ def list_operational_agenda(
                 id=f"task:{task.id}", kind="task", title=task.title, client_id=task.client_id,
                 client_name=client_names.get(task.client_id), due_at=due_at,
                 status=agenda_status(due_at.date()), priority=task.priority or "normal",
+                assigned_user_id=task.assigned_to_id, assigned_user_name=user_names.get(task.assigned_to_id),
                 target_filter="task:overdue" if due_at.date() < today else "task:all",
             ))
     status_order = {"overdue": 0, "today": 1, "upcoming": 2}
     priority_order = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
     items.sort(key=lambda item: (status_order[item.status], item.due_at, priority_order[item.priority], item.title.casefold()))
+    workload = []
+    for user in agenda_users:
+        user_items = [item for item in items if item.assigned_user_id == user.id]
+        workload.append(OperationalAgendaWorkloadRead(
+            user_id=user.id, user_name=user.full_name, total=len(user_items),
+            overdue=sum(item.status == "overdue" for item in user_items),
+            today=sum(item.status == "today" for item in user_items),
+            upcoming=sum(item.status == "upcoming" for item in user_items),
+        ))
+    unassigned_items = [item for item in items if item.assigned_user_id is None]
+    if unassigned_items:
+        workload.append(OperationalAgendaWorkloadRead(
+            user_id=None, user_name="Sem responsável", total=len(unassigned_items),
+            overdue=sum(item.status == "overdue" for item in unassigned_items),
+            today=sum(item.status == "today" for item in unassigned_items),
+            upcoming=sum(item.status == "upcoming" for item in unassigned_items),
+        ))
+    workload.sort(key=lambda row: (-row.overdue, -row.today, -row.total, row.user_name.casefold()))
     return OperationalAgendaRead(
         date_from=date_from, date_to=date_to,
         summary=OperationalAgendaSummaryRead(
             total=len(items), overdue=sum(item.status == "overdue" for item in items),
             today=sum(item.status == "today" for item in items),
             upcoming=sum(item.status == "upcoming" for item in items),
-        ), items=items,
+        ), workload=workload, items=items,
     )
 
 

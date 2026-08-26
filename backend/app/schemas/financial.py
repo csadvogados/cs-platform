@@ -201,6 +201,8 @@ class OperationalAgendaItemRead(BaseModel):
     due_at: datetime
     status: Literal["overdue", "today", "upcoming"]
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    assigned_user_id: uuid.UUID | None = None
+    assigned_user_name: str | None = None
     target_filter: str
 
 
@@ -211,10 +213,20 @@ class OperationalAgendaSummaryRead(BaseModel):
     upcoming: int = 0
 
 
+class OperationalAgendaWorkloadRead(BaseModel):
+    user_id: uuid.UUID | None = None
+    user_name: str
+    total: int = 0
+    overdue: int = 0
+    today: int = 0
+    upcoming: int = 0
+
+
 class OperationalAgendaRead(BaseModel):
     date_from: date
     date_to: date
     summary: OperationalAgendaSummaryRead
+    workload: list[OperationalAgendaWorkloadRead] = Field(default_factory=list)
     items: list[OperationalAgendaItemRead] = Field(default_factory=list)
 
 

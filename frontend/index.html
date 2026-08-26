@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.20.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.21.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -243,7 +243,7 @@
           </section>
 
           <section id="view-agenda" class="page-view" aria-labelledby="agenda-heading">
-            <div class="section-intro"><div><p class="eyebrow dark">ROTINA UNIFICADA</p><h1 id="agenda-heading">Agenda operacional</h1><p>Tarefas, retornos de cobrança e promessas em uma única linha do tempo.</p></div><button id="agenda-refresh" class="primary-button" type="button">Atualizar agenda</button></div>
+            <div class="section-intro"><div><p class="eyebrow dark">ROTINA UNIFICADA</p><h1 id="agenda-heading">Agenda operacional</h1><p>Tarefas, retornos de cobrança e promessas em uma única linha do tempo.</p></div><div class="button-row"><button id="my-agenda-button" class="secondary-button" type="button">Minha agenda</button><button id="agenda-refresh" class="primary-button" type="button">Atualizar agenda</button></div></div>
             <div class="agenda-summary-grid">
               <article><span>Total no período</span><strong id="agenda-total">0</strong></article>
               <article class="overdue"><span>Atrasados</span><strong id="agenda-overdue">0</strong></article>
@@ -253,11 +253,13 @@
             <form id="agenda-filter-form" class="agenda-filter-bar">
               <label><span>Tipo</span><select name="kind"><option value="all">Todos</option><option value="task">Tarefas do CRM</option><option value="follow_up">Acompanhamentos</option><option value="promise">Promessas</option></select></label>
               <label><span>Situação</span><select name="status"><option value="all">Todas</option><option value="overdue">Atrasados</option><option value="today">Para hoje</option><option value="upcoming">Próximos</option></select></label>
+              <label><span>Responsável</span><select id="agenda-responsible-filter" name="responsible"><option value="all">Todos</option><option value="mine">Minha agenda</option><option value="unassigned">Sem responsável</option></select></label>
               <label><span>De</span><input name="date_from" type="date" /></label>
               <label><span>Até</span><input name="date_to" type="date" /></label>
               <button class="primary-button" type="submit">Aplicar filtros</button>
               <button id="agenda-clear-filters" class="secondary-button" type="button">Limpar</button>
             </form>
+            <details class="panel agenda-workload-panel" open><summary><span><small>CARGA DA EQUIPE</small><strong>Distribuição dos compromissos</strong></span><span id="agenda-workload-summary">0 responsáveis</span></summary><div id="agenda-workload-list" class="agenda-workload-list"></div></details>
             <section class="panel agenda-panel"><div class="panel-header"><div><p class="eyebrow dark">COMPROMISSOS</p><h3>Linha do tempo</h3></div><span id="agenda-result-count">0 registros</span></div><div id="agenda-list" class="agenda-list"><div class="loading-row">Carregando agenda…</div></div></section>
           </section>
 
@@ -355,7 +357,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.20.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.21.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -637,6 +639,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.20.0"></script>
+    <script src="./assets/app.js?v=5.21.0"></script>
   </body>
 </html>
