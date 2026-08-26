@@ -192,6 +192,32 @@ class OperationalAlertsRead(BaseModel):
     items: list[OperationalAlertRead] = Field(default_factory=list)
 
 
+class OperationalAgendaItemRead(BaseModel):
+    id: str
+    kind: Literal["task", "follow_up", "promise"]
+    title: str
+    client_id: uuid.UUID | None = None
+    client_name: str | None = None
+    due_at: datetime
+    status: Literal["overdue", "today", "upcoming"]
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    target_filter: str
+
+
+class OperationalAgendaSummaryRead(BaseModel):
+    total: int = 0
+    overdue: int = 0
+    today: int = 0
+    upcoming: int = 0
+
+
+class OperationalAgendaRead(BaseModel):
+    date_from: date
+    date_to: date
+    summary: OperationalAgendaSummaryRead
+    items: list[OperationalAgendaItemRead] = Field(default_factory=list)
+
+
 class CollectionAssignmentUpdate(BaseModel):
     assigned_user_id: uuid.UUID | None = None
     priority: CollectionPriority = "normal"

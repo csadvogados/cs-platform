@@ -6,6 +6,7 @@
     user: null,
     dashboard: null,
     alerts: { total: 0, criticalCount: 0, items: [], open: false },
+    agenda: { summary: null, items: [], filters: { kind: "all", status: "all", dateFrom: "", dateTo: "" } },
     collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
@@ -42,6 +43,7 @@
     dashboard: ["VISÃO GERAL", "Painel de operação", "Novo cliente"],
     clients: ["RELACIONAMENTO", "Clientes", "Novo cliente"],
     collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
+    agenda: ["ROTINA UNIFICADA", "Agenda operacional", "Atualizar"],
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
     crm: ["DESENVOLVIMENTO DE NEGÓCIOS", "CRM", "Nova oportunidade"],
     users: ["ORGANIZAÇÃO", "Equipe", "Atualizar"],
@@ -488,7 +490,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = ["audit", "collections"].includes(view);
+    $("#top-action-button").hidden = ["audit", "collections", "agenda"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -717,6 +719,7 @@
       loadDashboard(),
       loadCollections(),
       loadOperationalAlerts(),
+      loadOperationalAgenda(),
       loadClients(),
       loadCrm(),
       loadUsers(),
@@ -748,6 +751,67 @@
     state.alerts.items = Array.isArray(response.items) ? response.items : [];
     renderOperationalAlerts();
     if (showNotice) toast("Alertas atualizados.");
+  }
+
+  async function loadOperationalAgenda(showNotice = false) {
+    const filters = state.agenda.filters;
+    const params = new URLSearchParams();
+    if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+    if (filters.dateTo) params.set("date_to", filters.dateTo);
+    const response = await api(`/api/v1/financial/operational-agenda?${params.toString()}`);
+    state.agenda.summary = response.summary || null;
+    state.agenda.items = Array.isArray(response.items) ? response.items : [];
+    renderOperationalAgenda();
+    if (showNotice) toast("Agenda atualizada.");
+  }
+
+  function renderOperationalAgenda() {
+    const summary = state.agenda.summary || {};
+    $("#agenda-total").textContent = summary.total || 0;
+    $("#agenda-overdue").textContent = summary.overdue || 0;
+    $("#agenda-today").textContent = summary.today || 0;
+    $("#agenda-upcoming").textContent = summary.upcoming || 0;
+    const filters = state.agenda.filters;
+    const items = state.agenda.items.filter((item) =>
+      (filters.kind === "all" || item.kind === filters.kind)
+      && (filters.status === "all" || item.status === filters.status)
+    );
+    $("#agenda-result-count").textContent = items.length === 1 ? "1 registro" : `${items.length} registros`;
+    const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa" };
+    const statusLabels = { overdue: "Atrasado", today: "Hoje", upcoming: "Próximo" };
+    $("#agenda-list").innerHTML = items.length ? items.map((item) => `<button class="agenda-item ${escapeHtml(item.status)}" type="button" data-agenda-id="${escapeHtml(item.id)}">
+      <span class="agenda-date"><strong>${escapeHtml(formatDate(item.due_at, true))}</strong><small>${escapeHtml(statusLabels[item.status] || item.status)}</small></span>
+      <span class="agenda-marker" aria-hidden="true"></span>
+      <span class="agenda-copy"><small>${escapeHtml(kindLabels[item.kind] || item.kind)}</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.client_name || "Sem cliente vinculado")}</span></span>
+      <span class="badge ${item.priority === "urgent" ? "priority-urgent" : `priority-${escapeHtml(item.priority || "normal")}`} ">${escapeHtml(priorityLabels[item.priority] || "Normal")}</span>
+      <span class="agenda-arrow" aria-hidden="true">→</span>
+    </button>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
+  }
+
+  async function openAgendaItem(itemId) {
+    const item = state.agenda.items.find((entry) => String(entry.id) === String(itemId));
+    if (!item) return;
+    if (item.kind === "task") {
+      state.crmFilters.search = item.title;
+      state.crmFilters.taskStatus = item.status === "overdue" ? "overdue" : "all";
+      $("#crm-search").value = state.crmFilters.search;
+      $("#crm-task-status-filter").value = state.crmFilters.taskStatus;
+      setView("crm");
+      const tab = $('.crm-tab[data-crm-tab="tasks"]');
+      $$(".crm-tab").forEach((entry) => entry.classList.toggle("active", entry === tab));
+      $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === "crm-tasks"));
+      renderCrm();
+      return;
+    }
+    state.collections.filters.q = item.client_name || "";
+    if (item.kind === "follow_up") state.collections.filters.followUp = item.status;
+    if (item.kind === "promise") state.collections.filters.promise = item.status;
+    setView("collections");
+    const form = $("#collection-filter-form");
+    form.elements.q.value = state.collections.filters.q;
+    form.elements.follow_up_filter.value = state.collections.filters.followUp;
+    form.elements.promise_filter.value = state.collections.filters.promise;
+    await loadCollections();
   }
 
   function renderOperationalAlerts() {
@@ -3195,6 +3259,26 @@
     $("#alert-center-button").addEventListener("click", (event) => {
       event.stopPropagation();
       setAlertPopover(!state.alerts.open);
+    });
+    $("#agenda-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(event.currentTarget));
+      if (values.date_from && values.date_to && values.date_from > values.date_to) {
+        toast("A data inicial não pode ser posterior à data final.", "error");
+        return;
+      }
+      state.agenda.filters = { kind: values.kind || "all", status: values.status || "all", dateFrom: values.date_from || "", dateTo: values.date_to || "" };
+      loadOperationalAgenda().catch((error) => toast(error.message, "error"));
+    });
+    $("#agenda-clear-filters").addEventListener("click", () => {
+      $("#agenda-filter-form").reset();
+      state.agenda.filters = { kind: "all", status: "all", dateFrom: "", dateTo: "" };
+      loadOperationalAgenda().catch((error) => toast(error.message, "error"));
+    });
+    $("#agenda-refresh").addEventListener("click", () => loadOperationalAgenda(true).catch((error) => toast(error.message, "error")));
+    $("#agenda-list").addEventListener("click", (event) => {
+      const item = event.target.closest("[data-agenda-id]");
+      if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error"));
     });
     $("#alert-close-button").addEventListener("click", () => setAlertPopover(false));
     $("#alert-refresh-button").addEventListener("click", () => loadOperationalAlerts(true).catch((error) => toast(error.message, "error")));

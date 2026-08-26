@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.19.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.20.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -68,6 +68,7 @@
             <button class="nav-item active" data-view="dashboard"><span aria-hidden="true">⌂</span> Visão geral</button>
             <button class="nav-item" data-view="clients"><span aria-hidden="true">◎</span> Clientes</button>
             <button class="nav-item" data-view="collections"><span aria-hidden="true">▣</span> Cobranças</button>
+            <button class="nav-item" data-view="agenda"><span aria-hidden="true">◫</span> Agenda</button>
             <button class="nav-item" data-view="crm"><span aria-hidden="true">◇</span> CRM</button>
             <button class="nav-item" data-view="users"><span aria-hidden="true">♙</span> Equipe</button>
             <button id="audit-nav-item" class="nav-item" data-view="audit" hidden><span aria-hidden="true">◷</span> Histórico</button>
@@ -241,6 +242,25 @@
             <div class="table-wrap collection-table-wrap"><table><thead><tr><th class="collection-select-column"><span class="sr-only">Selecionar</span></th><th>Cliente</th><th>Acordo</th><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Responsável</th><th>Último contato</th><th>Ação recomendada</th><th>Ações</th></tr></thead><tbody id="collections-table"><tr><td colspan="11" class="empty-cell">Carregando cobranças…</td></tr></tbody></table></div>
           </section>
 
+          <section id="view-agenda" class="page-view" aria-labelledby="agenda-heading">
+            <div class="section-intro"><div><p class="eyebrow dark">ROTINA UNIFICADA</p><h1 id="agenda-heading">Agenda operacional</h1><p>Tarefas, retornos de cobrança e promessas em uma única linha do tempo.</p></div><button id="agenda-refresh" class="primary-button" type="button">Atualizar agenda</button></div>
+            <div class="agenda-summary-grid">
+              <article><span>Total no período</span><strong id="agenda-total">0</strong></article>
+              <article class="overdue"><span>Atrasados</span><strong id="agenda-overdue">0</strong></article>
+              <article><span>Para hoje</span><strong id="agenda-today">0</strong></article>
+              <article><span>Próximos</span><strong id="agenda-upcoming">0</strong></article>
+            </div>
+            <form id="agenda-filter-form" class="agenda-filter-bar">
+              <label><span>Tipo</span><select name="kind"><option value="all">Todos</option><option value="task">Tarefas do CRM</option><option value="follow_up">Acompanhamentos</option><option value="promise">Promessas</option></select></label>
+              <label><span>Situação</span><select name="status"><option value="all">Todas</option><option value="overdue">Atrasados</option><option value="today">Para hoje</option><option value="upcoming">Próximos</option></select></label>
+              <label><span>De</span><input name="date_from" type="date" /></label>
+              <label><span>Até</span><input name="date_to" type="date" /></label>
+              <button class="primary-button" type="submit">Aplicar filtros</button>
+              <button id="agenda-clear-filters" class="secondary-button" type="button">Limpar</button>
+            </form>
+            <section class="panel agenda-panel"><div class="panel-header"><div><p class="eyebrow dark">COMPROMISSOS</p><h3>Linha do tempo</h3></div><span id="agenda-result-count">0 registros</span></div><div id="agenda-list" class="agenda-list"><div class="loading-row">Carregando agenda…</div></div></section>
+          </section>
+
           <section id="view-crm" class="page-view" aria-labelledby="crm-heading">
             <div class="section-intro"><div><p class="eyebrow dark">DESENVOLVIMENTO DE NEGÓCIOS</p><h1 id="crm-heading">CRM</h1><p>Acompanhe contatos, oportunidades e tarefas da equipe.</p></div><div class="button-row"><button class="secondary-button" data-open-dialog="task-dialog">Nova tarefa</button><button class="primary-button" data-open-dialog="opportunity-dialog">Nova oportunidade</button></div></div>
             <div class="crm-summary">
@@ -335,7 +355,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.19.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.20.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -617,6 +637,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.19.0"></script>
+    <script src="./assets/app.js?v=5.20.0"></script>
   </body>
 </html>

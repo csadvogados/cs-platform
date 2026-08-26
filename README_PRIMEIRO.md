@@ -1,30 +1,25 @@
-# CS Platform v5.19.0 — LEIA PRIMEIRO
+# CS Platform v5.20.0 — LEIA PRIMEIRO
 
-Este pacote adiciona a **Central de alertas operacionais**.
+Este pacote adiciona a **Agenda operacional unificada**.
 
-## Como instalar
+## Instalação
 
-1. Abra o repositório `csadvogados/cs-platform` no GitHub.
-2. Substitua os sete arquivos do pacote, mantendo exatamente as mesmas pastas.
-3. Confirme o commit com a mensagem:
+1. Substitua os sete arquivos do pacote no GitHub, mantendo as mesmas pastas.
+2. Use o commit: `feat: adicionar agenda operacional unificada v5.20.0`.
+3. Aguarde os deploys do `cs-platform-api` e do `cs-platform-web`.
+4. Deixe o campo **Pre-deploy Command** vazio. Não há migração de banco.
 
-   `feat: adicionar central de alertas operacionais v5.19.0`
+## Teste
 
-4. Aguarde o deploy do `cs-platform-api` terminar com sucesso.
-5. Aguarde o deploy do `cs-platform-web` terminar com sucesso.
-6. Não preencha o campo **Pre-deploy Command**. Esta versão não possui migração de banco.
+1. Atualize a plataforma com `Ctrl + F5` e entre normalmente.
+2. Abra **Agenda** no menu lateral.
+3. Confira os totais e a linha do tempo.
+4. Teste os filtros de tipo, situação e período.
+5. Clique em uma tarefa: o CRM deve abrir na aba Tarefas, com o registro localizado.
+6. Clique em um acompanhamento ou promessa: Cobranças deve abrir com os filtros correspondentes.
+7. Em Configurações, confirme a versão `5.20.0`.
 
-## Como testar
-
-1. Acesse a plataforma e faça login.
-2. Confira o sino no cabeçalho e clique nele.
-3. Confira o contador e os alertas de cobranças, promessas, acompanhamentos e tarefas.
-4. Clique em **Cobranças críticas**. A tela Cobranças deve abrir com o filtro **Crítica**.
-5. Clique em **Tarefas do CRM atrasadas**. O CRM deve abrir na aba **Tarefas**, com o filtro **Atrasadas**.
-6. Clique em **Atualizar alertas** e confirme a mensagem de atualização.
-7. Em Configurações, confirme `5.19.0`, API online e banco de dados OK.
-
-## Arquivos incluídos
+## Arquivos
 
 - `backend/app/api/routes/financial.py`
 - `backend/app/core/constants.py`
@@ -33,5 +28,3 @@ Este pacote adiciona a **Central de alertas operacionais**.
 - `frontend/index.html`
 - `frontend/assets/app.js`
 - `frontend/assets/styles.css`
-- `README_PRIMEIRO.md`
-- `SHA256SUMS.txt`

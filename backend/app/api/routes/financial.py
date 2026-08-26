@@ -36,6 +36,9 @@ from app.schemas.financial import (
     CollectionsRead,
     OperationalAlertRead,
     OperationalAlertsRead,
+    OperationalAgendaItemRead,
+    OperationalAgendaRead,
+    OperationalAgendaSummaryRead,
     DebtCreate,
     DebtRead,
     ExpenseCreate,
@@ -669,6 +672,81 @@ def list_operational_alerts(
         total=sum(item.count for item in items),
         critical_count=sum(item.count for item in items if item.severity == "critical"),
         items=items,
+    )
+
+
+@router.get("/operational-agenda", response_model=OperationalAgendaRead)
+def list_operational_agenda(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    today = date.today()
+    date_from = date_from or today - timedelta(days=30)
+    date_to = date_to or today + timedelta(days=30)
+    if date_from > date_to:
+        raise HTTPException(status_code=422, detail="A data inicial não pode ser posterior à data final")
+    if (date_to - date_from).days > 366:
+        raise HTTPException(status_code=422, detail="O período máximo da agenda é de 12 meses")
+
+    collections = list_collections(
+        q="", collection_status_filter="all", follow_up_filter="all", promise_filter="all",
+        responsible_filter="all", priority_filter="all", aging_filter="all", attention_filter="all",
+        sort_order="recommended", due_from=None, due_to=None, db=db, actor=actor,
+    )
+    items: list[OperationalAgendaItemRead] = []
+
+    def agenda_status(value: date) -> str:
+        return "overdue" if value < today else "today" if value == today else "upcoming"
+
+    for collection in collections.items:
+        if collection.status not in {"pending", "due_soon", "overdue"}:
+            continue
+        if collection.next_follow_up_at and date_from <= collection.next_follow_up_at.date() <= date_to:
+            items.append(OperationalAgendaItemRead(
+                id=f"follow-up:{collection.id}", kind="follow_up", title="Acompanhamento de cobrança",
+                client_id=collection.client_id, client_name=collection.client_name,
+                due_at=collection.next_follow_up_at, status=agenda_status(collection.next_follow_up_at.date()),
+                priority=collection.priority, target_filter=f"follow_up:{collection.follow_up_status}",
+            ))
+        if collection.latest_promise_date and date_from <= collection.latest_promise_date <= date_to:
+            items.append(OperationalAgendaItemRead(
+                id=f"promise:{collection.id}", kind="promise", title="Promessa de pagamento",
+                client_id=collection.client_id, client_name=collection.client_name,
+                due_at=datetime.combine(collection.latest_promise_date, time(12), tzinfo=timezone.utc),
+                status=agenda_status(collection.latest_promise_date), priority=collection.priority,
+                target_filter=f"promise:{collection.promise_status}",
+            ))
+
+    client_names = dict(db.execute(select(Client.id, Client.full_name).where(
+        Client.organization_id == actor.organization_id,
+    )).all())
+    for task in db.scalars(select(CRMTask).where(
+        CRMTask.organization_id == actor.organization_id,
+        CRMTask.status.in_({"pending", "in_progress"}),
+        CRMTask.due_at.is_not(None),
+    )):
+        due_at = task.due_at
+        if due_at and due_at.tzinfo is None:
+            due_at = due_at.replace(tzinfo=timezone.utc)
+        if due_at and date_from <= due_at.date() <= date_to:
+            items.append(OperationalAgendaItemRead(
+                id=f"task:{task.id}", kind="task", title=task.title, client_id=task.client_id,
+                client_name=client_names.get(task.client_id), due_at=due_at,
+                status=agenda_status(due_at.date()), priority=task.priority or "normal",
+                target_filter="task:overdue" if due_at.date() < today else "task:all",
+            ))
+    status_order = {"overdue": 0, "today": 1, "upcoming": 2}
+    priority_order = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
+    items.sort(key=lambda item: (status_order[item.status], item.due_at, priority_order[item.priority], item.title.casefold()))
+    return OperationalAgendaRead(
+        date_from=date_from, date_to=date_to,
+        summary=OperationalAgendaSummaryRead(
+            total=len(items), overdue=sum(item.status == "overdue" for item in items),
+            today=sum(item.status == "today" for item in items),
+            upcoming=sum(item.status == "upcoming" for item in items),
+        ), items=items,
     )
 
 
