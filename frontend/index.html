@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.23.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.24.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -66,6 +66,7 @@
           </a>
           <nav class="nav-list" aria-label="Navegação principal">
             <button class="nav-item active" data-view="dashboard"><span aria-hidden="true">⌂</span> Visão geral</button>
+            <button id="management-nav-item" class="nav-item" data-view="management" hidden><span aria-hidden="true">▥</span> Indicadores</button>
             <button class="nav-item" data-view="clients"><span aria-hidden="true">◎</span> Clientes</button>
             <button class="nav-item" data-view="collections"><span aria-hidden="true">▣</span> Cobranças</button>
             <button class="nav-item" data-view="agenda"><span aria-hidden="true">◫</span> Agenda</button>
@@ -146,6 +147,30 @@
                 <article class="collection-alert follow-up"><span>Acompanhamentos</span><strong id="dashboard-follow-up-count">—</strong><small id="dashboard-follow-up-detail">Carregando…</small></article>
               </div>
             </section>
+          </section>
+
+          <section id="view-management" class="page-view" aria-labelledby="management-heading">
+            <div class="section-intro"><div><p class="eyebrow dark">INTELIGÊNCIA OPERACIONAL</p><h1 id="management-heading">Central Gerencial</h1><p>Compare resultados, identifique riscos e acompanhe o desempenho da equipe.</p></div><div class="button-row"><button id="management-export" class="secondary-button" type="button">Exportar CSV</button><button id="management-refresh" class="primary-button" type="button">Atualizar indicadores</button></div></div>
+            <form id="management-filter-form" class="management-filter-bar">
+              <label><span>Período</span><select id="management-period" name="period"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="custom">Personalizado</option></select></label>
+              <label><span>De</span><input id="management-date-from" name="date_from" type="date" /></label>
+              <label><span>Até</span><input id="management-date-to" name="date_to" type="date" /></label>
+              <button class="primary-button" type="submit">Aplicar período</button>
+            </form>
+            <div class="management-kpi-grid">
+              <article><span>Novos clientes</span><strong id="management-new-clients">—</strong><small id="management-new-clients-change">Comparando períodos…</small></article>
+              <article><span>Atendimentos</span><strong id="management-interactions">—</strong><small id="management-interactions-change">Comparando períodos…</small></article>
+              <article><span>Tarefas concluídas</span><strong id="management-completed-tasks">—</strong><small id="management-completed-tasks-change">Comparando períodos…</small></article>
+              <article class="accent"><span>Recebimentos</span><strong id="management-received">—</strong><small id="management-received-change">Comparando períodos…</small></article>
+              <article><span>Conversão comercial</span><strong id="management-conversion">—</strong><small id="management-conversion-detail">Ganhos e perdas no período</small></article>
+              <article><span>Índice de recebimento</span><strong id="management-recovery">—</strong><small id="management-recovery-detail">Sobre vencimentos do período</small></article>
+            </div>
+            <div class="management-main-grid">
+              <section class="panel management-trend-panel"><div class="panel-header"><div><p class="eyebrow dark">EVOLUÇÃO DIÁRIA</p><h3>Movimento da operação</h3></div><span id="management-period-label">—</span></div><div class="management-legend"><span class="clients">Clientes</span><span class="interactions">Atendimentos</span><span class="tasks">Tarefas</span><span class="received">Recebimentos</span></div><div id="management-trend" class="management-trend"><div class="loading-row">Carregando evolução…</div></div></section>
+              <section class="panel panel-dark management-risk-panel"><div class="panel-header"><div><p class="eyebrow">ATENÇÃO</p><h3>Riscos atuais</h3></div></div><div class="management-risk-list"><article><span>Tarefas atrasadas</span><strong id="management-overdue-tasks">—</strong></article><article><span>Tarefas pendentes</span><strong id="management-pending-tasks">—</strong></article><article><span>Cobranças atrasadas</span><strong id="management-overdue-collections">—</strong></article><article><span>Valor em atraso</span><strong id="management-overdue-amount">—</strong></article></div><div id="management-insights" class="management-insights"></div></section>
+            </div>
+            <section class="panel management-pipeline-panel"><div class="panel-header"><div><p class="eyebrow dark">FUNIL COMERCIAL</p><h3>Distribuição das oportunidades</h3></div><div class="management-pipeline-total"><span>Pipeline aberto</span><strong id="management-open-pipeline">—</strong><small id="management-weighted-pipeline">— ponderado</small></div></div><div id="management-pipeline" class="management-pipeline"></div></section>
+            <section class="panel management-team-panel"><div class="panel-header"><div><p class="eyebrow dark">PRODUTIVIDADE</p><h3>Desempenho da equipe</h3></div><span id="management-team-count">0 responsáveis</span></div><div class="table-wrap"><table><thead><tr><th>Responsável</th><th>Clientes</th><th>Oportunidades</th><th>Tarefas pendentes</th><th>Tarefas concluídas</th><th>Atendimentos</th><th>Ações de cobrança</th></tr></thead><tbody id="management-team-body"><tr><td colspan="7" class="empty-cell">Carregando equipe…</td></tr></tbody></table></div></section>
           </section>
 
           <section id="view-clients" class="page-view" aria-labelledby="clients-heading">
@@ -362,7 +387,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.23.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.24.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -644,6 +669,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.23.0"></script>
+    <script src="./assets/app.js?v=5.24.0"></script>
   </body>
 </html>

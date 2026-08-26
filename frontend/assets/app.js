@@ -6,6 +6,7 @@
     user: null,
     dashboard: null,
     alerts: { total: 0, criticalCount: 0, items: [], open: false },
+    management: { report: null, filters: { period: "30", dateFrom: "", dateTo: "" } },
     agenda: { summary: null, workload: [], items: [], viewMode: "timeline", weekStart: null, filters: { search: "", kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" } },
     collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
@@ -41,6 +42,7 @@
 
   const viewMeta = {
     dashboard: ["VISÃO GERAL", "Painel de operação", "Novo cliente"],
+    management: ["INTELIGÊNCIA OPERACIONAL", "Central Gerencial", "Atualizar"],
     clients: ["RELACIONAMENTO", "Clientes", "Novo cliente"],
     collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
     agenda: ["ROTINA UNIFICADA", "Agenda operacional", "Atualizar"],
@@ -330,6 +332,16 @@
       || (state.user?.permissions || []).includes("audit.read");
   }
 
+  function canViewManagement() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("report.read");
+  }
+
+  function canExportManagement() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("report.export");
+  }
+
   function canExportClients() {
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("client.export");
@@ -477,12 +489,15 @@
     $("#settings-role").textContent = userRoleLabels[state.user.role] || state.user.role || "—";
     $("#password-security-warning").hidden = !state.user.must_change_password;
     $("#audit-nav-item").hidden = !canViewAudit();
+    $("#management-nav-item").hidden = !canViewManagement();
+    $("#management-export").hidden = !canExportManagement();
     $("#export-clients-button").hidden = !canExportClients();
     $("#import-clients-button").hidden = !canImportClients();
   }
 
   function setView(view) {
     if (view === "audit" && !canViewAudit()) view = "dashboard";
+    if (view === "management" && !canViewManagement()) view = "dashboard";
     if (!viewMeta[view]) return;
     state.currentView = view;
     $$(".page-view").forEach((section) => section.classList.toggle("active-view", section.id === `view-${view}`));
@@ -490,7 +505,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = ["audit", "collections", "agenda"].includes(view);
+    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -729,6 +744,9 @@
     if (state.currentView === "clientDetail" && state.selectedClient) {
       loaders.push(loadClientDetail(state.selectedClient.id));
     }
+    if (canViewManagement()) {
+      loaders.push(loadManagement());
+    }
     if (state.currentView === "audit" && canViewAudit()) {
       loaders.push(loadAudit(state.audit.page));
     }
@@ -742,6 +760,118 @@
   async function loadDashboard() {
     state.dashboard = await api("/api/v1/dashboard");
     renderDashboard();
+  }
+
+  function managementParams() {
+    const params = new URLSearchParams();
+    if (state.management.filters.dateFrom) params.set("date_from", state.management.filters.dateFrom);
+    if (state.management.filters.dateTo) params.set("date_to", state.management.filters.dateTo);
+    return params;
+  }
+
+  function comparisonText(currentValue, previousValue, currency = false) {
+    const current = Number(currentValue || 0);
+    const previous = Number(previousValue || 0);
+    if (current === 0 && previous === 0) return { text: "Sem movimento nos dois períodos", tone: "neutral" };
+    if (previous === 0) return { text: `Novo resultado no período${currency ? `: ${formatCurrency(current)}` : ""}`, tone: "positive" };
+    const variation = ((current - previous) / Math.abs(previous)) * 100;
+    const prefix = variation > 0 ? "+" : "";
+    return {
+      text: `${prefix}${variation.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% em relação ao período anterior`,
+      tone: variation > 0 ? "positive" : variation < 0 ? "negative" : "neutral"
+    };
+  }
+
+  function renderManagementComparison(selector, current, previous, currency = false) {
+    const element = $(selector);
+    const result = comparisonText(current, previous, currency);
+    element.textContent = result.text;
+    element.className = `management-comparison ${result.tone}`;
+  }
+
+  async function loadManagement(showNotice = false) {
+    const query = managementParams().toString();
+    state.management.report = await api(`/api/v1/financial/executive-overview${query ? `?${query}` : ""}`);
+    renderManagement();
+    if (showNotice) toast("Indicadores gerenciais atualizados.");
+  }
+
+  function renderManagement() {
+    const report = state.management.report || {};
+    $("#management-new-clients").textContent = report.new_clients || 0;
+    $("#management-interactions").textContent = report.interactions || 0;
+    $("#management-completed-tasks").textContent = report.completed_tasks || 0;
+    $("#management-received").textContent = formatCurrency(report.received_amount);
+    $("#management-conversion").textContent = `${Number(report.conversion_rate || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+    $("#management-recovery").textContent = `${Number(report.recovery_rate || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+    $("#management-conversion-detail").textContent = `${report.won_count || 0} ganha(s) · ${report.lost_count || 0} perdida(s)`;
+    $("#management-recovery-detail").textContent = `${formatCurrency(report.received_amount)} de ${formatCurrency(report.due_amount)}`;
+    renderManagementComparison("#management-new-clients-change", report.new_clients, report.previous_new_clients);
+    renderManagementComparison("#management-interactions-change", report.interactions, report.previous_interactions);
+    renderManagementComparison("#management-completed-tasks-change", report.completed_tasks, report.previous_completed_tasks);
+    renderManagementComparison("#management-received-change", report.received_amount, report.previous_received_amount, true);
+    $("#management-period-label").textContent = `${formatDate(report.date_from)} a ${formatDate(report.date_to)}`;
+    $("#management-overdue-tasks").textContent = report.overdue_tasks || 0;
+    $("#management-pending-tasks").textContent = report.pending_tasks || 0;
+    $("#management-overdue-collections").textContent = report.overdue_collections || 0;
+    $("#management-overdue-amount").textContent = formatCurrency(report.overdue_amount);
+    $("#management-open-pipeline").textContent = formatCurrency(report.open_pipeline_value);
+    $("#management-weighted-pipeline").textContent = `${formatCurrency(report.weighted_pipeline_value)} ponderado`;
+
+    const trend = Array.isArray(report.trend) ? report.trend : [];
+    const maxActivity = Math.max(1, ...trend.map((row) => Math.max(Number(row.new_clients || 0), Number(row.interactions || 0), Number(row.completed_tasks || 0))));
+    const maxReceived = Math.max(1, ...trend.map((row) => Number(row.received_amount || 0)));
+    $("#management-trend").innerHTML = trend.length ? `<div class="management-trend-track">${trend.map((row) => `<article title="${escapeHtml(formatDate(row.day))}">
+      <div class="management-bars"><span class="clients" style="height:${Number(row.new_clients || 0) ? Math.max(3, Number(row.new_clients) / maxActivity * 100) : 0}%"></span><span class="interactions" style="height:${Number(row.interactions || 0) ? Math.max(3, Number(row.interactions) / maxActivity * 100) : 0}%"></span><span class="tasks" style="height:${Number(row.completed_tasks || 0) ? Math.max(3, Number(row.completed_tasks) / maxActivity * 100) : 0}%"></span><span class="received" style="height:${Number(row.received_amount || 0) ? Math.max(3, Number(row.received_amount) / maxReceived * 100) : 0}%"></span></div>
+      <strong>${String(row.day).slice(8, 10)}</strong><small>${String(row.day).slice(5, 7)}</small></article>`).join("")}</div>` : '<div class="empty-state">Sem movimento neste período.</div>';
+
+    const stageLabelsLocal = { lead: "Leads", qualified: "Qualificação", proposal: "Proposta", negotiation: "Negociação", won: "Ganhas", lost: "Perdidas" };
+    const pipeline = Array.isArray(report.pipeline) ? report.pipeline : [];
+    const pipelineMax = Math.max(1, ...pipeline.map((row) => Number(row.count || 0)));
+    $("#management-pipeline").innerHTML = pipeline.map((row) => `<article class="management-stage ${escapeHtml(row.stage)}"><div><span>${escapeHtml(stageLabelsLocal[row.stage] || row.stage)}</span><strong>${row.count || 0}</strong></div><div class="management-stage-meter"><span style="width:${Number(row.count || 0) / pipelineMax * 100}%"></span></div><small>${formatCurrency(row.amount)}</small></article>`).join("");
+
+    const team = Array.isArray(report.team) ? report.team : [];
+    $("#management-team-count").textContent = `${team.length} ${team.length === 1 ? "responsável" : "responsáveis"}`;
+    $("#management-team-body").innerHTML = team.length ? team.map((row) => `<tr><td><strong>${escapeHtml(row.user_name)}</strong></td><td>${row.assigned_clients || 0}</td><td>${row.open_opportunities || 0}</td><td>${row.pending_tasks || 0}</td><td>${row.completed_tasks || 0}</td><td>${row.interactions || 0}</td><td>${row.collection_actions || 0}</td></tr>`).join("") : '<tr><td colspan="7" class="empty-cell">Nenhum responsável ativo encontrado.</td></tr>';
+
+    const insights = [];
+    if (Number(report.overdue_tasks || 0) > 0) insights.push(`${report.overdue_tasks} tarefa(s) atrasada(s) precisam de priorização.`);
+    if (Number(report.overdue_collections || 0) > 0) insights.push(`${report.overdue_collections} cobrança(s) representam ${formatCurrency(report.overdue_amount)} em atraso.`);
+    if (Number(report.conversion_rate || 0) < 25 && Number(report.won_count || 0) + Number(report.lost_count || 0) > 0) insights.push("A conversão comercial ficou abaixo de 25% no período.");
+    if (Number(report.recovery_rate || 0) < 50 && Number(report.due_amount || 0) > 0) insights.push("O índice de recebimento ficou abaixo de 50% dos vencimentos.");
+    if (!insights.length) insights.push("Nenhum risco crítico foi identificado no período selecionado.");
+    $("#management-insights").innerHTML = insights.map((item) => `<p>${escapeHtml(item)}</p>`).join("");
+  }
+
+  function setManagementPeriod(period) {
+    const today = new Date();
+    const days = Number(period || 30);
+    const start = new Date(today);
+    start.setDate(start.getDate() - Math.max(0, days - 1));
+    state.management.filters.period = String(period);
+    state.management.filters.dateFrom = localDateValue(start);
+    state.management.filters.dateTo = localDateValue(today);
+    $("#management-date-from").value = state.management.filters.dateFrom;
+    $("#management-date-to").value = state.management.filters.dateTo;
+  }
+
+  async function exportManagement() {
+    const button = $("#management-export");
+    setBusy(button, true, "Gerando…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const query = managementParams().toString();
+      const response = await fetch(`${API_BASE}/api/v1/financial/executive-overview.csv${query ? `?${query}` : ""}`, { headers });
+      if (!response.ok) throw new Error(await readError(response));
+      saveBlob(await response.blob(), `central_gerencial_${state.management.filters.dateFrom}_${state.management.filters.dateTo}.csv`);
+      toast("Relatório gerencial exportado.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   async function loadOperationalAlerts(showNotice = false) {
@@ -3290,6 +3420,32 @@
     $("#client-next-page").addEventListener("click", () => {
       loadClientPage(state.clientPage.page + 1).catch((error) => toast(error.message, "error"));
     });
+    $("#management-period").addEventListener("change", (event) => {
+      const period = event.currentTarget.value;
+      if (period !== "custom") {
+        setManagementPeriod(period);
+        loadManagement().catch((error) => toast(error.message, "error"));
+      }
+    });
+    ["#management-date-from", "#management-date-to"].forEach((selector) => $(selector).addEventListener("change", () => {
+      $("#management-period").value = "custom";
+    }));
+    $("#management-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(event.currentTarget));
+      if (!values.date_from || !values.date_to) {
+        toast("Informe as datas inicial e final.", "error");
+        return;
+      }
+      if (values.date_from > values.date_to) {
+        toast("A data inicial não pode ser posterior à data final.", "error");
+        return;
+      }
+      state.management.filters = { period: String(values.period || "custom"), dateFrom: String(values.date_from), dateTo: String(values.date_to) };
+      loadManagement(true).catch((error) => toast(error.message, "error"));
+    });
+    $("#management-refresh").addEventListener("click", () => loadManagement(true).catch((error) => toast(error.message, "error")));
+    $("#management-export").addEventListener("click", exportManagement);
     $("#collections-refresh").addEventListener("click", () => loadCollections(true).catch((error) => toast(error.message, "error")));
     $("#my-collections-button").addEventListener("click", () => {
       state.collections.filters.responsible = "mine";
@@ -3557,6 +3713,7 @@
     $$("[data-view]").forEach((button) => button.addEventListener("click", () => {
       setView(button.dataset.view);
       if (button.dataset.view === "collections") loadCollections().catch((error) => toast(error.message, "error"));
+      if (button.dataset.view === "management") loadManagement().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));
@@ -3597,6 +3754,7 @@
     state.collections.reportFilters = { dateFrom: localDateValue(monthStart), dateTo: localDateValue(today) };
     $("#collection-report-from").value = state.collections.reportFilters.dateFrom;
     $("#collection-report-to").value = state.collections.reportFilters.dateTo;
+    setManagementPeriod("30");
     wireEvents();
     if (!API_BASE) {
       showLogin("A API ainda não foi configurada no arquivo config.js.");

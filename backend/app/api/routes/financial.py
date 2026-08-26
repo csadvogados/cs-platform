@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_user, require_permissions, require_roles
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.crm import CRMTask
+from app.models.crm import CRMInteraction, CRMOpportunity, CRMTask
 from app.models.financial import CollectionAction, Creditor, Debt, Expense, Income, PaymentAgreement, PaymentInstallment
 from app.models.user import User
 from app.schemas.financial import (
@@ -32,6 +32,10 @@ from app.schemas.financial import (
     CollectionReportRead,
     CollectionSummaryRead,
     CollectionTeamPerformanceRead,
+    ExecutiveOverviewRead,
+    ExecutivePipelineStageRead,
+    ExecutiveTeamPerformanceRead,
+    ExecutiveTrendPointRead,
     CollectionWorkloadRead,
     CollectionsRead,
     OperationalAlertRead,
@@ -51,6 +55,7 @@ from app.schemas.financial import (
     InstallmentPaymentCreate,
     PaymentInstallmentRead,
 )
+from app.security.identity import IdentityContext
 from app.services.audit import record_audit
 
 router = APIRouter()
@@ -265,6 +270,206 @@ def collection_report_data(
         promise_amount=sum((Decimal(action.promise_amount or 0) for action in latest_promises.values()), Decimal("0")),
         recovery_rate=recovery_rate,
         team=team_rows,
+    )
+
+
+def executive_overview_data(
+    db: Session,
+    organization_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+) -> ExecutiveOverviewRead:
+    if date_from > date_to:
+        raise HTTPException(status_code=422, detail="A data inicial não pode ser posterior à data final")
+    if (date_to - date_from).days > 365:
+        raise HTTPException(status_code=422, detail="O período máximo da Central Gerencial é de 366 dias")
+
+    period_days = (date_to - date_from).days + 1
+    previous_date_to = date_from - timedelta(days=1)
+    previous_date_from = previous_date_to - timedelta(days=period_days - 1)
+    start_at = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+    end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    previous_start_at = datetime.combine(previous_date_from, time.min, tzinfo=timezone.utc)
+    previous_end_at = start_at
+
+    clients = list(db.scalars(select(Client).where(Client.organization_id == organization_id)))
+    opportunities = list(db.scalars(select(CRMOpportunity).where(CRMOpportunity.organization_id == organization_id)))
+    tasks = list(db.scalars(select(CRMTask).where(CRMTask.organization_id == organization_id)))
+    interactions_all = list(db.scalars(select(CRMInteraction).where(
+        CRMInteraction.organization_id == organization_id,
+        CRMInteraction.occurred_at >= previous_start_at,
+        CRMInteraction.occurred_at < end_at,
+    )))
+    installments = list(db.scalars(select(PaymentInstallment).where(PaymentInstallment.organization_id == organization_id)))
+    actions_all = list(db.scalars(select(CollectionAction).where(
+        CollectionAction.organization_id == organization_id,
+        CollectionAction.cancelled_at.is_(None),
+        CollectionAction.contacted_at >= previous_start_at,
+        CollectionAction.contacted_at < end_at,
+    )))
+    users = list(db.scalars(select(User).where(
+        User.organization_id == organization_id,
+        User.deleted_at.is_(None),
+        User.status == "active",
+    ).order_by(User.full_name)))
+
+    def as_utc(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    in_current = lambda value: bool(value and start_at <= as_utc(value) < end_at)
+    in_previous = lambda value: bool(value and previous_start_at <= as_utc(value) < previous_end_at)
+    new_clients = [item for item in clients if in_current(item.created_at)]
+    previous_new_clients = [item for item in clients if in_previous(item.created_at)]
+    interactions = [item for item in interactions_all if in_current(item.occurred_at)]
+    previous_interactions = [item for item in interactions_all if in_previous(item.occurred_at)]
+    completed_tasks = [item for item in tasks if item.status == "completed" and in_current(item.completed_at)]
+    previous_completed_tasks = [item for item in tasks if item.status == "completed" and in_previous(item.completed_at)]
+    received = [item for item in installments if item.status == "paid" and in_current(item.paid_at)]
+    previous_received = [item for item in installments if item.status == "paid" and in_previous(item.paid_at)]
+    collection_actions = [item for item in actions_all if in_current(item.contacted_at)]
+    previous_collection_actions = [item for item in actions_all if in_previous(item.contacted_at)]
+
+    open_stages = {"lead", "qualified", "proposal", "negotiation"}
+    open_opportunities = [item for item in opportunities if item.stage in open_stages]
+    won = [item for item in opportunities if item.stage == "won" and in_current(item.updated_at)]
+    lost = [item for item in opportunities if item.stage == "lost" and in_current(item.updated_at)]
+    decided = len(won) + len(lost)
+    conversion_rate = (
+        (Decimal(len(won)) / Decimal(decided) * Decimal("100")).quantize(CENT, rounding=ROUND_HALF_UP)
+        if decided else Decimal("0")
+    )
+    today = date.today()
+    due_items = [item for item in installments if date_from <= item.due_date <= date_to and item.status != "cancelled"]
+    overdue_items = [item for item in installments if item.status not in {"paid", "cancelled"} and item.due_date < today]
+    due_amount = sum((Decimal(item.amount or 0) for item in due_items), Decimal("0"))
+    received_amount = sum((Decimal(item.paid_amount or 0) for item in received), Decimal("0"))
+    previous_received_amount = sum((Decimal(item.paid_amount or 0) for item in previous_received), Decimal("0"))
+    recovery_rate = (
+        (received_amount / due_amount * Decimal("100")).quantize(CENT, rounding=ROUND_HALF_UP)
+        if due_amount else Decimal("0")
+    )
+
+    trend: list[ExecutiveTrendPointRead] = []
+    for offset in range(period_days):
+        day = date_from + timedelta(days=offset)
+        trend.append(ExecutiveTrendPointRead(
+            day=day,
+            new_clients=sum(1 for item in new_clients if item.created_at.date() == day),
+            interactions=sum(1 for item in interactions if item.occurred_at.date() == day),
+            completed_tasks=sum(1 for item in completed_tasks if item.completed_at.date() == day),
+            received_amount=sum((Decimal(item.paid_amount or 0) for item in received if item.paid_at.date() == day), Decimal("0")),
+        ))
+
+    stage_order = ["lead", "qualified", "proposal", "negotiation", "won", "lost"]
+    pipeline = [ExecutivePipelineStageRead(
+        stage=stage,
+        count=sum(1 for item in opportunities if item.stage == stage),
+        amount=sum((Decimal(str(item.estimated_value or 0)) for item in opportunities if item.stage == stage), Decimal("0")),
+    ) for stage in stage_order]
+
+    team = [ExecutiveTeamPerformanceRead(
+        user_id=user.id,
+        user_name=user.full_name,
+        assigned_clients=sum(1 for item in clients if item.assigned_user_id == user.id),
+        open_opportunities=sum(1 for item in open_opportunities if item.owner_id == user.id),
+        pending_tasks=sum(1 for item in tasks if item.assigned_to_id == user.id and item.status in {"pending", "in_progress"}),
+        completed_tasks=sum(1 for item in completed_tasks if item.assigned_to_id == user.id),
+        interactions=sum(1 for item in interactions if item.user_id == user.id),
+        collection_actions=sum(1 for item in collection_actions if item.created_by_user_id == user.id),
+    ) for user in users]
+
+    return ExecutiveOverviewRead(
+        date_from=date_from,
+        date_to=date_to,
+        previous_date_from=previous_date_from,
+        previous_date_to=previous_date_to,
+        total_clients=len(clients),
+        new_clients=len(new_clients),
+        previous_new_clients=len(previous_new_clients),
+        interactions=len(interactions),
+        previous_interactions=len(previous_interactions),
+        completed_tasks=len(completed_tasks),
+        previous_completed_tasks=len(previous_completed_tasks),
+        received_amount=received_amount,
+        previous_received_amount=previous_received_amount,
+        collection_actions=len(collection_actions),
+        previous_collection_actions=len(previous_collection_actions),
+        open_pipeline_count=len(open_opportunities),
+        open_pipeline_value=sum((Decimal(str(item.estimated_value or 0)) for item in open_opportunities), Decimal("0")),
+        weighted_pipeline_value=sum((Decimal(str(item.estimated_value or 0)) * Decimal(item.probability or 0) / Decimal("100") for item in open_opportunities), Decimal("0")),
+        won_count=len(won),
+        lost_count=len(lost),
+        conversion_rate=conversion_rate,
+        due_amount=due_amount,
+        recovery_rate=recovery_rate,
+        pending_tasks=sum(1 for item in tasks if item.status in {"pending", "in_progress"}),
+        overdue_tasks=sum(1 for item in tasks if item.status in {"pending", "in_progress"} and item.due_at and as_utc(item.due_at) < datetime.now(timezone.utc)),
+        overdue_collections=len(overdue_items),
+        overdue_amount=sum((Decimal(item.amount or 0) for item in overdue_items), Decimal("0")),
+        trend=trend,
+        pipeline=pipeline,
+        team=team,
+    )
+
+
+@router.get("/executive-overview", response_model=ExecutiveOverviewRead)
+def executive_overview(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    identity: IdentityContext = Depends(require_permissions("report.read")),
+):
+    today = date.today()
+    return executive_overview_data(db, identity.organization_id, date_from or today - timedelta(days=29), date_to or today)
+
+
+@router.get("/executive-overview.csv")
+def export_executive_overview(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    identity: IdentityContext = Depends(require_permissions("report.read", "report.export")),
+):
+    today = date.today()
+    report = executive_overview_data(db, identity.organization_id, date_from or today - timedelta(days=29), date_to or today)
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(["Central Gerencial", "CS Platform", "v5.24.0"])
+    writer.writerow(["Período", report.date_from.strftime("%d/%m/%Y"), report.date_to.strftime("%d/%m/%Y")])
+    writer.writerow([])
+    writer.writerow(["Indicador", "Período atual", "Período anterior"])
+    writer.writerow(["Novos clientes", report.new_clients, report.previous_new_clients])
+    writer.writerow(["Atendimentos", report.interactions, report.previous_interactions])
+    writer.writerow(["Tarefas concluídas", report.completed_tasks, report.previous_completed_tasks])
+    writer.writerow(["Recebimentos", f"{report.received_amount:.2f}", f"{report.previous_received_amount:.2f}"])
+    writer.writerow(["Ações de cobrança", report.collection_actions, report.previous_collection_actions])
+    writer.writerow(["Conversão comercial", f"{report.conversion_rate:.2f}%", ""])
+    writer.writerow(["Índice de recebimento", f"{report.recovery_rate:.2f}%", ""])
+    writer.writerow([])
+    writer.writerow(["Etapa do funil", "Quantidade", "Valor"])
+    for row in report.pipeline:
+        writer.writerow([row.stage, row.count, f"{row.amount:.2f}"])
+    writer.writerow([])
+    writer.writerow(["Responsável", "Clientes", "Oportunidades", "Tarefas pendentes", "Tarefas concluídas", "Atendimentos", "Ações de cobrança"])
+    for row in report.team:
+        writer.writerow([row.user_name, row.assigned_clients, row.open_opportunities, row.pending_tasks, row.completed_tasks, row.interactions, row.collection_actions])
+    record_audit(
+        db,
+        organization_id=identity.organization_id,
+        user_id=identity.user_id,
+        entity_type="management_report",
+        entity_id=None,
+        action="export",
+        new_values={"date_from": str(report.date_from), "date_to": str(report.date_to)},
+    )
+    db.commit()
+    filename = f"central_gerencial_{report.date_from}_{report.date_to}.csv"
+    return Response(
+        content=("\ufeff" + stream.getvalue()).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
     )
 
 
@@ -816,7 +1021,7 @@ def export_operational_agenda_csv(
     }
     stream = io.StringIO(newline="")
     writer = csv.writer(stream, delimiter=";")
-    writer.writerow(["Agenda operacional", "CS Platform", "v5.23.0"])
+    writer.writerow(["Agenda operacional", "CS Platform", "v5.24.0"])
     writer.writerow(["Período", agenda.date_from.strftime("%d/%m/%Y"), agenda.date_to.strftime("%d/%m/%Y")])
     writer.writerow([])
     writer.writerow(["Data e hora", "Tipo", "Situação", "Título", "Cliente", "Responsável", "Prioridade"])

@@ -306,6 +306,64 @@ class CollectionReportRead(BaseModel):
     team: list[CollectionTeamPerformanceRead] = Field(default_factory=list)
 
 
+class ExecutiveTrendPointRead(BaseModel):
+    day: date
+    new_clients: int = 0
+    interactions: int = 0
+    completed_tasks: int = 0
+    received_amount: Decimal = Decimal("0")
+
+
+class ExecutivePipelineStageRead(BaseModel):
+    stage: Literal["lead", "qualified", "proposal", "negotiation", "won", "lost"]
+    count: int = 0
+    amount: Decimal = Decimal("0")
+
+
+class ExecutiveTeamPerformanceRead(BaseModel):
+    user_id: uuid.UUID
+    user_name: str
+    assigned_clients: int = 0
+    open_opportunities: int = 0
+    pending_tasks: int = 0
+    completed_tasks: int = 0
+    interactions: int = 0
+    collection_actions: int = 0
+
+
+class ExecutiveOverviewRead(BaseModel):
+    date_from: date
+    date_to: date
+    previous_date_from: date
+    previous_date_to: date
+    total_clients: int = 0
+    new_clients: int = 0
+    previous_new_clients: int = 0
+    interactions: int = 0
+    previous_interactions: int = 0
+    completed_tasks: int = 0
+    previous_completed_tasks: int = 0
+    received_amount: Decimal = Decimal("0")
+    previous_received_amount: Decimal = Decimal("0")
+    collection_actions: int = 0
+    previous_collection_actions: int = 0
+    open_pipeline_count: int = 0
+    open_pipeline_value: Decimal = Decimal("0")
+    weighted_pipeline_value: Decimal = Decimal("0")
+    won_count: int = 0
+    lost_count: int = 0
+    conversion_rate: Decimal = Decimal("0")
+    due_amount: Decimal = Decimal("0")
+    recovery_rate: Decimal = Decimal("0")
+    pending_tasks: int = 0
+    overdue_tasks: int = 0
+    overdue_collections: int = 0
+    overdue_amount: Decimal = Decimal("0")
+    trend: list[ExecutiveTrendPointRead] = Field(default_factory=list)
+    pipeline: list[ExecutivePipelineStageRead] = Field(default_factory=list)
+    team: list[ExecutiveTeamPerformanceRead] = Field(default_factory=list)
+
+
 class CollectionActionCreate(BaseModel):
     action_type: CollectionActionType
     outcome: CollectionOutcome

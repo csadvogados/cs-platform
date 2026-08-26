@@ -1,12 +1,12 @@
-# CS Platform v5.23.0 — LEIA PRIMEIRO
+# CS Platform v5.24.0 — LEIA PRIMEIRO
 
-Esta versão adiciona a **Agenda 360**.
+Esta versão adiciona a **Central Gerencial** com indicadores executivos da operação.
 
 Substitua exatamente os sete arquivos presentes neste pacote, mantendo as mesmas pastas no GitHub.
 
 Use este nome no commit:
 
-`feat: adicionar agenda 360 e calendário semanal v5.23.0`
+`feat: adicionar central gerencial e indicadores executivos v5.24.0`
 
 Não há migração de banco. Deixe **Pre-deploy Command** vazio no Railway.
 
@@ -14,14 +14,13 @@ Não há migração de banco. Deixe **Pre-deploy Command** vazio no Railway.
 
 1. Aguarde `cs-platform-api` e `cs-platform-web` ficarem verdes.
 2. Abra o sistema e pressione `Ctrl + F5`.
-3. Entre em **Agenda** e confirme o título **Agenda 360**.
-4. Pesquise por título, cliente e responsável.
-5. Alterne entre **Linha do tempo** e **Calendário semanal**.
-6. Navegue pelas semanas e volte em **Semana atual**.
-7. Clique em **Nova tarefa**, salve uma tarefa e confira se ela aparece.
-8. Clique em **Concluir** e confirme que a tarefa desaparece e os totais são atualizados automaticamente.
-9. Confira **Minha agenda**, os filtros e **Exportar CSV**.
-10. Em **Configurações**, confirme a versão `5.23.0`.
+3. Em **Configurações**, confirme a versão `5.24.0`.
+4. Abra **Indicadores** e confira a **Central Gerencial**.
+5. Teste os períodos de 7, 30 e 90 dias.
+6. Escolha duas datas, clique em **Aplicar período** e confira a atualização dos indicadores.
+7. Confira a evolução diária, os riscos, o funil comercial e o desempenho da equipe.
+8. Clique em **Exportar CSV** e abra o relatório.
+9. Confirme que um perfil sem acesso a relatórios não enxerga a opção **Indicadores**.
 
 O arquivo `SHA256SUMS.txt` permite conferir a integridade dos arquivos.
 
