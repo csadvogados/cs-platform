@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.client import Client
+from app.models.crm import CRMTask
 from app.models.financial import CollectionAction, Creditor, Debt, Expense, Income, PaymentAgreement, PaymentInstallment
 from app.models.user import User
 from app.schemas.financial import (
@@ -33,6 +34,8 @@ from app.schemas.financial import (
     CollectionTeamPerformanceRead,
     CollectionWorkloadRead,
     CollectionsRead,
+    OperationalAlertRead,
+    OperationalAlertsRead,
     DebtCreate,
     DebtRead,
     ExpenseCreate,
@@ -596,6 +599,77 @@ def list_collections(
         items.sort(key=lambda item: (item.due_date, item.client_name.casefold()))
 
     return CollectionsRead(summary=summary, workload=workload, aging=aging, items=items, total=len(items))
+
+
+@router.get("/operational-alerts", response_model=OperationalAlertsRead)
+def list_operational_alerts(
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    collections = list_collections(
+        q="",
+        collection_status_filter="all",
+        follow_up_filter="all",
+        promise_filter="all",
+        responsible_filter="all",
+        priority_filter="all",
+        aging_filter="all",
+        attention_filter="all",
+        sort_order="recommended",
+        due_from=None,
+        due_to=None,
+        db=db,
+        actor=actor,
+    )
+    now = datetime.now(timezone.utc)
+    overdue_tasks = 0
+    for task in db.scalars(select(CRMTask).where(
+        CRMTask.organization_id == actor.organization_id,
+        CRMTask.status.in_({"pending", "in_progress"}),
+        CRMTask.due_at.is_not(None),
+    )):
+        due_at = task.due_at
+        if due_at and due_at.tzinfo is None:
+            due_at = due_at.replace(tzinfo=timezone.utc)
+        if due_at and due_at < now:
+            overdue_tasks += 1
+
+    definitions = (
+        (
+            "critical_collections", "critical", "Cobranças críticas",
+            "Cobranças que precisam de ação prioritária.",
+            collections.summary.critical_count, "collections", "attention:critical",
+        ),
+        (
+            "overdue_promises", "critical", "Promessas vencidas",
+            "Promessas de pagamento que venceram sem baixa.",
+            collections.summary.overdue_promises_count, "collections", "promise:overdue",
+        ),
+        (
+            "overdue_follow_ups", "warning", "Acompanhamentos atrasados",
+            "Retornos de cobrança que já passaram da data.",
+            collections.summary.overdue_follow_up_count, "collections", "follow_up:overdue",
+        ),
+        (
+            "overdue_tasks", "critical", "Tarefas do CRM atrasadas",
+            "Tarefas pendentes com prazo vencido.",
+            overdue_tasks, "crm", "task:overdue",
+        ),
+    )
+    items = [OperationalAlertRead(
+        key=key,
+        severity=severity,
+        title=title,
+        detail=detail,
+        count=count,
+        target_view=target_view,
+        target_filter=target_filter,
+    ) for key, severity, title, detail, count, target_view, target_filter in definitions if count]
+    return OperationalAlertsRead(
+        total=sum(item.count for item in items),
+        critical_count=sum(item.count for item in items if item.severity == "critical"),
+        items=items,
+    )
 
 
 def owned_collection_installment(

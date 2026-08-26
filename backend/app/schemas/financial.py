@@ -176,6 +176,22 @@ class CollectionsRead(BaseModel):
     total: int
 
 
+class OperationalAlertRead(BaseModel):
+    key: Literal["critical_collections", "overdue_promises", "overdue_follow_ups", "overdue_tasks"]
+    severity: Literal["critical", "warning"]
+    title: str
+    detail: str
+    count: int
+    target_view: Literal["collections", "crm"]
+    target_filter: str
+
+
+class OperationalAlertsRead(BaseModel):
+    total: int = 0
+    critical_count: int = 0
+    items: list[OperationalAlertRead] = Field(default_factory=list)
+
+
 class CollectionAssignmentUpdate(BaseModel):
     assigned_user_id: uuid.UUID | None = None
     priority: CollectionPriority = "normal"

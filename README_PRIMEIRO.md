@@ -1,31 +1,37 @@
-# CS Platform v5.18.0 — Fila inteligente de cobranças
+# CS Platform v5.19.0 — LEIA PRIMEIRO
 
-Este pacote contém os 7 arquivos que devem ser substituídos no GitHub.
+Este pacote adiciona a **Central de alertas operacionais**.
 
-## Como aplicar
+## Como instalar
 
-Substitua os arquivos mantendo exatamente as mesmas pastas:
+1. Abra o repositório `csadvogados/cs-platform` no GitHub.
+2. Substitua os sete arquivos do pacote, mantendo exatamente as mesmas pastas.
+3. Confirme o commit com a mensagem:
 
-1. `backend/app/api/routes/financial.py`
-2. `backend/app/core/constants.py`
-3. `backend/app/schemas/financial.py`
-4. `backend/docker-entrypoint.sh`
-5. `frontend/index.html`
-6. `frontend/assets/app.js`
-7. `frontend/assets/styles.css`
+   `feat: adicionar central de alertas operacionais v5.19.0`
 
-Use este nome no commit:
+4. Aguarde o deploy do `cs-platform-api` terminar com sucesso.
+5. Aguarde o deploy do `cs-platform-web` terminar com sucesso.
+6. Não preencha o campo **Pre-deploy Command**. Esta versão não possui migração de banco.
 
-`feat: adicionar fila inteligente de cobranças v5.18.0`
+## Como testar
 
-Não há nova migração de banco. Não altere comandos ou variáveis do Railway.
+1. Acesse a plataforma e faça login.
+2. Confira o sino no cabeçalho e clique nele.
+3. Confira o contador e os alertas de cobranças, promessas, acompanhamentos e tarefas.
+4. Clique em **Cobranças críticas**. A tela Cobranças deve abrir com o filtro **Crítica**.
+5. Clique em **Tarefas do CRM atrasadas**. O CRM deve abrir na aba **Tarefas**, com o filtro **Atrasadas**.
+6. Clique em **Atualizar alertas** e confirme a mensagem de atualização.
+7. Em Configurações, confirme `5.19.0`, API online e banco de dados OK.
 
-## Teste depois do deploy
+## Arquivos incluídos
 
-1. Aguarde API e interface ficarem verdes.
-2. Abra o sistema e pressione `Ctrl + F5`.
-3. Abra **Cobranças**.
-4. Confira a nova coluna **Ação recomendada** e os níveis de atenção.
-5. Teste o filtro **Nível de atenção** e as opções de ordenação.
-6. Selecione **Ordem recomendada** e clique em **Atender próxima**.
-7. Confirme que a janela de registro de contato foi aberta para a cobrança prioritária.
+- `backend/app/api/routes/financial.py`
+- `backend/app/core/constants.py`
+- `backend/app/schemas/financial.py`
+- `backend/docker-entrypoint.sh`
+- `frontend/index.html`
+- `frontend/assets/app.js`
+- `frontend/assets/styles.css`
+- `README_PRIMEIRO.md`
+- `SHA256SUMS.txt`

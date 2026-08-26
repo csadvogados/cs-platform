@@ -5,6 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
+    alerts: { total: 0, criticalCount: 0, items: [], open: false },
     collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
@@ -715,6 +716,7 @@
     const loaders = [
       loadDashboard(),
       loadCollections(),
+      loadOperationalAlerts(),
       loadClients(),
       loadCrm(),
       loadUsers(),
@@ -737,6 +739,69 @@
   async function loadDashboard() {
     state.dashboard = await api("/api/v1/dashboard");
     renderDashboard();
+  }
+
+  async function loadOperationalAlerts(showNotice = false) {
+    const response = await api("/api/v1/financial/operational-alerts");
+    state.alerts.total = Number(response.total || 0);
+    state.alerts.criticalCount = Number(response.critical_count || 0);
+    state.alerts.items = Array.isArray(response.items) ? response.items : [];
+    renderOperationalAlerts();
+    if (showNotice) toast("Alertas atualizados.");
+  }
+
+  function renderOperationalAlerts() {
+    const badge = $("#alert-count-badge");
+    const button = $("#alert-center-button");
+    const total = state.alerts.total || 0;
+    badge.textContent = total > 99 ? "99+" : String(total);
+    badge.hidden = total === 0;
+    button.classList.toggle("has-critical-alerts", state.alerts.criticalCount > 0);
+    button.setAttribute("aria-label", total ? `Abrir central de alertas, ${total} pendência(s)` : "Abrir central de alertas, nenhuma pendência");
+    const list = $("#alert-list");
+    if (!state.alerts.items.length) {
+      list.innerHTML = '<div class="alert-empty"><strong>Tudo em dia</strong><span>Nenhum alerta operacional ativo.</span></div>';
+      return;
+    }
+    list.innerHTML = state.alerts.items.map((item) => `<button class="alert-item ${escapeHtml(item.severity)}" type="button" data-alert-view="${escapeHtml(item.target_view)}" data-alert-filter="${escapeHtml(item.target_filter)}">
+      <span class="alert-item-count">${escapeHtml(item.count)}</span>
+      <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span>
+      <span class="alert-item-arrow" aria-hidden="true">→</span>
+    </button>`).join("");
+  }
+
+  function setAlertPopover(open) {
+    state.alerts.open = Boolean(open);
+    $("#alert-popover").hidden = !state.alerts.open;
+    $("#alert-center-button").setAttribute("aria-expanded", String(state.alerts.open));
+  }
+
+  async function openOperationalAlert(targetView, targetFilter) {
+    setAlertPopover(false);
+    if (targetView === "collections") {
+      const [field, value] = String(targetFilter || "").split(":");
+      if (field === "attention") state.collections.filters.attention = value || "all";
+      if (field === "promise") state.collections.filters.promise = value || "all";
+      if (field === "follow_up") state.collections.filters.followUp = value || "all";
+      setView("collections");
+      const form = $("#collection-filter-form");
+      form.elements.attention_filter.value = state.collections.filters.attention;
+      form.elements.promise_filter.value = state.collections.filters.promise;
+      form.elements.follow_up_filter.value = state.collections.filters.followUp;
+      await loadCollections();
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (targetView === "crm") {
+      state.crmFilters.taskStatus = targetFilter === "task:overdue" ? "overdue" : "all";
+      $("#crm-task-status-filter").value = state.crmFilters.taskStatus;
+      setView("crm");
+      const taskTab = $('.crm-tab[data-crm-tab="tasks"]');
+      $$(".crm-tab").forEach((tab) => tab.classList.toggle("active", tab === taskTab));
+      $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === "crm-tasks"));
+      renderCrm();
+      $("#crm-task-status-filter").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
 
   function collectionParams() {
@@ -1400,6 +1465,7 @@
       closeDialog($("#collection-cancel-dialog"));
       await loadCollectionActionHistory(state.collections.selectedItem.id);
       await loadCollections();
+      await loadOperationalAlerts();
       toast("Ação de cobrança anulada.");
     } catch (error) {
       toast(error.message, "error");
@@ -1464,6 +1530,7 @@
       await api(`/api/v1/financial/collections/${state.collections.selectedItem.id}/actions`, { method: "POST", body: JSON.stringify(payload) });
       await loadCollectionActionHistory(state.collections.selectedItem.id);
       await loadCollections();
+      await loadOperationalAlerts();
       toast("Ação de cobrança registrada.");
       form.reset();
       form.elements.contacted_at.value = toLocalDateTimeValue(new Date());
@@ -2143,7 +2210,7 @@
   }
 
   async function refreshCrm(message) {
-    await Promise.all([loadCrm(), loadDashboard()]);
+    await Promise.all([loadCrm(), loadDashboard(), loadOperationalAlerts()]);
     if (message) toast(message);
   }
 
@@ -2225,8 +2292,9 @@
     const filteredTasks = state.crm.tasks.filter((item) => {
       const status = String(item.status || "pending").toLowerCase();
       const priority = String(item.priority || "normal").toLowerCase();
+      const overdue = item.due_at && new Date(item.due_at) < new Date() && !["completed", "cancelled"].includes(status);
       return matchesCrmSearch(item.title, item.description, clientName(item.client_id), taskStatusLabels[status], priorityLabels[priority])
-        && (state.crmFilters.taskStatus === "all" || status === state.crmFilters.taskStatus)
+        && (state.crmFilters.taskStatus === "all" || (state.crmFilters.taskStatus === "overdue" ? overdue : status === state.crmFilters.taskStatus))
         && (state.crmFilters.priority === "all" || priority === state.crmFilters.priority);
     });
     const filteredContacts = state.crm.contacts.filter((item) => matchesCrmSearch(
@@ -3123,6 +3191,22 @@
     $("#crm-search").addEventListener("input", (event) => {
       state.crmFilters.search = event.currentTarget.value;
       renderCrm();
+    });
+    $("#alert-center-button").addEventListener("click", (event) => {
+      event.stopPropagation();
+      setAlertPopover(!state.alerts.open);
+    });
+    $("#alert-close-button").addEventListener("click", () => setAlertPopover(false));
+    $("#alert-refresh-button").addEventListener("click", () => loadOperationalAlerts(true).catch((error) => toast(error.message, "error")));
+    $("#alert-list").addEventListener("click", (event) => {
+      const item = event.target.closest("[data-alert-view]");
+      if (item) openOperationalAlert(item.dataset.alertView, item.dataset.alertFilter).catch((error) => toast(error.message, "error"));
+    });
+    document.addEventListener("click", (event) => {
+      if (state.alerts.open && !event.target.closest(".alert-center")) setAlertPopover(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.alerts.open) setAlertPopover(false);
     });
     $("#crm-task-status-filter").addEventListener("change", (event) => {
       state.crmFilters.taskStatus = event.currentTarget.value;

@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.18.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.19.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -93,6 +93,14 @@
             <h2 id="view-title">Painel de operação</h2>
           </div>
           <div class="topbar-actions">
+            <div class="alert-center">
+              <button id="alert-center-button" class="alert-button" type="button" aria-label="Abrir central de alertas" aria-expanded="false">🔔<span id="alert-count-badge" class="alert-count-badge" hidden>0</span></button>
+              <section id="alert-popover" class="alert-popover" aria-label="Central de alertas" hidden>
+                <div class="alert-popover-header"><div><span>ATENÇÃO OPERACIONAL</span><strong>Central de alertas</strong></div><button id="alert-close-button" class="icon-button" type="button" aria-label="Fechar alertas">×</button></div>
+                <div id="alert-list" class="alert-list"><p class="alert-empty">Carregando alertas…</p></div>
+                <button id="alert-refresh-button" class="secondary-button alert-refresh-button" type="button">Atualizar alertas</button>
+              </section>
+            </div>
             <button id="refresh-button" class="secondary-button" type="button">Atualizar</button>
             <button id="top-action-button" class="primary-button" type="button">Novo cliente</button>
           </div>
@@ -243,7 +251,7 @@
             </div>
             <div class="crm-filter-bar" aria-label="Busca e filtros do CRM">
               <label class="crm-search-field"><span>Buscar no CRM</span><input id="crm-search" type="search" placeholder="Cliente, assunto, contato ou oportunidade" autocomplete="off" /></label>
-              <label><span>Status da tarefa</span><select id="crm-task-status-filter"><option value="all">Todos</option><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="completed">Concluída</option><option value="cancelled">Cancelada</option></select></label>
+              <label><span>Status da tarefa</span><select id="crm-task-status-filter"><option value="all">Todos</option><option value="overdue">Atrasadas</option><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="completed">Concluída</option><option value="cancelled">Cancelada</option></select></label>
               <label><span>Prioridade</span><select id="crm-priority-filter"><option value="all">Todas</option><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
               <label><span>Tipo de atendimento</span><select id="crm-interaction-type-filter"><option value="all">Todos</option><option value="call">Ligação</option><option value="email">E-mail</option><option value="meeting">Reunião</option><option value="message">Mensagem</option><option value="note">Observação</option><option value="other">Outro</option></select></label>
               <button id="clear-crm-filters" class="secondary-button" type="button">Limpar filtros</button>
@@ -327,7 +335,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.18.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.19.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -609,6 +617,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.18.0"></script>
+    <script src="./assets/app.js?v=5.19.0"></script>
   </body>
 </html>
