@@ -7,6 +7,7 @@
     dashboard: null,
     alerts: { total: 0, criticalCount: 0, items: [], open: false },
     management: { report: null, filters: { period: "30", dateFrom: "", dateTo: "" } },
+    performance: { report: null, month: "" },
     agenda: { summary: null, workload: [], items: [], viewMode: "timeline", weekStart: null, filters: { search: "", kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" } },
     collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
@@ -43,6 +44,7 @@
   const viewMeta = {
     dashboard: ["VISÃO GERAL", "Painel de operação", "Novo cliente"],
     management: ["INTELIGÊNCIA OPERACIONAL", "Central Gerencial", "Atualizar"],
+    performance: ["GESTÃO POR RESULTADOS", "Metas e desempenho", "Atualizar"],
     clients: ["RELACIONAMENTO", "Clientes", "Novo cliente"],
     collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
     agenda: ["ROTINA UNIFICADA", "Agenda operacional", "Atualizar"],
@@ -342,6 +344,15 @@
       || (state.user?.permissions || []).includes("report.export");
   }
 
+  function canViewPerformance() {
+    return canViewManagement();
+  }
+
+  function canManagePerformance() {
+    return Boolean(state.user?.is_superuser)
+      || ["admin", "supervisor"].includes(String(state.user?.role || "").toLowerCase());
+  }
+
   function canExportClients() {
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("client.export");
@@ -490,7 +501,10 @@
     $("#password-security-warning").hidden = !state.user.must_change_password;
     $("#audit-nav-item").hidden = !canViewAudit();
     $("#management-nav-item").hidden = !canViewManagement();
+    $("#performance-nav-item").hidden = !canViewPerformance();
     $("#management-export").hidden = !canExportManagement();
+    $("#performance-export").hidden = !canExportManagement();
+    $("#performance-new-goal").hidden = !canManagePerformance();
     $("#export-clients-button").hidden = !canExportClients();
     $("#import-clients-button").hidden = !canImportClients();
   }
@@ -498,6 +512,7 @@
   function setView(view) {
     if (view === "audit" && !canViewAudit()) view = "dashboard";
     if (view === "management" && !canViewManagement()) view = "dashboard";
+    if (view === "performance" && !canViewPerformance()) view = "dashboard";
     if (!viewMeta[view]) return;
     state.currentView = view;
     $$(".page-view").forEach((section) => section.classList.toggle("active-view", section.id === `view-${view}`));
@@ -505,7 +520,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management"].includes(view);
+    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management", "performance"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -747,6 +762,9 @@
     if (canViewManagement()) {
       loaders.push(loadManagement());
     }
+    if (state.currentView === "performance" && canViewPerformance()) {
+      loaders.push(loadPerformance());
+    }
     if (state.currentView === "audit" && canViewAudit()) {
       loaders.push(loadAudit(state.audit.page));
     }
@@ -867,6 +885,132 @@
       if (!response.ok) throw new Error(await readError(response));
       saveBlob(await response.blob(), `central_gerencial_${state.management.filters.dateFrom}_${state.management.filters.dateTo}.csv`);
       toast("Relatório gerencial exportado.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  const performanceMetricLabels = {
+    new_clients: "Novos clientes",
+    interactions: "Atendimentos",
+    completed_tasks: "Tarefas concluídas",
+    received_amount: "Recebimentos",
+    won_opportunities: "Oportunidades ganhas"
+  };
+
+  const performanceStatusLabels = {
+    no_goal: "Meta não definida",
+    on_track: "No caminho certo",
+    attention: "Atenção necessária",
+    achieved: "Meta atingida"
+  };
+
+  function currentMonthValue() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function performanceMonthParam() {
+    const month = state.performance.month || currentMonthValue();
+    return `${month}-01`;
+  }
+
+  function performanceValue(metric, value) {
+    return metric === "received_amount" ? formatCurrency(value) : Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  }
+
+  async function loadPerformance(showNotice = false) {
+    if (!state.performance.month) state.performance.month = currentMonthValue();
+    $("#performance-month").value = state.performance.month;
+    state.performance.report = await api(`/api/v1/performance/overview?month=${encodeURIComponent(performanceMonthParam())}`);
+    renderPerformance();
+    if (showNotice) toast("Metas e resultados atualizados.");
+  }
+
+  function renderPerformance() {
+    const report = state.performance.report || {};
+    const metrics = Array.isArray(report.organization_metrics) ? report.organization_metrics : [];
+    const goals = Array.isArray(report.goals) ? report.goals : [];
+    const ranking = Array.isArray(report.ranking) ? report.ranking : [];
+    const alerts = Array.isArray(report.alerts) ? report.alerts : [];
+    const elapsed = Math.max(0, Math.min(100, Number(report.elapsed_percent || 0)));
+    $("#performance-month-progress").style.width = `${elapsed}%`;
+    $("#performance-month-detail").textContent = `${elapsed.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% do mês transcorrido`;
+    const generalGoals = goals.filter((goal) => !goal.user_id).length;
+    $("#performance-goal-summary").textContent = `${generalGoals} ${generalGoals === 1 ? "meta definida" : "metas definidas"}`;
+    $("#performance-metric-grid").innerHTML = metrics.map((metric) => {
+      const progress = Math.max(0, Math.min(100, Number(metric.progress_percent || 0)));
+      return `<article class="performance-metric-card ${escapeHtml(metric.status)}">
+        <div><span>${escapeHtml(metric.label)}</span><em>${escapeHtml(performanceStatusLabels[metric.status] || metric.status)}</em></div>
+        <strong>${performanceValue(metric.metric, metric.actual_value)} <small>de ${performanceValue(metric.metric, metric.target_value)}</small></strong>
+        <div class="performance-progress"><span style="width:${progress}%"></span></div>
+        <footer><b>${Number(metric.progress_percent || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% realizado</b><span>Projeção: ${performanceValue(metric.metric, metric.projected_value)}</span></footer>
+      </article>`;
+    }).join("") || '<div class="empty-state">Nenhum indicador disponível.</div>';
+
+    $("#performance-alerts").innerHTML = alerts.map((alert) => `<article class="performance-alert ${escapeHtml(alert.severity)}"><span>${alert.severity === "success" ? "✓" : alert.severity === "warning" ? "!" : "i"}</span><div><strong>${escapeHtml(alert.title)}</strong><p>${escapeHtml(alert.detail)}</p></div></article>`).join("") || '<div class="empty-state">Nenhum alerta para este mês.</div>';
+    $("#performance-goal-count").textContent = `${goals.length} ${goals.length === 1 ? "registro" : "registros"}`;
+    $("#performance-goal-list").innerHTML = goals.length ? goals.map((goal) => `<article><div><span>${goal.user_id ? "META INDIVIDUAL" : "META GERAL"}</span><strong>${escapeHtml(goal.user_name || "Toda a organização")}</strong><small>${escapeHtml(performanceMetricLabels[goal.metric] || goal.metric)} · ${performanceValue(goal.metric, goal.target_value)}</small></div>${canManagePerformance() ? `<button class="delete-button" type="button" data-delete-performance-goal="${goal.id}">Apagar</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhuma meta cadastrada para este mês.</div>';
+
+    $("#performance-ranking-body").innerHTML = ranking.length ? ranking.map((member, index) => `<tr><td><span class="performance-position ${index < 3 ? `top-${index + 1}` : ""}">${index + 1}º</span></td><td><strong>${escapeHtml(member.user_name)}</strong><small>${member.goal_count || 0} meta(s) individual(is)</small></td><td><strong>${Number(member.average_progress || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong></td><td>${member.achieved_goals || 0}</td><td>${member.interactions || 0}</td><td>${member.completed_tasks || 0}</td><td>${member.won_opportunities || 0}</td><td>${formatCurrency(member.received_amount)}</td></tr>`).join("") : '<tr><td colspan="8" class="empty-cell">Nenhum integrante ativo encontrado.</td></tr>';
+  }
+
+  function fillPerformanceGoalUsers() {
+    const select = $("#performance-goal-user");
+    select.innerHTML = '<option value="">Toda a organização</option>' + state.users.filter((user) => user.status === "active").map((user) => `<option value="${user.id}">${escapeHtml(user.full_name)}</option>`).join("");
+  }
+
+  async function savePerformanceGoal(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Salvando…");
+    try {
+      const values = Object.fromEntries(new FormData(form));
+      const payload = {
+        reference_month: performanceMonthParam(),
+        metric: values.metric,
+        target_value: Number(values.target_value),
+        user_id: values.user_id || null
+      };
+      await api("/api/v1/performance/goals", { method: "PUT", body: JSON.stringify(payload) });
+      closeDialog($("#performance-goal-dialog"));
+      form.reset();
+      await loadPerformance();
+      toast("Meta salva e indicadores recalculados.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function deletePerformanceGoal(goalId, button) {
+    if (!window.confirm("Apagar esta meta? Os resultados já realizados não serão alterados.")) return;
+    setBusy(button, true, "Apagando…");
+    try {
+      await api(`/api/v1/performance/goals/${goalId}`, { method: "DELETE" });
+      await loadPerformance();
+      toast("Meta apagada.");
+    } catch (error) {
+      toast(error.message, "error");
+      setBusy(button, false);
+    }
+  }
+
+  async function exportPerformance() {
+    const button = $("#performance-export");
+    setBusy(button, true, "Gerando…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const response = await fetch(`${API_BASE}/api/v1/performance/overview.csv?month=${encodeURIComponent(performanceMonthParam())}`, { headers });
+      if (!response.ok) throw new Error(await readError(response));
+      saveBlob(await response.blob(), `metas_${state.performance.month}.csv`);
+      toast("Relatório de metas exportado.");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -3446,6 +3590,21 @@
     });
     $("#management-refresh").addEventListener("click", () => loadManagement(true).catch((error) => toast(error.message, "error")));
     $("#management-export").addEventListener("click", exportManagement);
+    $("#performance-month").addEventListener("change", (event) => {
+      state.performance.month = event.currentTarget.value || currentMonthValue();
+      loadPerformance().catch((error) => toast(error.message, "error"));
+    });
+    $("#performance-refresh").addEventListener("click", () => loadPerformance(true).catch((error) => toast(error.message, "error")));
+    $("#performance-export").addEventListener("click", exportPerformance);
+    $("#performance-new-goal").addEventListener("click", () => {
+      fillPerformanceGoalUsers();
+      openDialog("performance-goal-dialog");
+    });
+    $("#performance-goal-form").addEventListener("submit", savePerformanceGoal);
+    $("#performance-goal-list").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-delete-performance-goal]");
+      if (button) deletePerformanceGoal(button.dataset.deletePerformanceGoal, button);
+    });
     $("#collections-refresh").addEventListener("click", () => loadCollections(true).catch((error) => toast(error.message, "error")));
     $("#my-collections-button").addEventListener("click", () => {
       state.collections.filters.responsible = "mine";
@@ -3714,6 +3873,7 @@
       setView(button.dataset.view);
       if (button.dataset.view === "collections") loadCollections().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "management") loadManagement().catch((error) => toast(error.message, "error"));
+      if (button.dataset.view === "performance") loadPerformance().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));

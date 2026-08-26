@@ -1,26 +1,52 @@
-# CS Platform v5.24.0 — LEIA PRIMEIRO
+# CS Platform v5.25.0 — Metas e desempenho
 
-Esta versão adiciona a **Central Gerencial** com indicadores executivos da operação.
+Esta versão adiciona planejamento mensal e acompanhamento automático de resultados à plataforma.
 
-Substitua exatamente os sete arquivos presentes neste pacote, mantendo as mesmas pastas no GitHub.
+## Novidades
 
-Use este nome no commit:
+- Metas mensais para novos clientes, atendimentos, tarefas concluídas, recebimentos e oportunidades ganhas.
+- Metas gerais da organização e metas individuais por integrante.
+- Comparação entre meta, resultado realizado e projeção de fechamento.
+- Alertas automáticos de metas atingidas ou abaixo da projeção.
+- Ranking da equipe pelo cumprimento das metas.
+- Histórico mensal: basta alterar o mês de referência para consultar outro período.
+- Exportação do relatório de metas em CSV.
+- Registro no Histórico das inclusões, alterações e exclusões de metas.
+- Controle de acesso: administradores e supervisores gerenciam metas; demais perfis autorizados consultam os resultados.
 
-`feat: adicionar central gerencial e indicadores executivos v5.24.0`
+## Banco de dados
 
-Não há migração de banco. Deixe **Pre-deploy Command** vazio no Railway.
+A versão inclui a migração `0014_performance_goals.py`. Ela cria automaticamente a tabela `performance_goals` durante o deploy da API.
 
-## Depois do deploy
+Não execute comandos manualmente no banco. O `docker-entrypoint.sh` aplica a migração antes de iniciar a API.
 
-1. Aguarde `cs-platform-api` e `cs-platform-web` ficarem verdes.
-2. Abra o sistema e pressione `Ctrl + F5`.
-3. Em **Configurações**, confirme a versão `5.24.0`.
-4. Abra **Indicadores** e confira a **Central Gerencial**.
-5. Teste os períodos de 7, 30 e 90 dias.
-6. Escolha duas datas, clique em **Aplicar período** e confira a atualização dos indicadores.
-7. Confira a evolução diária, os riscos, o funil comercial e o desempenho da equipe.
-8. Clique em **Exportar CSV** e abra o relatório.
-9. Confirme que um perfil sem acesso a relatórios não enxerga a opção **Indicadores**.
+## Instalação
 
-O arquivo `SHA256SUMS.txt` permite conferir a integridade dos arquivos.
+Substitua ou adicione os 12 arquivos do pacote mantendo exatamente as pastas indicadas. Depois faça um único commit no GitHub.
 
+Mensagem sugerida:
+
+`feat: adicionar metas e desempenho da equipe v5.25.0`
+
+O Railway deverá fazer o deploy da API e do site. Aguarde os dois serviços ficarem com a indicação de sucesso.
+
+## Como testar
+
+1. Atualize a plataforma com `Ctrl + F5` e entre novamente.
+2. Abra **Metas** no menu lateral.
+3. Escolha o mês atual e clique em **Nova meta**.
+4. Cadastre uma meta para **Toda a organização**.
+5. Cadastre outra meta selecionando um integrante da equipe.
+6. Confirme os cartões de realizado, percentual e projeção.
+7. Confira os alertas e o ranking da equipe.
+8. Cadastre novamente o mesmo indicador para confirmar que o valor é atualizado.
+9. Use **Exportar CSV**.
+10. Apague uma meta de teste e confirme que somente a meta desapareceu; os dados realizados permanecem.
+
+## Validação técnica realizada
+
+- Sintaxe do frontend e backend conferida.
+- Cadeia de 15 migrações validada com uma única versão final.
+- Fluxo de cadastro e atualização testado no navegador.
+- Layout validado em desktop, tablet e celular.
+- Nenhum erro de console encontrado.

@@ -5,6 +5,7 @@ from app.models.client import Client
 from app.models.audit import AuditEvent
 from app.models.financial import CollectionAction, Income, Expense, Creditor, Debt, Diagnosis, PaymentAgreement, PaymentInstallment
 from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask
+from app.models.performance import PerformanceGoal
 from app.models.access_control import (
     PasswordHistory, Permission, Role, UserInvitation, UserSession,
     role_permissions, user_roles,
@@ -16,4 +17,5 @@ __all__ = [
     "Permission", "Role", "UserInvitation", "UserSession", "PasswordHistory",
     "role_permissions", "user_roles",
     "CRMContact", "CRMInteraction", "CRMOpportunity", "CRMTask",
+    "PerformanceGoal",
 ]

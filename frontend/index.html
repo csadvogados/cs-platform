@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.24.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.25.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -67,6 +67,7 @@
           <nav class="nav-list" aria-label="Navegação principal">
             <button class="nav-item active" data-view="dashboard"><span aria-hidden="true">⌂</span> Visão geral</button>
             <button id="management-nav-item" class="nav-item" data-view="management" hidden><span aria-hidden="true">▥</span> Indicadores</button>
+            <button id="performance-nav-item" class="nav-item" data-view="performance" hidden><span aria-hidden="true">◎</span> Metas</button>
             <button class="nav-item" data-view="clients"><span aria-hidden="true">◎</span> Clientes</button>
             <button class="nav-item" data-view="collections"><span aria-hidden="true">▣</span> Cobranças</button>
             <button class="nav-item" data-view="agenda"><span aria-hidden="true">◫</span> Agenda</button>
@@ -171,6 +172,27 @@
             </div>
             <section class="panel management-pipeline-panel"><div class="panel-header"><div><p class="eyebrow dark">FUNIL COMERCIAL</p><h3>Distribuição das oportunidades</h3></div><div class="management-pipeline-total"><span>Pipeline aberto</span><strong id="management-open-pipeline">—</strong><small id="management-weighted-pipeline">— ponderado</small></div></div><div id="management-pipeline" class="management-pipeline"></div></section>
             <section class="panel management-team-panel"><div class="panel-header"><div><p class="eyebrow dark">PRODUTIVIDADE</p><h3>Desempenho da equipe</h3></div><span id="management-team-count">0 responsáveis</span></div><div class="table-wrap"><table><thead><tr><th>Responsável</th><th>Clientes</th><th>Oportunidades</th><th>Tarefas pendentes</th><th>Tarefas concluídas</th><th>Atendimentos</th><th>Ações de cobrança</th></tr></thead><tbody id="management-team-body"><tr><td colspan="7" class="empty-cell">Carregando equipe…</td></tr></tbody></table></div></section>
+          </section>
+
+          <section id="view-performance" class="page-view" aria-labelledby="performance-heading">
+            <div class="section-intro performance-intro">
+              <div><p class="eyebrow dark">GESTÃO POR RESULTADOS</p><h1 id="performance-heading">Metas e desempenho</h1><p>Defina objetivos mensais, acompanhe projeções e reconheça o desempenho da equipe.</p></div>
+              <div class="button-row"><button id="performance-export" class="secondary-button" type="button">Exportar CSV</button><button id="performance-new-goal" class="primary-button" type="button">Nova meta</button></div>
+            </div>
+            <div class="performance-toolbar">
+              <label><span>Mês de referência</span><input id="performance-month" type="month" /></label>
+              <div><span>Avanço do mês</span><div class="performance-month-meter"><span id="performance-month-progress" style="width:0%"></span></div><small id="performance-month-detail">—</small></div>
+              <button id="performance-refresh" class="secondary-button" type="button">Atualizar resultados</button>
+            </div>
+            <section aria-labelledby="performance-goals-heading">
+              <div class="performance-section-heading"><div><p class="eyebrow dark">RESULTADO GERAL</p><h2 id="performance-goals-heading">Metas da organização</h2></div><span id="performance-goal-summary">0 metas definidas</span></div>
+              <div id="performance-metric-grid" class="performance-metric-grid"><div class="loading-row">Carregando metas…</div></div>
+            </section>
+            <div class="performance-columns">
+              <section class="panel performance-alert-panel"><div class="panel-header"><div><p class="eyebrow dark">LEITURA AUTOMÁTICA</p><h3>Alertas e projeções</h3></div></div><div id="performance-alerts" class="performance-alerts"><div class="loading-row">Analisando resultados…</div></div></section>
+              <section class="panel performance-goal-list-panel"><div class="panel-header"><div><p class="eyebrow dark">PLANEJAMENTO</p><h3>Metas cadastradas</h3></div><span id="performance-goal-count">0 registros</span></div><div id="performance-goal-list" class="performance-goal-list"><div class="loading-row">Carregando metas…</div></div></section>
+            </div>
+            <section class="panel performance-ranking-panel"><div class="panel-header"><div><p class="eyebrow dark">EQUIPE</p><h3>Ranking de desempenho</h3></div><span>Ordenado pelo cumprimento das metas</span></div><div class="table-wrap"><table><thead><tr><th>Posição</th><th>Responsável</th><th>Média das metas</th><th>Metas atingidas</th><th>Atendimentos</th><th>Tarefas</th><th>Vendas</th><th>Recebimentos</th></tr></thead><tbody id="performance-ranking-body"><tr><td colspan="8" class="empty-cell">Carregando equipe…</td></tr></tbody></table></div></section>
           </section>
 
           <section id="view-clients" class="page-view" aria-labelledby="clients-heading">
@@ -387,12 +409,25 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.24.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.25.0</dd></div></dl></section>
             </div>
           </section>
         </main>
       </div>
     </div>
+
+    <dialog id="performance-goal-dialog" class="modal small-modal">
+      <form id="performance-goal-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">PLANEJAMENTO MENSAL</p><h2>Definir meta</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button></div>
+        <div class="form-grid">
+          <label class="wide"><span>Aplicar para</span><select id="performance-goal-user" name="user_id"><option value="">Toda a organização</option></select></label>
+          <label class="wide"><span>Indicador</span><select id="performance-goal-metric" name="metric" required><option value="new_clients">Novos clientes</option><option value="interactions">Atendimentos</option><option value="completed_tasks">Tarefas concluídas</option><option value="received_amount">Recebimentos (R$)</option><option value="won_opportunities">Oportunidades ganhas</option></select></label>
+          <label class="wide"><span>Meta do mês</span><input id="performance-goal-value" name="target_value" type="number" min="0.01" step="0.01" required /></label>
+        </div>
+        <p class="form-helper">Ao cadastrar novamente o mesmo indicador e responsável, a meta anterior será atualizada.</p>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog>Cancelar</button><button class="primary-button" type="submit">Salvar meta</button></div>
+      </form>
+    </dialog>
 
     <dialog id="client-import-dialog" class="modal import-modal">
       <form id="client-import-form">
@@ -669,6 +704,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.24.0"></script>
+    <script src="./assets/app.js?v=5.25.0"></script>
   </body>
 </html>

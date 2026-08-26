@@ -436,7 +436,7 @@ def export_executive_overview(
     report = executive_overview_data(db, identity.organization_id, date_from or today - timedelta(days=29), date_to or today)
     stream = io.StringIO(newline="")
     writer = csv.writer(stream, delimiter=";", quoting=csv.QUOTE_MINIMAL)
-    writer.writerow(["Central Gerencial", "CS Platform", "v5.24.0"])
+    writer.writerow(["Central Gerencial", "CS Platform", "v5.25.0"])
     writer.writerow(["Período", report.date_from.strftime("%d/%m/%Y"), report.date_to.strftime("%d/%m/%Y")])
     writer.writerow([])
     writer.writerow(["Indicador", "Período atual", "Período anterior"])
@@ -1021,7 +1021,7 @@ def export_operational_agenda_csv(
     }
     stream = io.StringIO(newline="")
     writer = csv.writer(stream, delimiter=";")
-    writer.writerow(["Agenda operacional", "CS Platform", "v5.24.0"])
+    writer.writerow(["Agenda operacional", "CS Platform", "v5.25.0"])
     writer.writerow(["Período", agenda.date_from.strftime("%d/%m/%Y"), agenda.date_to.strftime("%d/%m/%Y")])
     writer.writerow([])
     writer.writerow(["Data e hora", "Tipo", "Situação", "Título", "Cliente", "Responsável", "Prioridade"])

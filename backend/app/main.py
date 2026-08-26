@@ -18,6 +18,7 @@ from app.api.routes import (
     dashboard,
     diagnoses,
     financial,
+    performance,
     health,
     metrics,
     crm,
@@ -179,6 +180,11 @@ app.include_router(
     financial.router,
     prefix=f"{settings.api_v1_prefix}/financial",
     tags=["Financial and Debts"],
+)
+app.include_router(
+    performance.router,
+    prefix=f"{settings.api_v1_prefix}/performance",
+    tags=["Performance goals"],
 )
 app.include_router(
     diagnoses.router,
