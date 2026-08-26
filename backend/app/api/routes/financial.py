@@ -816,7 +816,7 @@ def export_operational_agenda_csv(
     }
     stream = io.StringIO(newline="")
     writer = csv.writer(stream, delimiter=";")
-    writer.writerow(["Agenda operacional", "CS Platform", "v5.22.0"])
+    writer.writerow(["Agenda operacional", "CS Platform", "v5.23.0"])
     writer.writerow(["Período", agenda.date_from.strftime("%d/%m/%Y"), agenda.date_to.strftime("%d/%m/%Y")])
     writer.writerow([])
     writer.writerow(["Data e hora", "Tipo", "Situação", "Título", "Cliente", "Responsável", "Prioridade"])

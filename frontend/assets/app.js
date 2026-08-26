@@ -6,7 +6,7 @@
     user: null,
     dashboard: null,
     alerts: { total: 0, criticalCount: 0, items: [], open: false },
-    agenda: { summary: null, workload: [], items: [], filters: { kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" } },
+    agenda: { summary: null, workload: [], items: [], viewMode: "timeline", weekStart: null, filters: { search: "", kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" } },
     collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
@@ -778,7 +778,8 @@
     responsibleSelect.innerHTML = fixedOptions + state.agenda.workload.filter((row) => row.user_id).map((row) => `<option value="${escapeHtml(row.user_id)}">${escapeHtml(row.user_name)}</option>`).join("");
     responsibleSelect.value = filters.responsible;
     const items = state.agenda.items.filter((item) =>
-      (filters.kind === "all" || item.kind === filters.kind)
+      (!filters.search || [item.title, item.client_name, item.assigned_user_name].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(filters.search.toLocaleLowerCase("pt-BR"))))
+      && (filters.kind === "all" || item.kind === filters.kind)
       && (filters.status === "all" || item.status === filters.status)
       && (filters.responsible === "all"
         || (filters.responsible === "mine" && String(item.assigned_user_id || "") === String(state.user?.id || ""))
@@ -791,18 +792,60 @@
     $("#agenda-promise-count").textContent = items.filter((item) => item.kind === "promise").length;
     const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa" };
     const statusLabels = { overdue: "Atrasado", today: "Hoje", upcoming: "Próximo" };
-    $("#agenda-list").innerHTML = items.length ? items.map((item) => `<button class="agenda-item ${escapeHtml(item.status)}" type="button" data-agenda-id="${escapeHtml(item.id)}">
+    $("#agenda-list").innerHTML = items.length ? items.map((item) => `<article class="agenda-item ${escapeHtml(item.status)}"><button class="agenda-open" type="button" data-agenda-id="${escapeHtml(item.id)}">
       <span class="agenda-date"><strong>${escapeHtml(formatDate(item.due_at, true))}</strong><small>${escapeHtml(statusLabels[item.status] || item.status)}</small></span>
       <span class="agenda-marker" aria-hidden="true"></span>
       <span class="agenda-copy"><small>${escapeHtml(kindLabels[item.kind] || item.kind)}</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.client_name || "Sem cliente vinculado")} · ${escapeHtml(item.assigned_user_name || "Sem responsável")}</span></span>
       <span class="badge ${item.priority === "urgent" ? "priority-urgent" : `priority-${escapeHtml(item.priority || "normal")}`} ">${escapeHtml(priorityLabels[item.priority] || "Normal")}</span>
       <span class="agenda-arrow" aria-hidden="true">→</span>
-    </button>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
+    </button>${item.kind === "task" ? `<button class="complete-button agenda-complete-task" type="button" data-agenda-complete-task="${escapeHtml(String(item.id).replace(/^task:/, ""))}">Concluir</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
     const workload = state.agenda.workload;
     $("#agenda-workload-summary").textContent = `${workload.length} ${workload.length === 1 ? "responsável" : "responsáveis"}`;
     $("#agenda-workload-list").innerHTML = workload.length ? workload.map((row) => `<button type="button" class="agenda-workload-card ${String(filters.responsible) === String(row.user_id || "unassigned") ? "active" : ""}" data-agenda-responsible="${escapeHtml(row.user_id || "unassigned")}">
       <strong>${escapeHtml(row.user_name)}</strong><span>${escapeHtml(row.total)} compromisso(s)</span><small>${escapeHtml(row.overdue)} atrasado(s) · ${escapeHtml(row.today)} para hoje · ${escapeHtml(row.upcoming)} próximo(s)</small>
     </button>`).join("") : '<div class="empty-state">Nenhum responsável encontrado.</div>';
+    renderAgendaWeek(items);
+  }
+
+  function agendaWeekStart(value = new Date()) {
+    const result = new Date(value);
+    result.setHours(0, 0, 0, 0);
+    const day = result.getDay();
+    result.setDate(result.getDate() - (day === 0 ? 6 : day - 1));
+    return result;
+  }
+
+  function renderAgendaWeek(items) {
+    const start = state.agenda.weekStart ? new Date(`${state.agenda.weekStart}T12:00:00`) : agendaWeekStart();
+    state.agenda.weekStart = localDateValue(start);
+    const days = Array.from({ length: 7 }, (_, index) => { const day = new Date(start); day.setDate(day.getDate() + index); return day; });
+    const end = days[6];
+    $("#agenda-week-title").textContent = `${formatDate(localDateValue(start))} a ${formatDate(localDateValue(end))}`;
+    const weekItems = items.filter((item) => { const value = String(item.due_at).slice(0, 10); return value >= localDateValue(start) && value <= localDateValue(end); });
+    $("#agenda-calendar-count").textContent = `${weekItems.length} compromisso(s)`;
+    const weekDay = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
+    $("#agenda-week-grid").innerHTML = days.map((day) => {
+      const key = localDateValue(day);
+      const daily = weekItems.filter((item) => String(item.due_at).slice(0, 10) === key);
+      const today = key === localDateValue(new Date());
+      return `<section class="agenda-day-column ${today ? "today" : ""}"><header><span>${escapeHtml(weekDay.format(day))}</span><strong>${day.getDate()}</strong></header><div>${daily.length ? daily.map((item) => `<button type="button" class="agenda-calendar-item ${escapeHtml(item.status)}" data-agenda-id="${escapeHtml(item.id)}"><small>${escapeHtml(String(formatDate(item.due_at, true)).split(", ")[1] || "")}</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.client_name || "Sem cliente")}</span></button>`).join("") : '<p>Sem compromissos</p>'}</div></section>`;
+    }).join("");
+  }
+
+  function setAgendaViewMode(mode) {
+    state.agenda.viewMode = mode;
+    $("#agenda-timeline-panel").hidden = mode !== "timeline";
+    $("#agenda-calendar-panel").hidden = mode !== "calendar";
+    $("#agenda-week-navigation").hidden = mode !== "calendar";
+    $("#agenda-timeline-view").classList.toggle("active", mode === "timeline");
+    $("#agenda-calendar-view").classList.toggle("active", mode === "calendar");
+  }
+
+  function moveAgendaWeek(offset) {
+    const start = state.agenda.weekStart ? new Date(`${state.agenda.weekStart}T12:00:00`) : agendaWeekStart();
+    start.setDate(start.getDate() + offset * 7);
+    state.agenda.weekStart = localDateValue(start);
+    renderOperationalAgenda();
   }
 
   async function openAgendaItem(itemId) {
@@ -2342,7 +2385,7 @@
   }
 
   async function refreshCrm(message) {
-    await Promise.all([loadCrm(), loadDashboard(), loadOperationalAlerts()]);
+    await Promise.all([loadCrm(), loadDashboard(), loadOperationalAlerts(), loadOperationalAgenda()]);
     if (message) toast(message);
   }
 
@@ -3335,15 +3378,21 @@
         toast("A data inicial não pode ser posterior à data final.", "error");
         return;
       }
-      state.agenda.filters = { kind: values.kind || "all", status: values.status || "all", responsible: values.responsible || "all", dateFrom: values.date_from || "", dateTo: values.date_to || "" };
+      state.agenda.filters = { search: String(values.search || "").trim(), kind: values.kind || "all", status: values.status || "all", responsible: values.responsible || "all", dateFrom: values.date_from || "", dateTo: values.date_to || "" };
       loadOperationalAgenda().catch((error) => toast(error.message, "error"));
     });
     $("#agenda-clear-filters").addEventListener("click", () => {
       $("#agenda-filter-form").reset();
-      state.agenda.filters = { kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" };
+      state.agenda.filters = { search: "", kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" };
       loadOperationalAgenda().catch((error) => toast(error.message, "error"));
     });
     $("#agenda-refresh").addEventListener("click", () => loadOperationalAgenda(true).catch((error) => toast(error.message, "error")));
+    $("#agenda-new-task").addEventListener("click", () => openDialog("task-dialog"));
+    $("#agenda-timeline-view").addEventListener("click", () => setAgendaViewMode("timeline"));
+    $("#agenda-calendar-view").addEventListener("click", () => setAgendaViewMode("calendar"));
+    $("#agenda-previous-week").addEventListener("click", () => moveAgendaWeek(-1));
+    $("#agenda-next-week").addEventListener("click", () => moveAgendaWeek(1));
+    $("#agenda-current-week").addEventListener("click", () => { state.agenda.weekStart = localDateValue(agendaWeekStart()); renderOperationalAgenda(); });
     $("#agenda-export-button").addEventListener("click", exportOperationalAgenda);
     $$('[data-agenda-period]').forEach((button) => button.addEventListener("click", () => applyAgendaPeriod(button.dataset.agendaPeriod).catch((error) => toast(error.message, "error"))));
     $("#my-agenda-button").addEventListener("click", () => {
@@ -3360,9 +3409,12 @@
       renderOperationalAgenda();
     });
     $("#agenda-list").addEventListener("click", (event) => {
+      const complete = event.target.closest("[data-agenda-complete-task]");
       const item = event.target.closest("[data-agenda-id]");
-      if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error"));
+      if (complete) completeCrmTask(complete.dataset.agendaCompleteTask, complete);
+      else if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error"));
     });
+    $("#agenda-week-grid").addEventListener("click", (event) => { const item = event.target.closest("[data-agenda-id]"); if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error")); });
     $("#alert-close-button").addEventListener("click", () => setAlertPopover(false));
     $("#alert-refresh-button").addEventListener("click", () => loadOperationalAlerts(true).catch((error) => toast(error.message, "error")));
     $("#alert-list").addEventListener("click", (event) => {

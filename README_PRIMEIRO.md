@@ -1,15 +1,27 @@
-# CS Platform v5.22.0 — LEIA PRIMEIRO
+# CS Platform v5.23.0 — LEIA PRIMEIRO
 
-Substitua os sete arquivos e use o commit:
+Esta versão adiciona a **Agenda 360**.
 
-`feat: adicionar relatório e exportação da agenda v5.22.0`
+Substitua exatamente os sete arquivos presentes neste pacote, mantendo as mesmas pastas no GitHub.
 
-Não há migração; deixe **Pre-deploy Command** vazio.
+Use este nome no commit:
 
-## Teste
+`feat: adicionar agenda 360 e calendário semanal v5.23.0`
 
-1. Abra Agenda e confira os totais por tipo.
-2. Teste Hoje, Próximos 7 dias, Próximos 30 dias e Período completo.
-3. Aplique filtros e clique em Exportar CSV.
-4. Abra o arquivo e confira se ele respeita o período e os filtros.
-5. Em Configurações, confirme `5.22.0`.
+Não há migração de banco. Deixe **Pre-deploy Command** vazio no Railway.
+
+## Depois do deploy
+
+1. Aguarde `cs-platform-api` e `cs-platform-web` ficarem verdes.
+2. Abra o sistema e pressione `Ctrl + F5`.
+3. Entre em **Agenda** e confirme o título **Agenda 360**.
+4. Pesquise por título, cliente e responsável.
+5. Alterne entre **Linha do tempo** e **Calendário semanal**.
+6. Navegue pelas semanas e volte em **Semana atual**.
+7. Clique em **Nova tarefa**, salve uma tarefa e confira se ela aparece.
+8. Clique em **Concluir** e confirme que a tarefa desaparece e os totais são atualizados automaticamente.
+9. Confira **Minha agenda**, os filtros e **Exportar CSV**.
+10. Em **Configurações**, confirme a versão `5.23.0`.
+
+O arquivo `SHA256SUMS.txt` permite conferir a integridade dos arquivos.
+
