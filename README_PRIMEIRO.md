@@ -1,18 +1,15 @@
-# CS Platform v5.21.0 — LEIA PRIMEIRO
+# CS Platform v5.22.0 — LEIA PRIMEIRO
 
-## Instalação
+Substitua os sete arquivos e use o commit:
 
-Substitua os sete arquivos, mantendo as pastas, e use o commit:
+`feat: adicionar relatório e exportação da agenda v5.22.0`
 
-`feat: adicionar minha agenda e carga da equipe v5.21.0`
-
-Aguarde o deploy da API e do Web. Deixe **Pre-deploy Command** vazio, pois não há migração de banco.
+Não há migração; deixe **Pre-deploy Command** vazio.
 
 ## Teste
 
-1. Atualize com `Ctrl + F5` e abra **Agenda**.
-2. Confira o quadro **Distribuição dos compromissos**.
-3. Clique em **Minha agenda** e confirme que aparecem somente seus compromissos.
-4. Selecione outro responsável e depois **Sem responsável**.
-5. Confirme o nome do responsável em cada item da linha do tempo.
-6. Em Configurações, confira a versão `5.21.0`.
+1. Abra Agenda e confira os totais por tipo.
+2. Teste Hoje, Próximos 7 dias, Próximos 30 dias e Período completo.
+3. Aplique filtros e clique em Exportar CSV.
+4. Abra o arquivo e confira se ele respeita o período e os filtros.
+5. Em Configurações, confirme `5.22.0`.

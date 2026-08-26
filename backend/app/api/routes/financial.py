@@ -778,6 +778,61 @@ def list_operational_agenda(
     )
 
 
+@router.get("/operational-agenda.csv")
+def export_operational_agenda_csv(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    kind: str = Query(default="all"),
+    agenda_status: str = Query(default="all", alias="status"),
+    responsible: str = Query(default="all"),
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    if kind not in {"all", "task", "follow_up", "promise"}:
+        raise HTTPException(status_code=422, detail="Tipo de compromisso inválido")
+    if agenda_status not in {"all", "overdue", "today", "upcoming"}:
+        raise HTTPException(status_code=422, detail="Situação da agenda inválida")
+    agenda = list_operational_agenda(date_from=date_from, date_to=date_to, db=db, actor=actor)
+    items = agenda.items
+    if kind != "all":
+        items = [item for item in items if item.kind == kind]
+    if agenda_status != "all":
+        items = [item for item in items if item.status == agenda_status]
+    if responsible == "mine":
+        items = [item for item in items if item.assigned_user_id == actor.id]
+    elif responsible == "unassigned":
+        items = [item for item in items if item.assigned_user_id is None]
+    elif responsible != "all":
+        try:
+            responsible_id = uuid.UUID(responsible)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Responsável inválido") from exc
+        items = [item for item in items if item.assigned_user_id == responsible_id]
+
+    labels = {
+        "task": "Tarefa do CRM", "follow_up": "Acompanhamento", "promise": "Promessa",
+        "overdue": "Atrasado", "today": "Para hoje", "upcoming": "Próximo",
+        "low": "Baixa", "normal": "Normal", "high": "Alta", "urgent": "Urgente",
+    }
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, delimiter=";")
+    writer.writerow(["Agenda operacional", "CS Platform", "v5.22.0"])
+    writer.writerow(["Período", agenda.date_from.strftime("%d/%m/%Y"), agenda.date_to.strftime("%d/%m/%Y")])
+    writer.writerow([])
+    writer.writerow(["Data e hora", "Tipo", "Situação", "Título", "Cliente", "Responsável", "Prioridade"])
+    for item in items:
+        writer.writerow([
+            item.due_at.astimezone(timezone.utc).strftime("%d/%m/%Y %H:%M"), labels.get(item.kind, item.kind),
+            labels.get(item.status, item.status), item.title, item.client_name or "—",
+            item.assigned_user_name or "Sem responsável", labels.get(item.priority, item.priority),
+        ])
+    body = ("\ufeff" + stream.getvalue()).encode("utf-8")
+    return Response(
+        content=body, media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="agenda_operacional.csv"', "Cache-Control": "no-store"},
+    )
+
+
 def owned_collection_installment(
     db: Session, installment_id: uuid.UUID, organization_id: uuid.UUID
 ) -> PaymentInstallment:

@@ -786,6 +786,9 @@
         || String(item.assigned_user_id || "") === String(filters.responsible))
     );
     $("#agenda-result-count").textContent = items.length === 1 ? "1 registro" : `${items.length} registros`;
+    $("#agenda-task-count").textContent = items.filter((item) => item.kind === "task").length;
+    $("#agenda-follow-up-count").textContent = items.filter((item) => item.kind === "follow_up").length;
+    $("#agenda-promise-count").textContent = items.filter((item) => item.kind === "promise").length;
     const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa" };
     const statusLabels = { overdue: "Atrasado", today: "Hoje", upcoming: "Próximo" };
     $("#agenda-list").innerHTML = items.length ? items.map((item) => `<button class="agenda-item ${escapeHtml(item.status)}" type="button" data-agenda-id="${escapeHtml(item.id)}">
@@ -826,6 +829,57 @@
     form.elements.follow_up_filter.value = state.collections.filters.followUp;
     form.elements.promise_filter.value = state.collections.filters.promise;
     await loadCollections();
+  }
+
+  function localDateValue(value) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  async function applyAgendaPeriod(period) {
+    const today = new Date();
+    let dateFrom = "";
+    let dateTo = "";
+    if (period !== "all") {
+      dateFrom = localDateValue(today);
+      const end = new Date(today);
+      end.setDate(end.getDate() + (period === "today" ? 0 : Number(period) - 1));
+      dateTo = localDateValue(end);
+    }
+    state.agenda.filters.dateFrom = dateFrom;
+    state.agenda.filters.dateTo = dateTo;
+    const form = $("#agenda-filter-form");
+    form.elements.date_from.value = dateFrom;
+    form.elements.date_to.value = dateTo;
+    $$('[data-agenda-period]').forEach((button) => button.classList.toggle("active", button.dataset.agendaPeriod === period));
+    await loadOperationalAgenda();
+  }
+
+  async function exportOperationalAgenda() {
+    const button = $("#agenda-export-button");
+    setBusy(button, true, "Gerando…");
+    try {
+      const filters = state.agenda.filters;
+      const params = new URLSearchParams();
+      if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+      if (filters.dateTo) params.set("date_to", filters.dateTo);
+      if (filters.kind !== "all") params.set("kind", filters.kind);
+      if (filters.status !== "all") params.set("status", filters.status);
+      if (filters.responsible !== "all") params.set("responsible", filters.responsible);
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const response = await fetch(`${API_BASE}/api/v1/financial/operational-agenda.csv?${params.toString()}`, { headers });
+      if (!response.ok) throw new Error(await readError(response));
+      saveBlob(await response.blob(), `agenda_operacional_${filters.dateFrom || "periodo"}_${filters.dateTo || "completo"}.csv`);
+      toast("Agenda exportada em CSV.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function renderOperationalAlerts() {
@@ -3290,6 +3344,8 @@
       loadOperationalAgenda().catch((error) => toast(error.message, "error"));
     });
     $("#agenda-refresh").addEventListener("click", () => loadOperationalAgenda(true).catch((error) => toast(error.message, "error")));
+    $("#agenda-export-button").addEventListener("click", exportOperationalAgenda);
+    $$('[data-agenda-period]').forEach((button) => button.addEventListener("click", () => applyAgendaPeriod(button.dataset.agendaPeriod).catch((error) => toast(error.message, "error"))));
     $("#my-agenda-button").addEventListener("click", () => {
       state.agenda.filters.responsible = "mine";
       $("#agenda-responsible-filter").value = "mine";
