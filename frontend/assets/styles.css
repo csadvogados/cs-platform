@@ -314,14 +314,22 @@ tr:last-child td { border-bottom: 0; }
 .collection-payment-date { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 10px; }
 .follow-up-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: -8px 0 18px; padding: 12px 16px; border-left: 3px solid var(--gold); background: #f0ede5; color: var(--ink-soft); font-size: 12px; }
 .follow-up-summary strong { color: var(--forest-2); }
-.queue-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.queue-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#collection-critical-count { color: var(--danger); }
 .collection-owner-cell { min-width: 145px; }
 .collection-owner-cell strong, .collection-owner-cell .badge { display: block; }
 .collection-owner-cell strong { margin-bottom: 7px; font-size: 11px; }
 .collection-owner-cell .badge { width: max-content; }
 .badge.priority-high { color: #7a5010; background: #f5e4bd; }
+.badge.attention-critical { color: #9b2f28; background: #f7dcd9; }
+.badge.attention-attention { color: #7a5010; background: #f5e4bd; }
+.badge.attention-routine { color: #286044; background: #dfeee6; }
 .collection-contact-cell { min-width: 150px; }
 .collection-contact-cell small { display: block; margin-top: 4px; color: var(--ink-soft); line-height: 1.35; }
+.collection-recommendation-cell { min-width: 190px; }
+.collection-recommendation-cell .badge { display: block; width: max-content; margin-bottom: 7px; }
+.collection-recommendation-cell strong { display: block; font-size: 11px; line-height: 1.35; }
+.collection-recommendation-cell small { display: block; margin-top: 5px; color: var(--ink-soft); font-size: 10px; }
 .collection-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 175px; }
 .collection-action-modal { width: min(900px, calc(100vw - 32px)); }
 .nested-grid { padding: 14px; border: 1px solid var(--line); background: #f5f2eb; }

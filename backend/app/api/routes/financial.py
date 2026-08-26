@@ -125,6 +125,48 @@ def collection_aging_bucket(due_date: date, today: date) -> str | None:
     return "days_61_plus"
 
 
+def collection_attention(
+    collection_status_value: str,
+    due_date: date,
+    today: date,
+    priority: str,
+    promise_status: str,
+    follow_up_status: str,
+    assigned_user_id: uuid.UUID | None,
+) -> tuple[int, str, str]:
+    if collection_status_value in {"paid", "cancelled"}:
+        return 0, "routine", "Nenhuma ação pendente"
+    overdue_days = max(0, (today - due_date).days)
+    score = min(overdue_days, 100)
+    score += {"urgent": 40, "high": 25, "normal": 10, "low": 0}.get(priority, 10)
+    if collection_status_value == "due_soon":
+        score += 10
+    if promise_status == "overdue":
+        score += 25
+    if follow_up_status == "overdue":
+        score += 20
+    if assigned_user_id is None:
+        score += 10
+    level = "critical" if score >= 60 else "attention" if score >= 25 else "routine"
+    if promise_status == "overdue":
+        action = "Retomar promessa vencida"
+    elif follow_up_status == "overdue":
+        action = "Realizar acompanhamento atrasado"
+    elif overdue_days > 60:
+        action = "Avaliar estratégia jurídica"
+    elif overdue_days > 30:
+        action = "Revisar proposta de acordo"
+    elif overdue_days > 7:
+        action = "Reforçar negociação"
+    elif overdue_days > 0:
+        action = "Realizar contato de cobrança"
+    elif collection_status_value == "due_soon":
+        action = "Lembrar próximo vencimento"
+    else:
+        action = "Acompanhar vencimento"
+    return score, level, action
+
+
 def collection_report_data(
     db: Session,
     organization_id: uuid.UUID,
@@ -303,6 +345,8 @@ def list_collections(
     responsible_filter: str = Query(default="all"),
     priority_filter: str = Query(default="all"),
     aging_filter: str = Query(default="all"),
+    attention_filter: str = Query(default="all"),
+    sort_order: str = Query(default="recommended"),
     due_from: date | None = None,
     due_to: date | None = None,
     db: Session = Depends(get_db),
@@ -324,6 +368,10 @@ def list_collections(
     allowed_aging_filters = {"all", "days_1_7", "days_8_30", "days_31_60", "days_61_plus"}
     if aging_filter not in allowed_aging_filters:
         raise HTTPException(status_code=422, detail="Faixa de atraso inválida")
+    if attention_filter not in {"all", "critical", "attention", "routine"}:
+        raise HTTPException(status_code=422, detail="Nível de atenção inválido")
+    if sort_order not in {"recommended", "due_date", "amount_desc"}:
+        raise HTTPException(status_code=422, detail="Ordenação da fila inválida")
     responsible_id: uuid.UUID | None = None
     if responsible_filter not in {"all", "mine", "unassigned"}:
         try:
@@ -387,6 +435,16 @@ def list_collections(
         promise_status = "none"
         if latest_promise and effective_status in {"pending", "due_soon", "overdue"}:
             promise_status = "overdue" if latest_promise.promise_date < today else "today" if latest_promise.promise_date == today else "upcoming"
+        priority = installment.collection_priority or "normal"
+        attention_score, attention_level, recommended_action = collection_attention(
+            effective_status,
+            installment.due_date,
+            today,
+            priority,
+            promise_status,
+            follow_up_status,
+            installment.collection_assigned_user_id,
+        )
         all_items.append(CollectionItemRead(
             id=installment.id,
             client_id=client.id,
@@ -410,7 +468,11 @@ def list_collections(
             promise_status=promise_status,
             assigned_user_id=installment.collection_assigned_user_id,
             assigned_user_name=assigned_names.get(installment.collection_assigned_user_id),
-            priority=installment.collection_priority or "normal",
+            priority=priority,
+            overdue_days=max(0, (today - installment.due_date).days) if effective_status == "overdue" else 0,
+            attention_score=attention_score,
+            attention_level=attention_level,
+            recommended_action=recommended_action,
         ))
     if status_changed:
         db.commit()
@@ -488,6 +550,8 @@ def list_collections(
         overdue_promises_count=len(overdue_promises),
         urgent_count=sum(1 for item in open_items if item.priority == "urgent"),
         unassigned_count=sum(1 for item in open_items if item.assigned_user_id is None),
+        critical_count=sum(1 for item in open_items if item.attention_level == "critical"),
+        attention_count=sum(1 for item in open_items if item.attention_level == "attention"),
     )
 
     items = all_items
@@ -517,6 +581,19 @@ def list_collections(
         items = [item for item in items if item.priority == priority_filter]
     if aging_filter != "all":
         items = [item for item in items if item.status == "overdue" and collection_aging_bucket(item.due_date, today) == aging_filter]
+    if attention_filter != "all":
+        items = [item for item in items if item.attention_level == attention_filter]
+    if sort_order == "recommended":
+        items.sort(key=lambda item: (
+            item.status in {"paid", "cancelled"},
+            -item.attention_score,
+            item.due_date,
+            item.client_name.casefold(),
+        ))
+    elif sort_order == "amount_desc":
+        items.sort(key=lambda item: (-item.amount, item.due_date, item.client_name.casefold()))
+    else:
+        items.sort(key=lambda item: (item.due_date, item.client_name.casefold()))
 
     return CollectionsRead(summary=summary, workload=workload, aging=aging, items=items, total=len(items))
 

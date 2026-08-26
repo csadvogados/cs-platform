@@ -1,4 +1,4 @@
-# CS Platform v5.17.0 — Envelhecimento da inadimplência
+# CS Platform v5.18.0 — Fila inteligente de cobranças
 
 Este pacote contém os 7 arquivos que devem ser substituídos no GitHub.
 
@@ -16,7 +16,7 @@ Substitua os arquivos mantendo exatamente as mesmas pastas:
 
 Use este nome no commit:
 
-`feat: adicionar faixas de atraso nas cobranças v5.17.0`
+`feat: adicionar fila inteligente de cobranças v5.18.0`
 
 Não há nova migração de banco. Não altere comandos ou variáveis do Railway.
 
@@ -25,6 +25,7 @@ Não há nova migração de banco. Não altere comandos ou variáveis do Railway
 1. Aguarde API e interface ficarem verdes.
 2. Abra o sistema e pressione `Ctrl + F5`.
 3. Abra **Cobranças**.
-4. Confira as quatro faixas do painel **Envelhecimento da inadimplência**.
-5. Clique em uma faixa e confirme que a lista foi filtrada.
-6. Clique em **Limpar** e confirme o retorno de todas as cobranças.
+4. Confira a nova coluna **Ação recomendada** e os níveis de atenção.
+5. Teste o filtro **Nível de atenção** e as opções de ordenação.
+6. Selecione **Ordem recomendada** e clique em **Atender próxima**.
+7. Confirme que a janela de registro de contato foi aberta para a cobrança prioritária.

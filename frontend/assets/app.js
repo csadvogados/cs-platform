@@ -5,7 +5,7 @@
   const state = {
     user: null,
     dashboard: null,
-    collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
+    collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
@@ -58,6 +58,7 @@
   };
 
   const priorityLabels = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
+  const attentionLabels = { routine: "Rotina", attention: "Exige atenção", critical: "Crítica" };
 
   const taskStatusLabels = {
     pending: "Pendente",
@@ -750,6 +751,8 @@
     if (filters.responsible && filters.responsible !== "all") params.set("responsible_filter", filters.responsible);
     if (filters.priority && filters.priority !== "all") params.set("priority_filter", filters.priority);
     if (filters.aging && filters.aging !== "all") params.set("aging_filter", filters.aging);
+    if (filters.attention && filters.attention !== "all") params.set("attention_filter", filters.attention);
+    params.set("sort_order", filters.sortOrder || "recommended");
     return params;
   }
 
@@ -1130,6 +1133,8 @@
     $("#collection-promise-alert").textContent = `${summary.open_promises_count || 0} promessa(s) aberta(s), ${summary.overdue_promises_count || 0} vencida(s)`;
     $("#collection-urgent-count").textContent = `${summary.urgent_count || 0} cobrança(s) urgente(s)`;
     $("#collection-unassigned-count").textContent = `${summary.unassigned_count || 0} cobrança(s) sem responsável`;
+    $("#collection-critical-count").textContent = `${summary.critical_count || 0} cobrança(s) crítica(s)`;
+    $("#collection-attention-count").textContent = `${summary.attention_count || 0} exige(m) atenção`;
     $("#collection-result-count").textContent = state.collections.total === 1 ? "1 cobrança" : `${state.collections.total} cobranças`;
     renderCollectionAging();
     renderCollectionWorkload();
@@ -1143,8 +1148,9 @@
       <td><span class="badge ${collectionStatusClass(item.status)}">${escapeHtml(collectionStatusLabel(item.status))}</span>${item.status === "paid" && item.paid_at ? `<small class="collection-payment-date">Pago em ${escapeHtml(formatDate(item.paid_at, true))}</small>` : ""}</td>
       <td class="collection-owner-cell"><strong>${escapeHtml(item.assigned_user_name || "Sem responsável")}</strong><span class="badge ${collectionPriorityClass(item.priority)}">${escapeHtml(priorityLabels[item.priority] || "Normal")}</span></td>
       <td class="collection-contact-cell">${item.last_contacted_at ? escapeHtml(formatDate(item.last_contacted_at, true)) : "Sem contato"}<small>${item.action_count || 0} registro(s)${item.next_follow_up_at ? ` · Próximo: ${escapeHtml(formatDate(item.next_follow_up_at, true))}` : ""}</small>${item.latest_promise_date ? `<span class="collection-promise-note">Promessa: ${escapeHtml(formatDate(item.latest_promise_date))}${item.latest_promise_amount ? ` · ${formatCurrency(item.latest_promise_amount)}` : ""}</span>` : ""}</td>
+      <td class="collection-recommendation-cell"><span class="badge attention-${escapeHtml(item.attention_level || "routine")}">${escapeHtml(attentionLabels[item.attention_level] || "Rotina")}</span><strong>${escapeHtml(item.recommended_action || "Acompanhar vencimento")}</strong><small>${item.attention_score || 0} pontos${item.overdue_days ? ` · ${escapeHtml(item.overdue_days)} dia(s) em atraso` : ""}</small></td>
       <td><div class="collection-row-actions">${canManageCollectionQueue() ? `<button class="edit-button" type="button" data-collection-assignment="${escapeHtml(item.id)}">Organizar</button>` : ""}${!["paid", "cancelled"].includes(item.status) ? `<button class="primary-link" type="button" data-collection-action="${escapeHtml(item.id)}">Registrar contato</button>` : ""}<button class="text-link" type="button" data-collection-history="${escapeHtml(item.id)}">Histórico</button><button class="text-link" type="button" data-collection-client="${escapeHtml(item.client_id)}">Cliente</button></div></td>
-    </tr>`).join("") : '<tr><td colspan="10" class="empty-cell">Nenhuma cobrança encontrada com estes filtros.</td></tr>';
+    </tr>`).join("") : '<tr><td colspan="11" class="empty-cell">Nenhuma cobrança encontrada com estes filtros.</td></tr>';
     $$("[data-collection-select]", $("#collections-table")).forEach((checkbox) => checkbox.addEventListener("change", () => {
       const selected = new Set(state.collections.selectedIds.map(String));
       if (checkbox.checked) selected.add(String(checkbox.dataset.collectionSelect));
@@ -1157,6 +1163,15 @@
     $$("[data-collection-history]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionActionDialog(button.dataset.collectionHistory, true)));
     $$("[data-collection-assignment]", $("#collections-table")).forEach((button) => button.addEventListener("click", () => openCollectionAssignment(button.dataset.collectionAssignment)));
     updateCollectionBulkToolbar();
+  }
+
+  function openNextCollection() {
+    const nextItem = state.collections.items.find((item) => !["paid", "cancelled"].includes(item.status));
+    if (!nextItem) {
+      toast("Nenhuma cobrança pendente foi encontrada nesta fila.", "error");
+      return;
+    }
+    openCollectionActionDialog(nextItem.id, false);
   }
 
   function openCollectionAssignment(installmentId) {
@@ -3068,13 +3083,15 @@
         promise: String(raw.promise_filter || "all"),
         responsible: String(raw.responsible_filter || "all"),
         priority: String(raw.priority_filter || "all"),
-        aging: String(raw.aging_filter || "all")
+        aging: String(raw.aging_filter || "all"),
+        attention: String(raw.attention_filter || "all"),
+        sortOrder: String(raw.sort_order || "recommended")
       };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#clear-collection-filters").addEventListener("click", () => {
       $("#collection-filter-form").reset();
-      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all" };
+      state.collections.filters = { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" };
       loadCollections().catch((error) => toast(error.message, "error"));
     });
     $("#collection-select-all").addEventListener("change", (event) => {
@@ -3087,6 +3104,7 @@
     });
     $("#distribute-selected-collections").addEventListener("click", openCollectionDistribution);
     $("#organize-selected-collections").addEventListener("click", openBulkCollectionAssignment);
+    $("#next-collection-button").addEventListener("click", openNextCollection);
     $("#collection-action-outcome").addEventListener("change", toggleCollectionPromiseFields);
     $("#collection-action-form").addEventListener("submit", saveCollectionAction);
     $("#collection-cancel-form").addEventListener("submit", cancelCollectionAction);

@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.17.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.18.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -168,7 +168,7 @@
           </section>
 
           <section id="view-collections" class="page-view" aria-labelledby="collections-heading">
-            <div class="section-intro"><div><p class="eyebrow dark">AGENDA FINANCEIRA</p><h1 id="collections-heading">Cobranças</h1><p>Acompanhe vencimentos, atrasos e pagamentos dos acordos.</p></div><div class="button-row"><button id="my-collections-button" class="secondary-button" type="button">Minhas cobranças</button><button id="collections-refresh" class="primary-button" type="button">Atualizar cobranças</button></div></div>
+            <div class="section-intro"><div><p class="eyebrow dark">AGENDA FINANCEIRA</p><h1 id="collections-heading">Cobranças</h1><p>Acompanhe vencimentos, atrasos e pagamentos dos acordos.</p></div><div class="button-row"><button id="next-collection-button" class="secondary-button" type="button">Atender próxima</button><button id="my-collections-button" class="secondary-button" type="button">Minhas cobranças</button><button id="collections-refresh" class="primary-button" type="button">Atualizar cobranças</button></div></div>
             <div class="collection-summary-grid">
               <article><span>Em aberto</span><strong id="collection-open-amount">—</strong><small id="collection-open-count">0 parcelas</small></article>
               <article class="danger-summary"><span>Em atraso</span><strong id="collection-overdue-amount">—</strong><small id="collection-overdue-count">0 parcelas</small></article>
@@ -208,7 +208,7 @@
                 </div>
               </div>
             </details>
-            <div class="follow-up-summary queue-summary" aria-live="polite"><strong id="collection-follow-up-today">0 acompanhamentos para hoje</strong><span id="collection-follow-up-overdue">0 acompanhamentos atrasados</span><span id="collection-follow-up-upcoming">0 acompanhamentos futuros</span><span id="collection-promise-alert">0 promessas abertas</span><span id="collection-urgent-count">0 cobranças urgentes</span><span id="collection-unassigned-count">0 cobranças sem responsável</span></div>
+            <div class="follow-up-summary queue-summary" aria-live="polite"><strong id="collection-critical-count">0 cobranças críticas</strong><span id="collection-attention-count">0 exigem atenção</span><span id="collection-follow-up-today">0 acompanhamentos para hoje</span><span id="collection-follow-up-overdue">0 acompanhamentos atrasados</span><span id="collection-follow-up-upcoming">0 acompanhamentos futuros</span><span id="collection-promise-alert">0 promessas abertas</span><span id="collection-urgent-count">0 cobranças urgentes</span><span id="collection-unassigned-count">0 cobranças sem responsável</span></div>
             <form id="collection-filter-form" class="collection-filter-bar">
               <label class="collection-search-field"><span>Buscar</span><input name="q" type="search" placeholder="Cliente ou acordo" autocomplete="off" /></label>
               <label><span>Situação</span><select name="status"><option value="all">Todas</option><option value="overdue">Atrasadas</option><option value="due_soon">Próximos 7 dias</option><option value="pending">Pendentes</option><option value="paid">Pagas</option><option value="cancelled">Canceladas</option></select></label>
@@ -219,6 +219,8 @@
               <label><span>Responsável</span><select id="collection-responsible-filter" name="responsible_filter"><option value="all">Todos</option><option value="mine">Minhas cobranças</option><option value="unassigned">Sem responsável</option></select></label>
               <label><span>Prioridade</span><select name="priority_filter"><option value="all">Todas</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baixa</option></select></label>
               <label><span>Tempo de atraso</span><select id="collection-aging-filter" name="aging_filter"><option value="all">Todas as faixas</option><option value="days_1_7">1 a 7 dias</option><option value="days_8_30">8 a 30 dias</option><option value="days_31_60">31 a 60 dias</option><option value="days_61_plus">Mais de 60 dias</option></select></label>
+              <label><span>Nível de atenção</span><select name="attention_filter"><option value="all">Todos</option><option value="critical">Crítica</option><option value="attention">Exige atenção</option><option value="routine">Rotina</option></select></label>
+              <label><span>Ordenar por</span><select name="sort_order"><option value="recommended">Ordem recomendada</option><option value="due_date">Vencimento mais antigo</option><option value="amount_desc">Maior valor</option></select></label>
               <button class="primary-button" type="submit">Aplicar filtros</button>
               <button id="clear-collection-filters" class="secondary-button" type="button">Limpar</button>
             </form>
@@ -228,7 +230,7 @@
               <strong id="collection-selected-count">0 selecionadas</strong>
               <div class="button-row"><button id="clear-collection-selection" class="secondary-button" type="button" disabled>Limpar seleção</button><button id="distribute-selected-collections" class="secondary-button" type="button" disabled>Distribuir selecionadas</button><button id="organize-selected-collections" class="primary-button" type="button" disabled>Organizar selecionadas</button></div>
             </div>
-            <div class="table-wrap collection-table-wrap"><table><thead><tr><th class="collection-select-column"><span class="sr-only">Selecionar</span></th><th>Cliente</th><th>Acordo</th><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Responsável</th><th>Último contato</th><th>Ações</th></tr></thead><tbody id="collections-table"><tr><td colspan="10" class="empty-cell">Carregando cobranças…</td></tr></tbody></table></div>
+            <div class="table-wrap collection-table-wrap"><table><thead><tr><th class="collection-select-column"><span class="sr-only">Selecionar</span></th><th>Cliente</th><th>Acordo</th><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Responsável</th><th>Último contato</th><th>Ação recomendada</th><th>Ações</th></tr></thead><tbody id="collections-table"><tr><td colspan="11" class="empty-cell">Carregando cobranças…</td></tr></tbody></table></div>
           </section>
 
           <section id="view-crm" class="page-view" aria-labelledby="crm-heading">
@@ -325,7 +327,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.17.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.18.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -607,6 +609,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.17.0"></script>
+    <script src="./assets/app.js?v=5.18.0"></script>
   </body>
 </html>

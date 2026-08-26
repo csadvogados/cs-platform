@@ -126,6 +126,10 @@ class CollectionItemRead(BaseModel):
     assigned_user_id: uuid.UUID | None = None
     assigned_user_name: str | None = None
     priority: CollectionPriority = "normal"
+    overdue_days: int = 0
+    attention_score: int = 0
+    attention_level: Literal["routine", "attention", "critical"] = "routine"
+    recommended_action: str = "Acompanhar vencimento"
 
 
 class CollectionSummaryRead(BaseModel):
@@ -144,6 +148,8 @@ class CollectionSummaryRead(BaseModel):
     overdue_promises_count: int = 0
     urgent_count: int = 0
     unassigned_count: int = 0
+    critical_count: int = 0
+    attention_count: int = 0
 
 
 class CollectionWorkloadRead(BaseModel):
