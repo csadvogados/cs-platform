@@ -88,35 +88,44 @@ def calculate(client, minimum=Decimal("600.00")):
     attention = sum(1 for nature in debt_natures if nature in ATTENTION)
 
     score = 0
+    breakdown = {"person_profile": 0, "good_faith": 0, "payment_distress": 0, "eligible_debts": 0, "minimum_existential": 0}
     alerts = []
     if client.person_natural:
         score += 20
+        breakdown["person_profile"] = 20
     else:
         alerts.append("O regime é direcionado à pessoa natural.")
 
     if client.good_faith_declared is True:
         score += 20
+        breakdown["good_faith"] = 20
     elif client.good_faith_declared is None:
         score += 8
+        breakdown["good_faith"] = 8
         alerts.append("A boa-fé deve ser apurada documentalmente.")
     else:
         alerts.append("Há indicação contrária à boa-fé.")
 
     if client.can_pay_without_harming_basics is False:
         score += 20
+        breakdown["payment_distress"] = 20
     elif client.can_pay_without_harming_basics is None:
         score += 10
+        breakdown["payment_distress"] = 10
         alerts.append("A capacidade de pagamento ainda não foi confirmada.")
 
     if eligible:
         score += 20
+        breakdown["eligible_debts"] = 20
     else:
         alerts.append("Não há dívida de consumo potencialmente elegível cadastrada.")
 
     if disposable < minimum:
         score += 20
+        breakdown["minimum_existential"] = 20
     elif income and disposable < income * Decimal("0.25"):
         score += 10
+        breakdown["minimum_existential"] = 10
 
     if attention:
         alerts.append(f"{attention} dívida(s) exige(m) tratamento específico.")
@@ -137,6 +146,11 @@ def calculate(client, minimum=Decimal("600.00")):
         f"parcelas: R$ {installments:.2f}; comprometimento: {commitment:.2f}%; "
         f"saldo estimado: R$ {disposable:.2f}. Resultado: {result} ({score}/100)."
     )
+    data_checks = [income > 0, expenses > 0, debt > 0, bool(debt_natures), client.good_faith_declared is not None, client.can_pay_without_harming_basics is not None]
+    data_quality_score = round(sum(data_checks) / len(data_checks) * 100)
+    max_payment_capacity = max(Decimal("0"), income - expenses - minimum).quantize(Decimal("0.01"))
+    risk_level = "critical" if commitment >= 80 or disposable < 0 else "high" if commitment >= 50 or disposable < minimum else "moderate" if debt else "low"
+    recommended_strategy = "judicial_assessment" if attention and not eligible else "protected_negotiation" if score >= 85 else "document_review" if score >= 60 else "financial_orientation"
     return {
         "total_income": income,
         "total_expenses": expenses,
@@ -157,4 +171,10 @@ def calculate(client, minimum=Decimal("600.00")):
             "installments": float(installments),
             "balance": float(max(disposable, Decimal("0"))),
         },
+        "risk_level": risk_level,
+        "recommended_strategy": recommended_strategy,
+        "max_payment_capacity": max_payment_capacity,
+        "data_quality_score": data_quality_score,
+        "score_breakdown": breakdown,
+        "analysis_snapshot": {"eligible_debts": eligible, "attention_debts": attention, "debt_natures": debt_natures},
     }
