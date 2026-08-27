@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
@@ -177,4 +177,10 @@ class Diagnosis(TimestampMixin, Base):
     eligibility_result: Mapped[str] = mapped_column(String(120), nullable=False)
     economic_conclusion: Mapped[str] = mapped_column(Text, nullable=False)
     legal_alerts: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(24), default="moderate", nullable=False, index=True)
+    recommended_strategy: Mapped[str] = mapped_column(String(80), default="manual_review", nullable=False)
+    max_payment_capacity: Mapped[Decimal] = mapped_column(Numeric(14,2), default=0, nullable=False)
+    data_quality_score: Mapped[int] = mapped_column(default=0, nullable=False)
+    score_breakdown: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    analysis_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     client = relationship("Client", back_populates="diagnoses")
