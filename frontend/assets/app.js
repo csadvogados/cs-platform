@@ -6,12 +6,14 @@
     user: null,
     dashboard: null,
     alerts: { total: 0, criticalCount: 0, items: [], open: false },
+    notifications: { items: [], total: 0, unreadCount: 0, criticalUnreadCount: 0, preferences: null, filters: { notificationType: "all", priority: "all", readStatus: "all" } },
     management: { report: null, filters: { period: "30", dateFrom: "", dateTo: "" } },
     performance: { report: null, month: "" },
     agenda: { summary: null, workload: [], items: [], viewMode: "timeline", weekStart: null, filters: { search: "", kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" } },
     collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
+    recovery: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, status: "all" },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
@@ -45,7 +47,9 @@
     dashboard: ["VISÃO GERAL", "Painel de operação", "Novo cliente"],
     management: ["INTELIGÊNCIA OPERACIONAL", "Central Gerencial", "Atualizar"],
     performance: ["GESTÃO POR RESULTADOS", "Metas e desempenho", "Atualizar"],
+    notifications: ["ACOMPANHAMENTO PESSOAL", "Central de notificações", "Atualizar"],
     clients: ["RELACIONAMENTO", "Clientes", "Novo cliente"],
+    recovery: ["RECOVERY CORE", "CS Recupera", "Abrir caso"],
     collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
     agenda: ["ROTINA UNIFICADA", "Agenda operacional", "Atualizar"],
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
@@ -113,7 +117,18 @@
     crm_contact: "Contato CRM",
     crm_interaction: "Atendimento",
     crm_opportunity: "Oportunidade",
-    crm_task: "Tarefa"
+    crm_task: "Tarefa",
+    recovery_case: "Caso de recuperação"
+  };
+
+  const recoveryStatusLabels = {
+    draft: "Rascunho", active: "Ativo", on_hold: "Pausado", resolved: "Resolvido",
+    judicialized: "Judicializado", cancelled: "Cancelado", archived: "Arquivado"
+  };
+  const recoveryStageLabels = {
+    intake: "Triagem", documents: "Documentos", diagnosis: "Diagnóstico", planning: "Planejamento",
+    negotiation: "Negociação", agreement_monitoring: "Acompanhamento do acordo",
+    judicial_preparation: "Preparação judicial", closed: "Encerrado"
   };
 
   const auditActionLabels = {
@@ -369,6 +384,18 @@
       || (state.user?.permissions || []).includes("client.delete");
   }
 
+  function canReadRecovery() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.read");
+  }
+
+  function canCreateRecovery() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.create");
+  }
+
+  function canTransitionRecovery() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.transition");
+  }
+
   function canManageCollectionQueue() {
     return Boolean(state.user?.is_superuser) || ["admin", "supervisor"].includes(String(state.user?.role || ""));
   }
@@ -507,12 +534,15 @@
     $("#performance-new-goal").hidden = !canManagePerformance();
     $("#export-clients-button").hidden = !canExportClients();
     $("#import-clients-button").hidden = !canImportClients();
+    $("#recovery-nav-item").hidden = !canReadRecovery();
+    $("#new-recovery-case").hidden = !canCreateRecovery();
   }
 
   function setView(view) {
     if (view === "audit" && !canViewAudit()) view = "dashboard";
     if (view === "management" && !canViewManagement()) view = "dashboard";
     if (view === "performance" && !canViewPerformance()) view = "dashboard";
+    if (view === "recovery" && !canReadRecovery()) view = "dashboard";
     if (!viewMeta[view]) return;
     state.currentView = view;
     $$(".page-view").forEach((section) => section.classList.toggle("active-view", section.id === `view-${view}`));
@@ -520,7 +550,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management", "performance"].includes(view);
+    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management", "performance", "notifications", "recovery"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -765,6 +795,7 @@
     if (state.currentView === "performance" && canViewPerformance()) {
       loaders.push(loadPerformance());
     }
+    if (state.currentView === "notifications") loaders.push(loadNotificationsPage());
     if (state.currentView === "audit" && canViewAudit()) {
       loaders.push(loadAudit(state.audit.page));
     }
@@ -1019,12 +1050,12 @@
   }
 
   async function loadOperationalAlerts(showNotice = false) {
-    const response = await api("/api/v1/financial/operational-alerts");
-    state.alerts.total = Number(response.total || 0);
-    state.alerts.criticalCount = Number(response.critical_count || 0);
+    const response = await api("/api/v1/notifications?limit=8&read_status=unread");
+    state.alerts.total = Number(response.unread_count || 0);
+    state.alerts.criticalCount = Number(response.critical_unread_count || 0);
     state.alerts.items = Array.isArray(response.items) ? response.items : [];
     renderOperationalAlerts();
-    if (showNotice) toast("Alertas atualizados.");
+    if (showNotice) toast("Notificações atualizadas.");
   }
 
   async function loadOperationalAgenda(showNotice = false) {
@@ -1209,12 +1240,13 @@
     button.setAttribute("aria-label", total ? `Abrir central de alertas, ${total} pendência(s)` : "Abrir central de alertas, nenhuma pendência");
     const list = $("#alert-list");
     if (!state.alerts.items.length) {
-      list.innerHTML = '<div class="alert-empty"><strong>Tudo em dia</strong><span>Nenhum alerta operacional ativo.</span></div>';
+      list.innerHTML = '<div class="alert-empty"><strong>Tudo em dia</strong><span>Nenhuma notificação não lida.</span></div>';
       return;
     }
-    list.innerHTML = state.alerts.items.map((item) => `<button class="alert-item ${escapeHtml(item.severity)}" type="button" data-alert-view="${escapeHtml(item.target_view)}" data-alert-filter="${escapeHtml(item.target_filter)}">
-      <span class="alert-item-count">${escapeHtml(item.count)}</span>
-      <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span>
+    const icons = { task: "✓", collection: "$", promise: "↻", goal: "◎" };
+    list.innerHTML = state.alerts.items.map((item) => `<button class="alert-item ${escapeHtml(item.priority)}" type="button" data-notification-id="${item.id}" data-alert-view="${escapeHtml(item.target_view || "")}" data-alert-filter="${escapeHtml(item.target_filter || "")}">
+      <span class="alert-item-count">${icons[item.notification_type] || "!"}</span>
+      <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.message)}</small></span>
       <span class="alert-item-arrow" aria-hidden="true">→</span>
     </button>`).join("");
   }
@@ -1225,18 +1257,21 @@
     $("#alert-center-button").setAttribute("aria-expanded", String(state.alerts.open));
   }
 
-  async function openOperationalAlert(targetView, targetFilter) {
+  async function openOperationalAlert(targetView, targetFilter, notificationId = null) {
+    if (notificationId) await api(`/api/v1/notifications/${notificationId}`, { method: "PATCH", body: JSON.stringify({ read: true }) });
     setAlertPopover(false);
     if (targetView === "collections") {
       const [field, value] = String(targetFilter || "").split(":");
       if (field === "attention") state.collections.filters.attention = value || "all";
       if (field === "promise") state.collections.filters.promise = value || "all";
       if (field === "follow_up") state.collections.filters.followUp = value || "all";
+      if (field === "status") state.collections.filters.status = value || "all";
       setView("collections");
       const form = $("#collection-filter-form");
       form.elements.attention_filter.value = state.collections.filters.attention;
       form.elements.promise_filter.value = state.collections.filters.promise;
       form.elements.follow_up_filter.value = state.collections.filters.followUp;
+      form.elements.status.value = state.collections.filters.status;
       await loadCollections();
       form.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
@@ -1250,7 +1285,79 @@
       $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === "crm-tasks"));
       renderCrm();
       $("#crm-task-status-filter").scrollIntoView({ behavior: "smooth", block: "center" });
+      await loadOperationalAlerts();
+      return;
     }
+    if (targetView === "performance") {
+      setView("performance");
+      await loadPerformance();
+      $("#performance-metric-grid").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    await loadOperationalAlerts();
+  }
+
+  function notificationParams() {
+    const filters = state.notifications.filters;
+    const params = new URLSearchParams({ limit: "200", read_status: filters.readStatus || "all" });
+    if (filters.notificationType !== "all") params.set("notification_type", filters.notificationType);
+    if (filters.priority !== "all") params.set("priority", filters.priority);
+    return params;
+  }
+
+  async function loadNotificationsPage(showNotice = false) {
+    const [page, preferences] = await Promise.all([
+      api(`/api/v1/notifications?${notificationParams()}`),
+      api("/api/v1/notifications/preferences")
+    ]);
+    state.notifications.items = Array.isArray(page.items) ? page.items : [];
+    state.notifications.total = Number(page.total || 0);
+    state.notifications.unreadCount = Number(page.unread_count || 0);
+    state.notifications.criticalUnreadCount = Number(page.critical_unread_count || 0);
+    state.notifications.preferences = preferences;
+    renderNotificationsPage();
+    renderNotificationPreferences();
+    await loadOperationalAlerts();
+    if (showNotice) toast("Central de notificações atualizada.");
+  }
+
+  function renderNotificationsPage() {
+    $("#notifications-unread").textContent = state.notifications.unreadCount;
+    $("#notifications-critical").textContent = state.notifications.criticalUnreadCount;
+    $("#notifications-total").textContent = state.notifications.total;
+    $("#notification-list-count").textContent = `${state.notifications.items.length} ${state.notifications.items.length === 1 ? "notificação" : "notificações"}`;
+    const typeLabels = { task: "Tarefa", collection: "Cobrança", promise: "Promessa", goal: "Meta" };
+    $("#notification-page-list").innerHTML = state.notifications.items.length ? state.notifications.items.map((item) => `<article class="notification-row ${item.read_at ? "read" : "unread"} ${escapeHtml(item.priority)}" data-notification-row="${item.id}">
+      <span class="notification-dot"></span><div class="notification-copy"><div><span class="badge">${escapeHtml(typeLabels[item.notification_type] || item.notification_type)}</span><small>${formatDate(item.event_at, true)}</small></div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p></div>
+      <div class="notification-actions"><button class="text-link" type="button" data-open-notification="${item.id}" data-alert-view="${escapeHtml(item.target_view || "")}" data-alert-filter="${escapeHtml(item.target_filter || "")}">Abrir</button><button class="secondary-button compact-button" type="button" data-toggle-notification="${item.id}" data-read="${item.read_at ? "false" : "true"}">${item.read_at ? "Marcar não lida" : "Marcar lida"}</button></div>
+    </article>`).join("") : '<div class="empty-state">Nenhuma notificação encontrada com estes filtros.</div>';
+  }
+
+  function renderNotificationPreferences() {
+    const form = $("#notification-preferences-form");
+    const preferences = state.notifications.preferences || {};
+    ["tasks_enabled", "collections_enabled", "promises_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { form.elements[name].checked = Boolean(preferences[name]); });
+  }
+
+  async function markAllNotificationsRead() {
+    await api("/api/v1/notifications/read-all", { method: "POST" });
+    await (state.currentView === "notifications" ? loadNotificationsPage() : loadOperationalAlerts());
+    toast("Todas as notificações foram marcadas como lidas.");
+  }
+
+  async function toggleNotificationStatus(id, read) {
+    await api(`/api/v1/notifications/${id}`, { method: "PATCH", body: JSON.stringify({ read }) });
+    await loadNotificationsPage();
+  }
+
+  async function saveNotificationPreferences(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const payload = {};
+    ["tasks_enabled", "collections_enabled", "promises_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { payload[name] = form.elements[name].checked; });
+    const button = $('button[type="submit"]', form); setBusy(button, true, "Salvando…");
+    try { state.notifications.preferences = await api("/api/v1/notifications/preferences", { method: "PUT", body: JSON.stringify(payload) }); toast("Preferências salvas."); }
+    catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   function collectionParams() {
@@ -1330,6 +1437,112 @@
       requestId
     };
     renderClients();
+  }
+
+  function recoveryActionButtons(item) {
+    if (!canTransitionRecovery()) return "";
+    const buttons = [];
+    if (item.status === "draft") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Iniciar</button>`);
+    if (item.status === "active") {
+      buttons.push(`<button class="edit-button" type="button" data-case-transition="on_hold" data-case-id="${escapeHtml(item.id)}">Pausar</button>`);
+      buttons.push(`<button class="edit-button" type="button" data-case-transition="resolved" data-case-id="${escapeHtml(item.id)}">Concluir</button>`);
+    }
+    if (item.status === "on_hold") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Retomar</button>`);
+    if (["resolved", "judicialized", "cancelled"].includes(item.status)) buttons.push(`<button class="edit-button" type="button" data-case-transition="archived" data-case-id="${escapeHtml(item.id)}">Arquivar</button>`);
+    return buttons.join("");
+  }
+
+  function renderRecoveryCases() {
+    const term = $("#recovery-search").value.trim().toLocaleLowerCase("pt-BR");
+    const visible = state.recovery.items.filter((item) => {
+      const name = clientName(item.client_id);
+      return !term || `${item.case_number} ${name}`.toLocaleLowerCase("pt-BR").includes(term);
+    });
+    $("#recovery-table").innerHTML = visible.length ? visible.map((item) => `
+      <tr>
+        <td><strong>${escapeHtml(item.case_number)}</strong><small>${escapeHtml(item.source)}</small></td>
+        <td><button class="text-link" type="button" data-case-client="${escapeHtml(item.client_id)}">${escapeHtml(clientName(item.client_id))}</button></td>
+        <td><span class="badge ${item.status === "cancelled" ? "danger" : ""}">${escapeHtml(recoveryStatusLabels[item.status] || item.status)}</span></td>
+        <td>${escapeHtml(recoveryStageLabels[item.stage] || item.stage)}</td>
+        <td>${formatDate(item.updated_at, true)}</td>
+        <td><span class="financial-actions">${recoveryActionButtons(item)}</span></td>
+      </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum caso encontrado.</td></tr>';
+    const first = state.recovery.total ? ((state.recovery.page - 1) * state.recovery.pageSize) + 1 : 0;
+    const last = Math.min(state.recovery.total, first + state.recovery.items.length - 1);
+    $("#recovery-page-range").textContent = state.recovery.total ? `${first}–${last} de ${state.recovery.total} casos` : "Nenhum caso para mostrar";
+    $("#recovery-page-label").textContent = `Página ${state.recovery.pages ? state.recovery.page : 0} de ${state.recovery.pages}`;
+    $("#recovery-prev-page").disabled = state.recovery.page <= 1;
+    $("#recovery-next-page").disabled = state.recovery.page >= state.recovery.pages;
+  }
+
+  async function recoveryCount(statusValue) {
+    const response = await api(`/api/v1/recovery-cases?page=1&page_size=1&status=${encodeURIComponent(statusValue)}`);
+    return Number(response.total || 0);
+  }
+
+  async function loadRecoveryCases(page = state.recovery.page, showNotice = false) {
+    if (!canReadRecovery()) return;
+    if (!state.clients.length) await loadClientOptions();
+    const params = new URLSearchParams({ page: String(Math.max(1, page)), page_size: String(state.recovery.pageSize) });
+    if (state.recovery.status !== "all") params.set("status", state.recovery.status);
+    const [response, draft, active, onHold, resolved, judicialized] = await Promise.all([
+      api(`/api/v1/recovery-cases?${params.toString()}`), recoveryCount("draft"), recoveryCount("active"),
+      recoveryCount("on_hold"), recoveryCount("resolved"), recoveryCount("judicialized")
+    ]);
+    state.recovery = { ...state.recovery, items: response.items || [], total: response.total || 0,
+      page: response.page || 1, pages: response.pages || 0 };
+    $("#recovery-total").textContent = draft + active + onHold + resolved + judicialized;
+    $("#recovery-active").textContent = active + onHold;
+    $("#recovery-closed").textContent = resolved + judicialized;
+    renderRecoveryCases();
+    if (showNotice) toast("Casos atualizados.");
+  }
+
+  async function openRecoveryCaseDialog() {
+    if (!canCreateRecovery()) return toast("Seu perfil não pode abrir casos.", "error");
+    try {
+      await loadClientOptions();
+      const form = $("#recovery-case-form");
+      form.reset();
+      $("#recovery-client").innerHTML = '<option value="">Selecione o cliente</option>' + state.clients.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.full_name)} · ${escapeHtml(item.cpf)}</option>`).join("");
+      $("#recovery-assignee").innerHTML = '<option value="">Sem responsável</option>' + (state.user ? `<option value="${escapeHtml(state.user.id)}">${escapeHtml(state.user.full_name)} (eu)</option>` : "");
+      $("#recovery-case-dialog").showModal();
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function submitRecoveryCase(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Abrindo…");
+    try {
+      const raw = Object.fromEntries(new FormData(form));
+      await api("/api/v1/recovery-cases", { method: "POST", body: JSON.stringify(compactObject(raw)) });
+      closeDialog(form.closest("dialog"));
+      await loadRecoveryCases(1);
+      toast("Caso de recuperação aberto.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function transitionRecoveryCase(caseId, target, button) {
+    const item = state.recovery.items.find((entry) => String(entry.id) === String(caseId));
+    if (!item) return;
+    let reason = null;
+    if (target === "archived") {
+      reason = window.prompt("Informe o motivo do arquivamento:");
+      if (!reason) return;
+    }
+    setBusy(button, true, "Salvando…");
+    try {
+      await api(`/api/v1/recovery-cases/${caseId}/transitions`, {
+        method: "POST", body: JSON.stringify({ status: target, version: item.version, reason })
+      });
+      await loadRecoveryCases(state.recovery.page);
+      toast("Situação do caso atualizada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   async function loadClients(page = 1) {
@@ -3669,6 +3882,22 @@
     $("#collection-assignment-form").addEventListener("submit", saveCollectionAssignment);
     $("#collection-bulk-assignment-form").addEventListener("submit", saveBulkCollectionAssignment);
     $("#collection-distribution-form").addEventListener("submit", saveCollectionDistribution);
+    $("#new-recovery-case").addEventListener("click", openRecoveryCaseDialog);
+    $("#recovery-case-form").addEventListener("submit", submitRecoveryCase);
+    $("#recovery-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      state.recovery.status = $("#recovery-status-filter").value || "all";
+      loadRecoveryCases(1).catch((error) => toast(error.message, "error"));
+    });
+    $("#recovery-search").addEventListener("input", renderRecoveryCases);
+    $("#recovery-prev-page").addEventListener("click", () => loadRecoveryCases(state.recovery.page - 1).catch((error) => toast(error.message, "error")));
+    $("#recovery-next-page").addEventListener("click", () => loadRecoveryCases(state.recovery.page + 1).catch((error) => toast(error.message, "error")));
+    $("#recovery-table").addEventListener("click", (event) => {
+      const clientButton = event.target.closest("[data-case-client]");
+      const transitionButton = event.target.closest("[data-case-transition]");
+      if (clientButton) openClientDetail(clientButton.dataset.caseClient);
+      else if (transitionButton) transitionRecoveryCase(transitionButton.dataset.caseId, transitionButton.dataset.caseTransition, transitionButton);
+    });
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
     $("#client-import-template-button").addEventListener("click", downloadClientImportTemplate);
@@ -3874,6 +4103,7 @@
       if (button.dataset.view === "collections") loadCollections().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "management") loadManagement().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "performance") loadPerformance().catch((error) => toast(error.message, "error"));
+      if (button.dataset.view === "recovery") loadRecoveryCases(1).catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));
