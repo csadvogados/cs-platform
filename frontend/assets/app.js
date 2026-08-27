@@ -3960,7 +3960,7 @@
     });
     $("#agenda-week-grid").addEventListener("click", (event) => { const item = event.target.closest("[data-agenda-id]"); if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error")); });
     $("#alert-close-button").addEventListener("click", () => setAlertPopover(false));
-    $("#alert-refresh-button").addEventListener("click", () => loadOperationalAlerts(true).catch((error) => toast(error.message, "error")));
+    $("#alert-refresh-button")?.addEventListener("click", () => loadOperationalAlerts(true).catch((error) => toast(error.message, "error")));
     $("#alert-list").addEventListener("click", (event) => {
       const item = event.target.closest("[data-alert-view]");
       if (item) openOperationalAlert(item.dataset.alertView, item.dataset.alertFilter).catch((error) => toast(error.message, "error"));
