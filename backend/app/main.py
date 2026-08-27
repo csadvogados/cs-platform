@@ -19,6 +19,7 @@ from app.api.routes import (
     diagnoses,
     financial,
     performance,
+    payment_plans,
     recovery_cases,
     notifications,
     health,
@@ -197,6 +198,11 @@ app.include_router(
     diagnoses.router,
     prefix=f"{settings.api_v1_prefix}/diagnoses",
     tags=["Diagnoses"],
+)
+app.include_router(
+    payment_plans.router,
+    prefix=f"{settings.api_v1_prefix}/payment-plans",
+    tags=["Payment Plan Engine"],
 )
 app.include_router(
     recovery_cases.router,
