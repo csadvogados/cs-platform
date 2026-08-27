@@ -17,6 +17,12 @@ class DiagnosisPreview(BaseModel):
     eligible_debts: int
     attention_debts: int
     chart_data: dict
+    risk_level: str
+    recommended_strategy: str
+    max_payment_capacity: Decimal
+    data_quality_score: int
+    score_breakdown: dict[str, int]
+    analysis_snapshot: dict
 class DiagnosisRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -34,4 +40,10 @@ class DiagnosisRead(BaseModel):
     eligibility_result: str
     economic_conclusion: str
     legal_alerts: str
+    risk_level: str
+    recommended_strategy: str
+    max_payment_capacity: Decimal
+    data_quality_score: int
+    score_breakdown: dict[str, int]
+    analysis_snapshot: dict
     created_at: datetime
