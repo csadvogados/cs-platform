@@ -19,6 +19,8 @@ from app.api.routes import (
     diagnoses,
     financial,
     performance,
+    recovery_cases,
+    notifications,
     health,
     metrics,
     crm,
@@ -187,9 +189,19 @@ app.include_router(
     tags=["Performance goals"],
 )
 app.include_router(
+    notifications.router,
+    prefix=f"{settings.api_v1_prefix}/notifications",
+    tags=["Notifications"],
+)
+app.include_router(
     diagnoses.router,
     prefix=f"{settings.api_v1_prefix}/diagnoses",
     tags=["Diagnoses"],
+)
+app.include_router(
+    recovery_cases.router,
+    prefix=f"{settings.api_v1_prefix}/recovery-cases",
+    tags=["Recovery Cases"],
 )
 app.include_router(
     dashboard.router,
