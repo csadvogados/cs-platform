@@ -1,0 +1,35 @@
+CS Recupera - Negotiation Engine 1.0
+
+COMO INSTALAR
+1. Abra a pasta do projeto CS Platform.
+2. Copie a pasta "backend" desta entrega.
+3. Cole na raiz do projeto, onde já existe a pasta "backend".
+4. Confirme a substituição dos arquivos main.py e models/__init__.py.
+5. Envie as alterações para a branch de homologação staging-cs-recupera.
+6. O Railway executará a migração 0018_negotiation_engine automaticamente durante o deploy.
+
+ARQUIVOS NOVOS
+- backend/app/models/negotiation.py
+- backend/app/schemas/negotiation.py
+- backend/app/services/negotiation_engine.py
+- backend/app/api/routes/negotiations.py
+- backend/alembic/versions/0018_negotiation_engine.py
+- backend/tests/test_negotiation_engine.py
+
+ARQUIVOS ATUALIZADOS
+- backend/app/models/__init__.py
+- backend/app/main.py
+
+VALIDAÇÃO REALIZADA
+- 8 testes aprovados em conjunto com Recovery Core, Diagnosis Engine e Payment Plan Engine.
+
+ENDPOINTS
+- POST /api/v1/negotiations
+- GET /api/v1/negotiations
+- GET /api/v1/negotiations/{negotiation_id}
+- POST /api/v1/negotiations/{negotiation_id}/offers
+- POST /api/v1/negotiations/{negotiation_id}/offers/{offer_id}/decision
+
+IMPORTANTE
+- Instale primeiro as entregas anteriores, incluindo a migração 0017.
+- Publique somente em homologação nesta etapa.
