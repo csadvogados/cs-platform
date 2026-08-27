@@ -12,7 +12,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/assets/cs-platform-social.png" />
     <title>CS Platform</title>
-    <link rel="stylesheet" href="./assets/styles.css?v=5.25.0" />
+    <link rel="stylesheet" href="./assets/styles.css?v=5.26.0" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -68,7 +68,9 @@
             <button class="nav-item active" data-view="dashboard"><span aria-hidden="true">⌂</span> Visão geral</button>
             <button id="management-nav-item" class="nav-item" data-view="management" hidden><span aria-hidden="true">▥</span> Indicadores</button>
             <button id="performance-nav-item" class="nav-item" data-view="performance" hidden><span aria-hidden="true">◎</span> Metas</button>
+            <button class="nav-item" data-view="notifications"><span aria-hidden="true">♢</span> Notificações</button>
             <button class="nav-item" data-view="clients"><span aria-hidden="true">◎</span> Clientes</button>
+            <button id="recovery-nav-item" class="nav-item" data-view="recovery"><span aria-hidden="true">↻</span> CS Recupera</button>
             <button class="nav-item" data-view="collections"><span aria-hidden="true">▣</span> Cobranças</button>
             <button class="nav-item" data-view="agenda"><span aria-hidden="true">◫</span> Agenda</button>
             <button class="nav-item" data-view="crm"><span aria-hidden="true">◇</span> CRM</button>
@@ -99,9 +101,9 @@
             <div class="alert-center">
               <button id="alert-center-button" class="alert-button" type="button" aria-label="Abrir central de alertas" aria-expanded="false">🔔<span id="alert-count-badge" class="alert-count-badge" hidden>0</span></button>
               <section id="alert-popover" class="alert-popover" aria-label="Central de alertas" hidden>
-                <div class="alert-popover-header"><div><span>ATENÇÃO OPERACIONAL</span><strong>Central de alertas</strong></div><button id="alert-close-button" class="icon-button" type="button" aria-label="Fechar alertas">×</button></div>
+                <div class="alert-popover-header"><div><span>ATUALIZAÇÕES</span><strong>Notificações</strong></div><button id="alert-close-button" class="icon-button" type="button" aria-label="Fechar notificações">×</button></div>
                 <div id="alert-list" class="alert-list"><p class="alert-empty">Carregando alertas…</p></div>
-                <button id="alert-refresh-button" class="secondary-button alert-refresh-button" type="button">Atualizar alertas</button>
+                <div class="alert-popover-actions"><button id="alert-read-all-button" class="text-link" type="button">Marcar todas como lidas</button><button id="alert-view-all-button" class="secondary-button" type="button">Ver todas</button></div>
               </section>
             </div>
             <button id="refresh-button" class="secondary-button" type="button">Atualizar</button>
@@ -195,6 +197,21 @@
             <section class="panel performance-ranking-panel"><div class="panel-header"><div><p class="eyebrow dark">EQUIPE</p><h3>Ranking de desempenho</h3></div><span>Ordenado pelo cumprimento das metas</span></div><div class="table-wrap"><table><thead><tr><th>Posição</th><th>Responsável</th><th>Média das metas</th><th>Metas atingidas</th><th>Atendimentos</th><th>Tarefas</th><th>Vendas</th><th>Recebimentos</th></tr></thead><tbody id="performance-ranking-body"><tr><td colspan="8" class="empty-cell">Carregando equipe…</td></tr></tbody></table></div></section>
           </section>
 
+          <section id="view-notifications" class="page-view" aria-labelledby="notifications-heading">
+            <div class="section-intro"><div><p class="eyebrow dark">ACOMPANHAMENTO PESSOAL</p><h1 id="notifications-heading">Central de notificações</h1><p>Acompanhe prazos, cobranças, promessas e metas que precisam da sua atenção.</p></div><div class="button-row"><button id="notifications-read-all" class="secondary-button" type="button">Marcar todas como lidas</button><button id="notifications-refresh" class="primary-button" type="button">Atualizar notificações</button></div></div>
+            <div class="notification-summary-grid"><article><span>Não lidas</span><strong id="notifications-unread">—</strong></article><article class="danger-summary"><span>Críticas</span><strong id="notifications-critical">—</strong></article><article><span>Exibidas</span><strong id="notifications-total">—</strong></article></div>
+            <form id="notification-filter-form" class="notification-filter-bar">
+              <label><span>Tipo</span><select name="notification_type"><option value="all">Todos</option><option value="task">Tarefas</option><option value="collection">Cobranças</option><option value="promise">Promessas</option><option value="goal">Metas</option></select></label>
+              <label><span>Prioridade</span><select name="priority"><option value="all">Todas</option><option value="critical">Crítica</option><option value="high">Alta</option><option value="normal">Normal</option></select></label>
+              <label><span>Situação</span><select name="read_status"><option value="all">Todas</option><option value="unread">Não lidas</option><option value="read">Lidas</option></select></label>
+              <button class="primary-button" type="submit">Aplicar filtros</button><button id="notification-clear-filters" class="secondary-button" type="button">Limpar</button>
+            </form>
+            <div class="notification-layout">
+              <section class="panel notification-feed-panel"><div class="panel-header"><div><p class="eyebrow dark">CAIXA DE ENTRADA</p><h3>Seus avisos</h3></div><span id="notification-list-count">0 notificações</span></div><div id="notification-page-list" class="notification-page-list"><div class="loading-row">Carregando notificações…</div></div></section>
+              <section class="panel notification-preferences-panel"><div class="panel-header"><div><p class="eyebrow dark">PREFERÊNCIAS</p><h3>O que deseja receber</h3></div></div><form id="notification-preferences-form" class="notification-preferences-form"><label><input name="tasks_enabled" type="checkbox" /> Tarefas próximas e atrasadas</label><label><input name="collections_enabled" type="checkbox" /> Parcelas e cobranças</label><label><input name="promises_enabled" type="checkbox" /> Promessas de pagamento</label><label><input name="goals_enabled" type="checkbox" /> Metas e projeções</label><label class="preference-emphasis"><input name="only_assigned_items" type="checkbox" /> Mostrar somente itens atribuídos a mim</label><button class="primary-button" type="submit">Salvar preferências</button></form></section>
+            </div>
+          </section>
+
           <section id="view-clients" class="page-view" aria-labelledby="clients-heading">
             <div class="section-intro"><div><p class="eyebrow dark">RELACIONAMENTO</p><h1 id="clients-heading">Clientes</h1><p>Consulte a base e registre novos atendimentos.</p></div><div class="button-row"><button id="import-clients-button" class="secondary-button" type="button" data-open-dialog="client-import-dialog" hidden>Importar CSV</button><button id="export-clients-button" class="secondary-button" type="button" hidden>Exportar CSV</button><button class="primary-button" data-open-dialog="client-dialog">Novo cliente</button></div></div>
             <div class="toolbar">
@@ -221,6 +238,22 @@
 
           <section id="view-clientDetail" class="page-view" aria-label="Detalhes do cliente">
             <div id="client-detail-content"><div class="loading-row">Carregando dados do cliente…</div></div>
+          </section>
+
+          <section id="view-recovery" class="page-view" aria-labelledby="recovery-heading">
+            <div class="section-intro"><div><p class="eyebrow dark">RECOVERY CORE</p><h1 id="recovery-heading">CS Recupera</h1><p>Organize cada operação de recuperação sem misturar os ciclos do cliente.</p></div><button id="new-recovery-case" class="primary-button" type="button">Abrir caso</button></div>
+            <div class="recovery-summary-grid">
+              <article><span>Total de casos</span><strong id="recovery-total">—</strong><small>Na organização</small></article>
+              <article><span>Em andamento</span><strong id="recovery-active">—</strong><small>Ativos ou pausados</small></article>
+              <article><span>Concluídos</span><strong id="recovery-closed">—</strong><small>Resolvidos ou judicializados</small></article>
+            </div>
+            <form id="recovery-filter-form" class="toolbar">
+              <label class="search-field"><span aria-hidden="true">⌕</span><input id="recovery-search" type="search" placeholder="Buscar cliente ou número do caso" /></label>
+              <label class="client-status-filter"><span>Situação</span><select id="recovery-status-filter" name="status"><option value="all">Todas</option><option value="draft">Rascunho</option><option value="active">Ativo</option><option value="on_hold">Pausado</option><option value="resolved">Resolvido</option><option value="judicialized">Judicializado</option><option value="cancelled">Cancelado</option><option value="archived">Arquivado</option></select></label>
+              <button class="secondary-button" type="submit">Filtrar</button>
+            </form>
+            <div class="table-wrap"><table><thead><tr><th>Caso</th><th>Cliente</th><th>Situação</th><th>Etapa</th><th>Atualização</th><th>Ações</th></tr></thead><tbody id="recovery-table"><tr><td colspan="6" class="empty-cell">Carregando casos…</td></tr></tbody></table></div>
+            <nav class="client-pagination" aria-label="Paginação de casos"><span id="recovery-page-range">Nenhum caso para mostrar</span><div><button id="recovery-prev-page" class="secondary-button" type="button" disabled>Anterior</button><strong id="recovery-page-label">Página 0 de 0</strong><button id="recovery-next-page" class="secondary-button" type="button" disabled>Próxima</button></div></nav>
           </section>
 
           <section id="view-collections" class="page-view" aria-labelledby="collections-heading">
@@ -409,7 +442,7 @@
                 <div id="session-list" class="session-list"><div class="loading-row">Carregando sessões…</div></div>
               </section>
 
-              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.25.0</dd></div></dl></section>
+              <section class="panel api-panel"><p class="eyebrow dark">AMBIENTE</p><h3>Conexão da API</h3><dl class="definition-list"><div><dt>Endereço</dt><dd id="api-address">—</dd></div><div><dt>Status</dt><dd><span id="api-status" class="status-dot">Verificando</span></dd></div><div><dt>Versão do frontend</dt><dd>5.26.0</dd></div></dl></section>
             </div>
           </section>
         </main>
@@ -638,6 +671,19 @@
       </form>
     </dialog>
 
+    <dialog id="recovery-case-dialog" class="modal small-modal">
+      <form id="recovery-case-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">CS RECUPERA</p><h2>Abrir caso</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid single">
+          <label><span>Cliente *</span><select id="recovery-client" name="client_id" required><option value="">Selecione o cliente</option></select></label>
+          <label><span>Responsável</span><select id="recovery-assignee" name="assigned_user_id"><option value="">Sem responsável</option></select></label>
+          <label><span>Origem</span><select name="source"><option value="manual">Cadastro manual</option><option value="import">Importação</option><option value="api">Integração</option></select></label>
+          <label><span>Observações</span><textarea name="notes" rows="4" maxlength="4000" placeholder="Contexto inicial do caso"></textarea></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Abrir caso</button></div>
+      </form>
+    </dialog>
+
     <dialog id="income-dialog" class="modal small-modal">
       <form id="income-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">FINANCEIRO</p><h2>Nova receita</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
@@ -704,6 +750,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.25.0"></script>
+    <script src="./assets/app.js?v=5.27.0-recovery-core"></script>
   </body>
 </html>
