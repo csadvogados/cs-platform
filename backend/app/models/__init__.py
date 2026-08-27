@@ -6,6 +6,8 @@ from app.models.audit import AuditEvent
 from app.models.financial import CollectionAction, Income, Expense, Creditor, Debt, Diagnosis, PaymentAgreement, PaymentInstallment
 from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask
 from app.models.performance import PerformanceGoal
+from app.models.notification import Notification, NotificationPreference
+from app.models.recovery import RecoveryCase, RecoveryCaseSource, RecoveryCaseStage, RecoveryCaseStatus
 from app.models.access_control import (
     PasswordHistory, Permission, Role, UserInvitation, UserSession,
     role_permissions, user_roles,
@@ -18,4 +20,6 @@ __all__ = [
     "role_permissions", "user_roles",
     "CRMContact", "CRMInteraction", "CRMOpportunity", "CRMTask",
     "PerformanceGoal",
+    "Notification", "NotificationPreference",
+    "RecoveryCase", "RecoveryCaseSource", "RecoveryCaseStage", "RecoveryCaseStatus",
 ]

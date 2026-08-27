@@ -31,3 +31,4 @@ class Client(TimestampMixin, Base):
     expenses = relationship("Expense", back_populates="client", cascade="all, delete-orphan")
     debts = relationship("Debt", back_populates="client", cascade="all, delete-orphan")
     diagnoses = relationship("Diagnosis", back_populates="client", cascade="all, delete-orphan")
+    recovery_cases = relationship("RecoveryCase", back_populates="client", cascade="all, delete-orphan")
