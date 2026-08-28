@@ -766,6 +766,18 @@
       </form>
     </dialog>
 
+    <dialog id="document-dialog" class="modal small-modal">
+      <form id="document-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">DOCUMENTOS</p><h2>Adicionar documento</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid single">
+          <label><span>Categoria *</span><select name="category" required><option value="identification">Identificação</option><option value="income_proof">Comprovante de renda</option><option value="residence_proof">Comprovante de residência</option><option value="debt_statement">Demonstrativo da dívida</option><option value="contract">Contrato</option><option value="other">Outro</option></select></label>
+          <label><span>Arquivo *</span><input name="file" type="file" accept="application/pdf,image/jpeg,image/png" required /></label>
+        </div>
+        <p class="form-help">Formatos aceitos: PDF, JPG e PNG, com no máximo 10 MB.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Enviar documento</button></div>
+      </form>
+    </dialog>
+
     <dialog id="payment-plan-dialog" class="modal">
       <form id="payment-plan-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">PLANO DE PAGAMENTO</p><h2>Simular cenários</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>

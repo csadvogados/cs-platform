@@ -29,6 +29,7 @@ from app.api.routes import (
     organizations,
     users,
     access_control,
+    documents,
 )
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -199,6 +200,11 @@ app.include_router(
     diagnoses.router,
     prefix=f"{settings.api_v1_prefix}/diagnoses",
     tags=["Diagnoses"],
+)
+app.include_router(
+    documents.router,
+    prefix=f"{settings.api_v1_prefix}/documents",
+    tags=["Client Documents"],
 )
 app.include_router(
     payment_plans.router,

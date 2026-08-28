@@ -9,6 +9,7 @@ from app.models.performance import PerformanceGoal
 from app.models.notification import Notification, NotificationPreference
 from app.models.recovery import RecoveryCase, RecoveryCaseSource, RecoveryCaseStage, RecoveryCaseStatus
 from app.models.negotiation import Negotiation, NegotiationOffer
+from app.models.document import ClientDocument
 from app.models.access_control import (
     PasswordHistory, Permission, Role, UserInvitation, UserSession,
     role_permissions, user_roles,
@@ -23,5 +24,5 @@ __all__ = [
     "PerformanceGoal",
     "Notification", "NotificationPreference",
     "RecoveryCase", "RecoveryCaseSource", "RecoveryCaseStage", "RecoveryCaseStatus",
-    "Negotiation", "NegotiationOffer",
+    "Negotiation", "NegotiationOffer", "ClientDocument",
 ]

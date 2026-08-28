@@ -20,7 +20,7 @@
     selectedClient: null,
     editingClientId: null,
     clientImport: { filename: "", clients: [], preview: null },
-    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [], dossier: null },
+    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [], dossier: null, documents: [], judicialChecklist: null },
     paymentPlan: null,
     editingFinancial: null,
     installmentPaymentTarget: null,
@@ -1587,7 +1587,9 @@
       `/api/v1/financial/clients/${client.id}/agreements`,
       `/api/v1/negotiations?client_id=${encodeURIComponent(client.id)}`,
       `/api/v1/recovery-cases?page=1&page_size=100&client_id=${encodeURIComponent(client.id)}`,
-      `/api/v1/diagnoses/${client.id}/dossier`
+      `/api/v1/diagnoses/${client.id}/dossier`,
+      `/api/v1/documents/clients/${client.id}`,
+      `/api/v1/documents/clients/${client.id}/judicial-checklist`
     ];
     const results = await Promise.allSettled(paths.map((path) => api(path)));
     const valueAt = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
@@ -1601,7 +1603,9 @@
       agreements: Array.isArray(valueAt(6, [])) ? valueAt(6, []) : [],
       negotiations: Array.isArray(valueAt(7, [])) ? valueAt(7, []) : [],
       recoveryCases: Array.isArray(valueAt(8, {}).items) ? valueAt(8, {}).items : [],
-      dossier: valueAt(9, null)
+      dossier: valueAt(9, null),
+      documents: Array.isArray(valueAt(10, [])) ? valueAt(10, []) : [],
+      judicialChecklist: valueAt(11, null)
     };
     fillCreditorSelect();
     fillAgreementDebtSelect();
@@ -2776,7 +2780,7 @@
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
-    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history, dossier } = state.financial;
+    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history, dossier, documents, judicialChecklist } = state.financial;
     const totalIncome = incomes.reduce((total, item) => total + Number(item.net_amount || 0), 0);
     const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount || 0), 0);
     const totalDebt = debts.reduce((total, item) => total + Number(item.current_balance || 0), 0);
@@ -2836,6 +2840,12 @@
         <div class="agreement-list">${agreements.length ? agreements.map(renderAgreementCard).join("") : '<div class="empty-state">Nenhum acordo de pagamento cadastrado.</div>'}</div>
       </section>
 
+      <section class="panel detail-panel document-panel">
+        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ JUDICIAL</p><h3>Documentos do cliente</h3></div><div class="button-row"><span class="badge ${judicialChecklist?.ready ? "" : "danger"}">${judicialChecklist?.ready ? "Pronto para revisão" : "Documentação pendente"}</span><button class="primary-button" type="button" data-open-dialog="document-dialog">Adicionar documento</button></div></div>
+        ${judicialChecklist?.missing_categories?.length ? `<div class="diagnosis-conclusion"><strong>Itens pendentes</strong><ul>${judicialChecklist.missing_categories.map((item) => `<li>${escapeHtml({identification:"Identificação",income_proof:"Comprovante de renda",residence_proof:"Comprovante de residência",debt_statement:"Demonstrativo da dívida"}[item] || item)}</li>`).join("")}</ul></div>` : ""}
+        <div class="detail-list">${documents.length ? documents.map((item) => `<article><span><strong>${escapeHtml(item.filename)}</strong><small>${escapeHtml(item.category)} · ${(Number(item.size_bytes || 0) / 1024).toLocaleString("pt-BR", {maximumFractionDigits:1})} KB</small></span><div class="detail-item-actions"><span class="badge ${item.status === "rejected" ? "danger" : ""}">${escapeHtml({pending:"Pendente",validated:"Validado",rejected:"Rejeitado"}[item.status] || item.status)}</span><span class="financial-actions"><button class="edit-button" type="button" data-download-document="${escapeHtml(item.id)}">Abrir</button>${item.status === "pending" ? `<button class="edit-button" type="button" data-validate-document="${escapeHtml(item.id)}" data-document-status="validated">Validar</button><button class="delete-button" type="button" data-validate-document="${escapeHtml(item.id)}" data-document-status="rejected">Rejeitar</button>` : ""}</span></div></article>`).join("") : '<div class="empty-state">Nenhum documento enviado.</div>'}</div>
+      </section>
+
       <section class="panel diagnosis-panel">
         <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ CONSOLIDADO</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir dossiê</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
         ${dossier ? `<div class="diagnosis-conclusion"><strong>Conferência do dossiê</strong>${dossier.missing_information?.length ? `<ul>${dossier.missing_information.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<p class="muted">Dossiê completo para revisão profissional.</p>'}<p class="muted">${dossier.creditors?.length || 0} credor(es) · ${dossier.debts?.length || 0} dívida(s) · ${dossier.latest_diagnosis ? `diagnóstico salvo v${escapeHtml(dossier.latest_diagnosis.version)}` : "sem diagnóstico salvo"}</p></div>` : ""}
@@ -2879,6 +2889,49 @@
     $$('[data-new-offer]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openNegotiationOfferDialog(button.dataset.newOffer)));
     $$('[data-offer-decision]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => decideNegotiationOffer(button)));
     $$('[data-generate-agreement]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => generateAgreementFromOffer(button)));
+    $$('[data-download-document]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => downloadDocument(button.dataset.downloadDocument)));
+    $$('[data-validate-document]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => validateDocument(button.dataset.validateDocument, button.dataset.documentStatus, button)));
+  }
+
+  async function submitDocument(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !state.selectedClient) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Enviando…");
+    try {
+      await api(`/api/v1/documents/clients/${state.selectedClient.id}`, { method: "POST", body: new FormData(form) });
+      form.closest("dialog").close();
+      await loadClientDetail(state.selectedClient.id);
+      toast("Documento enviado para validação.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function downloadDocument(documentId) {
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const response = await fetch(`${API_BASE}/api/v1/documents/${documentId}/download`, { headers });
+      if (!response.ok) throw new Error(await readError(response));
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function validateDocument(documentId, statusValue, button) {
+    const notes = window.prompt(statusValue === "validated" ? "Observação da validação (opcional):" : "Informe o motivo da rejeição:", "");
+    if (notes === null) return;
+    setBusy(button, true, statusValue === "validated" ? "Validando…" : "Rejeitando…");
+    try {
+      await api(`/api/v1/documents/${documentId}/validation`, { method: "POST", body: JSON.stringify({ status: statusValue, notes: notes || null }) });
+      await loadClientDetail(state.selectedClient.id);
+      toast(statusValue === "validated" ? "Documento validado." : "Documento rejeitado.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { if (document.body.contains(button)) setBusy(button, false); }
   }
 
   function clientName(id) {
@@ -4273,6 +4326,7 @@
       if (state.audit.page < state.audit.pages) loadAudit(state.audit.page + 1).catch((error) => toast(error.message, "error"));
     });
     $("#client-form").addEventListener("submit", submitClient);
+    $("#document-form").addEventListener("submit", submitDocument);
     $("#user-form").addEventListener("submit", submitUser);
     $("#organization-form").addEventListener("submit", submitOrganization);
     $("#password-form").addEventListener("submit", submitPasswordChange);
