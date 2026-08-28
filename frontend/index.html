@@ -748,8 +748,43 @@
       </form>
     </dialog>
 
+    <dialog id="negotiation-dialog" class="modal">
+      <form id="negotiation-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">NEGOTIATION ENGINE</p><h2>Abrir negociação</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid">
+          <label class="wide"><span>Caso de recuperação *</span><select id="negotiation-case" name="recovery_case_id" required><option value="">Selecione o caso</option></select></label>
+          <label class="wide"><span>Dívida *</span><select id="negotiation-debt" name="debt_id" required><option value="">Selecione a dívida</option></select></label>
+          <label><span>Canal *</span><select name="channel" required><option value="whatsapp">WhatsApp</option><option value="phone">Telefone</option><option value="email">E-mail</option><option value="portal">Portal do credor</option><option value="consumer_gov">Consumidor.gov</option><option value="in_person">Presencial</option><option value="other">Outro</option></select></label>
+          <label><span>Validade da negociação</span><input name="expires_at" type="datetime-local" /></label>
+          <label class="wide"><span>Referência externa</span><input name="external_reference" maxlength="120" placeholder="Protocolo, chamado ou identificação do credor" /></label>
+          <label class="wide"><span>Observações</span><textarea name="notes" rows="3" maxlength="4000"></textarea></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Abrir negociação</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="negotiation-offer-dialog" class="modal">
+      <form id="negotiation-offer-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">PROPOSTA</p><h2>Registrar proposta</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input id="negotiation-offer-id" name="negotiation_id" type="hidden" />
+        <div class="form-grid">
+          <label><span>Origem *</span><select name="origin" required><option value="creditor">Credor</option><option value="client">Cliente</option><option value="system">Sistema</option></select></label>
+          <label><span>Valor ofertado *</span><input name="offered_amount" type="number" min="0.01" step="0.01" required /></label>
+          <label><span>Entrada</span><input name="down_payment" type="number" min="0" step="0.01" value="0" /></label>
+          <label><span>Parcelas *</span><input name="installment_count" type="number" min="1" max="600" value="12" required /></label>
+          <label><span>Valor da parcela *</span><input name="installment_amount" type="number" min="0.01" step="0.01" required /></label>
+          <label><span>Juros anuais (%)</span><input name="annual_interest_rate" type="number" min="0" max="100" step="0.01" value="0" /></label>
+          <label><span>Primeiro vencimento *</span><input name="first_due_date" type="date" required /></label>
+          <label><span>Validade da proposta</span><input name="valid_until" type="datetime-local" /></label>
+          <label class="wide"><span>Observações</span><textarea name="notes" rows="3" maxlength="4000"></textarea></label>
+        </div>
+        <p class="form-help">Após salvar, o motor avaliará capacidade, desconto e risco, apresentando uma recomendação automática.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Avaliar proposta</button></div>
+      </form>
+    </dialog>
+
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.27.0-recovery-core"></script>
+    <script src="./assets/app.js?v=5.28.0-negotiation-engine"></script>
   </body>
 </html>

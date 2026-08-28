@@ -662,6 +662,20 @@ tr:last-child td { border-bottom: 0; }
 .detail-item-actions > strong { color: var(--forest-2); font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
 .financial-actions { display: inline-flex; align-items: center; gap: 6px; }
 .agreement-panel { margin-top: 20px; }
+.negotiation-panel { margin-top: 20px; }
+.negotiation-list { display: grid; gap: 14px; }
+.negotiation-card { border: 1px solid var(--line); background: #fffdfa; }
+.negotiation-card > header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; padding: 18px; border-bottom: 1px solid var(--line); }
+.negotiation-card h4 { margin: 0 0 5px; font-size: 15px; }
+.negotiation-card header p { margin: 0; color: var(--ink-soft); font-size: 11px; }
+.negotiation-offers { display: grid; gap: 10px; padding: 16px 18px 18px; }
+.negotiation-offer { display: grid; grid-template-columns: minmax(150px,1.2fr) repeat(3,minmax(100px,.7fr)) minmax(180px,1.2fr); gap: 14px; align-items: center; padding: 13px 14px; border: 1px solid #ded9cf; background: var(--surface); }
+.negotiation-offer span, .negotiation-offer strong, .negotiation-offer small { display: block; }
+.negotiation-offer small { margin-bottom: 4px; color: var(--ink-soft); font-size: 10px; }
+.engine-decision { border-left: 4px solid var(--forest-2); padding-left: 10px; }
+.engine-decision.reject { border-color: var(--danger); }
+.engine-decision.counter, .engine-decision.manual_review { border-color: #b88224; }
+.negotiation-empty { padding: 10px 0; color: var(--ink-soft); font-size: 12px; }
 .agreement-panel td:first-child strong { display: block; }
 .agreement-panel td:first-child small { display: block; margin-top: 4px; color: var(--ink-soft); }
 .agreement-list { display: grid; gap: 14px; }
@@ -934,6 +948,9 @@ tr:last-child td { border-bottom: 0; }
   .agreement-item > summary { grid-template-columns: 1fr 1fr; }
   .agreement-item > summary span:first-child { grid-column: 1 / -1; }
   .agreement-toolbar { align-items: stretch; flex-direction: column; }
+  .negotiation-card > header { flex-direction: column; }
+  .negotiation-offer { grid-template-columns: 1fr 1fr; }
+  .engine-decision { grid-column: 1 / -1; }
   .crm-task-row { grid-template-columns: auto minmax(0, 1fr); }
   .crm-task-row .list-meta { grid-column: 2; text-align: left; }
   .crm-task-row .crm-item-actions { grid-column: 1 / -1; justify-content: flex-start; }

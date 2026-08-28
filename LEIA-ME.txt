@@ -1,35 +1,19 @@
-CS Recupera - Negotiation Engine 1.0
+CS Recupera - Interface do Negotiation Engine 1.0
 
-COMO INSTALAR
-1. Abra a pasta do projeto CS Platform.
-2. Copie a pasta "backend" desta entrega.
-3. Cole na raiz do projeto, onde já existe a pasta "backend".
-4. Confirme a substituição dos arquivos main.py e models/__init__.py.
-5. Envie as alterações para a branch de homologação staging-cs-recupera.
-6. O Railway executará a migração 0018_negotiation_engine automaticamente durante o deploy.
+INSTALAÇÃO
+1. Extraia o ZIP.
+2. Copie a pasta frontend.
+3. Cole na raiz do projeto CS Platform.
+4. Confirme a substituição de index.html, assets/app.js e assets/styles.css.
+5. Faça o commit na branch staging-cs-recupera.
+6. Clique em Push origin no GitHub Desktop.
+7. Aguarde o serviço cs-platform-web ficar Active no Railway.
+8. Atualize a página de homologação com Ctrl+F5.
 
-ARQUIVOS NOVOS
-- backend/app/models/negotiation.py
-- backend/app/schemas/negotiation.py
-- backend/app/services/negotiation_engine.py
-- backend/app/api/routes/negotiations.py
-- backend/alembic/versions/0018_negotiation_engine.py
-- backend/tests/test_negotiation_engine.py
-
-ARQUIVOS ATUALIZADOS
-- backend/app/models/__init__.py
-- backend/app/main.py
-
-VALIDAÇÃO REALIZADA
-- 8 testes aprovados em conjunto com Recovery Core, Diagnosis Engine e Payment Plan Engine.
-
-ENDPOINTS
-- POST /api/v1/negotiations
-- GET /api/v1/negotiations
-- GET /api/v1/negotiations/{negotiation_id}
-- POST /api/v1/negotiations/{negotiation_id}/offers
-- POST /api/v1/negotiations/{negotiation_id}/offers/{offer_id}/decision
+TESTES
+- O arquivo ROTEIRO_TESTE_NEGOTIATION_ENGINE.txt contém cinco testes manuais.
+- O arquivo frontend/tests/negotiation_ui.smoke.test.mjs contém os testes automatizados da interface.
 
 IMPORTANTE
-- Instale primeiro as entregas anteriores, incluindo a migração 0017.
-- Publique somente em homologação nesta etapa.
+- Esta entrega pressupõe que a API com a migração 0018 já esteja publicada.
+- Não publique na branch main nesta etapa.

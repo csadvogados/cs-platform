@@ -20,7 +20,7 @@
     selectedClient: null,
     editingClientId: null,
     clientImport: { filename: "", clients: [], preview: null },
-    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], diagnosis: null, history: [] },
+    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [] },
     editingFinancial: null,
     installmentPaymentTarget: null,
     editingUserId: null,
@@ -119,6 +119,8 @@
     crm_opportunity: "Oportunidade",
     crm_task: "Tarefa",
     recovery_case: "Caso de recuperação"
+    ,negotiation: "Negociação"
+    ,negotiation_offer: "Proposta de negociação"
   };
 
   const recoveryStatusLabels = {
@@ -394,6 +396,18 @@
 
   function canTransitionRecovery() {
     return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.transition");
+  }
+
+  function canCreateNegotiation() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("negotiation.create");
+  }
+
+  function canUpdateNegotiation() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("negotiation.update");
+  }
+
+  function canApproveNegotiation() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("negotiation.approve");
   }
 
   function canManageCollectionQueue() {
@@ -1564,7 +1578,9 @@
       "/api/v1/financial/creditors",
       `/api/v1/diagnoses/${client.id}/preview`,
       `/api/v1/diagnoses/${client.id}/history?limit=50`,
-      `/api/v1/financial/clients/${client.id}/agreements`
+      `/api/v1/financial/clients/${client.id}/agreements`,
+      `/api/v1/negotiations?client_id=${encodeURIComponent(client.id)}`,
+      `/api/v1/recovery-cases?page=1&page_size=100&client_id=${encodeURIComponent(client.id)}`
     ];
     const results = await Promise.allSettled(paths.map((path) => api(path)));
     const valueAt = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
@@ -1575,7 +1591,9 @@
       creditors: Array.isArray(valueAt(3, [])) ? valueAt(3, []) : [],
       diagnosis: valueAt(4, null),
       history: Array.isArray(valueAt(5, [])) ? valueAt(5, []) : [],
-      agreements: Array.isArray(valueAt(6, [])) ? valueAt(6, []) : []
+      agreements: Array.isArray(valueAt(6, [])) ? valueAt(6, []) : [],
+      negotiations: Array.isArray(valueAt(7, [])) ? valueAt(7, []) : [],
+      recoveryCases: Array.isArray(valueAt(8, {}).items) ? valueAt(8, {}).items : []
     };
     fillCreditorSelect();
     fillAgreementDebtSelect();
@@ -2710,10 +2728,39 @@
     dialog.showModal();
   }
 
+  const negotiationStatusLabels = { open: "Em aberto", accepted: "Aceita", rejected: "Recusada", expired: "Expirada", cancelled: "Cancelada" };
+  const offerStatusLabels = { pending: "Pendente", accepted: "Aceita", rejected: "Recusada", expired: "Expirada", withdrawn: "Retirada" };
+  const engineDecisionLabels = { accept: "Recomenda aceitar", counter: "Recomenda contraproposta", reject: "Recomenda rejeitar", manual_review: "Revisão manual" };
+
+  function negotiationDebt(negotiation) {
+    return state.financial.debts.find((item) => String(item.id) === String(negotiation.debt_id));
+  }
+
+  function renderNegotiationOffer(negotiation, offer) {
+    const pendingActions = offer.status === "pending" && canApproveNegotiation()
+      ? `<span class="financial-actions"><button class="edit-button" type="button" data-offer-decision="accepted" data-negotiation-id="${escapeHtml(negotiation.id)}" data-offer-id="${escapeHtml(offer.id)}">Aceitar</button><button class="delete-button" type="button" data-offer-decision="rejected" data-negotiation-id="${escapeHtml(negotiation.id)}" data-offer-id="${escapeHtml(offer.id)}">Rejeitar</button></span>` : "";
+    return `<article class="negotiation-offer">
+      <span><small>Proposta ${escapeHtml(offer.sequence_number)} · ${escapeHtml(offer.origin === "creditor" ? "Credor" : offer.origin === "client" ? "Cliente" : "Sistema")}</small><strong>${formatCurrency(offer.offered_amount)}</strong></span>
+      <span><small>Condição</small><strong>${escapeHtml(offer.installment_count)} × ${formatCurrency(offer.installment_amount)}</strong></span>
+      <span><small>Uso da capacidade</small><strong>${Number(offer.capacity_usage_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong></span>
+      <span><small>Situação</small><strong>${escapeHtml(offerStatusLabels[offer.status] || offer.status)}</strong></span>
+      <span class="engine-decision ${escapeHtml(offer.engine_decision)}"><small>${escapeHtml(engineDecisionLabels[offer.engine_decision] || offer.engine_decision)} · ${escapeHtml(offer.engine_score)} pontos</small><strong>${escapeHtml(offer.engine_reason)}</strong>${pendingActions}</span>
+    </article>`;
+  }
+
+  function renderNegotiationCard(item) {
+    const debt = negotiationDebt(item);
+    const offers = Array.isArray(item.offers) ? item.offers : [];
+    return `<article class="negotiation-card">
+      <header><div><h4>${escapeHtml(debtNatureLabel(debt?.nature || "Dívida"))}</h4><p>${escapeHtml(creditorName(debt?.creditor_id))} · ${escapeHtml(item.channel)} · aberta em ${escapeHtml(formatDate(item.opened_at, true))}</p></div><div class="button-row"><span class="badge ${item.status === "rejected" || item.status === "cancelled" ? "danger" : ""}">${escapeHtml(negotiationStatusLabels[item.status] || item.status)}</span>${item.status === "open" && canUpdateNegotiation() ? `<button class="secondary-button" type="button" data-new-offer="${escapeHtml(item.id)}">Nova proposta</button>` : ""}</div></header>
+      <div class="negotiation-offers">${offers.length ? offers.map((offer) => renderNegotiationOffer(item, offer)).join("") : '<div class="negotiation-empty">Nenhuma proposta registrada nesta negociação.</div>'}</div>
+    </article>`;
+  }
+
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
-    const { incomes, expenses, debts, agreements, diagnosis, history } = state.financial;
+    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history } = state.financial;
     const totalIncome = incomes.reduce((total, item) => total + Number(item.net_amount || 0), 0);
     const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount || 0), 0);
     const totalDebt = debts.reduce((total, item) => total + Number(item.current_balance || 0), 0);
@@ -2763,6 +2810,11 @@
         </div>
       </section>
 
+      <section class="panel negotiation-panel">
+        <div class="panel-header"><div><p class="eyebrow dark">NEGOTIATION ENGINE</p><h3>Negociações e propostas</h3></div><div class="button-row"><span class="result-count">${negotiations.length} ${negotiations.length === 1 ? "negociação" : "negociações"}</span>${canCreateNegotiation() ? '<button id="open-negotiation-dialog" class="primary-button" type="button">Abrir negociação</button>' : ""}</div></div>
+        <div class="negotiation-list">${negotiations.length ? negotiations.map(renderNegotiationCard).join("") : '<div class="empty-state">Nenhuma negociação aberta para este cliente.</div>'}</div>
+      </section>
+
       <section class="panel agreement-panel">
         <div class="panel-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h3>Acordos de pagamento</h3></div><div class="button-row"><span class="result-count">${agreements.length} ${agreements.length === 1 ? "acordo" : "acordos"}</span><button class="primary-button" type="button" data-open-dialog="agreement-dialog">Novo acordo</button></div></div>
         <div class="agreement-list">${agreements.length ? agreements.map(renderAgreementCard).join("") : '<div class="empty-state">Nenhum acordo de pagamento cadastrado.</div>'}</div>
@@ -2805,10 +2857,95 @@
     $$("[data-open-saved-report]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/history/${button.dataset.openSavedReport}/report`, button)));
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
     $("#save-diagnosis")?.addEventListener("click", saveDiagnosis);
+    $("#open-negotiation-dialog")?.addEventListener("click", openNegotiationDialog);
+    $$('[data-new-offer]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openNegotiationOfferDialog(button.dataset.newOffer)));
+    $$('[data-offer-decision]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => decideNegotiationOffer(button)));
   }
 
   function clientName(id) {
     return state.clients.find((client) => String(client.id) === String(id))?.full_name || "Cliente não identificado";
+  }
+
+  function openNegotiationDialog() {
+    const form = $("#negotiation-form");
+    form.reset();
+    $("#negotiation-case").innerHTML = '<option value="">Selecione o caso</option>' + state.financial.recoveryCases
+      .filter((item) => !["resolved", "cancelled", "archived"].includes(item.status))
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.case_number)} · ${escapeHtml(recoveryStatusLabels[item.status] || item.status)}</option>`).join("");
+    $("#negotiation-debt").innerHTML = '<option value="">Selecione a dívida</option>' + state.financial.debts
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(debtNatureLabel(item.nature))} · ${formatCurrency(item.current_balance)}</option>`).join("");
+    if (!state.financial.recoveryCases.length) {
+      toast("Abra primeiro um caso no CS Recupera para este cliente.", "error");
+      return;
+    }
+    if (!state.financial.debts.length) {
+      toast("Cadastre primeiro uma dívida para este cliente.", "error");
+      return;
+    }
+    $("#negotiation-dialog").showModal();
+  }
+
+  function openNegotiationOfferDialog(negotiationId) {
+    const negotiation = state.financial.negotiations.find((item) => String(item.id) === String(negotiationId));
+    const debt = negotiation && negotiationDebt(negotiation);
+    if (!negotiation || !debt) return toast("Negociação ou dívida não encontrada.", "error");
+    const form = $("#negotiation-offer-form");
+    form.reset();
+    $("#negotiation-offer-id").value = negotiation.id;
+    form.elements.offered_amount.value = Number(debt.current_balance || 0).toFixed(2);
+    form.elements.installment_count.value = 12;
+    form.elements.installment_amount.value = (Number(debt.current_balance || 0) / 12).toFixed(2);
+    form.elements.first_due_date.value = localDateValue(new Date(Date.now() + 30 * 86400000));
+    $("#negotiation-offer-dialog").showModal();
+  }
+
+  async function submitNegotiation(event) {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('[type="submit"]');
+    const raw = Object.fromEntries(new FormData(event.currentTarget));
+    if (raw.expires_at) raw.expires_at = new Date(raw.expires_at).toISOString();
+    setBusy(button, true, "Abrindo…");
+    try {
+      await api("/api/v1/negotiations", { method: "POST", body: JSON.stringify(compactObject(raw)) });
+      $("#negotiation-dialog").close();
+      await loadClientDetail(state.selectedClient.id);
+      toast("Negociação aberta com sucesso.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function submitNegotiationOffer(event) {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('[type="submit"]');
+    const raw = Object.fromEntries(new FormData(event.currentTarget));
+    const negotiationId = raw.negotiation_id;
+    delete raw.negotiation_id;
+    for (const key of ["offered_amount", "down_payment", "installment_amount", "annual_interest_rate"]) raw[key] = String(raw[key] || "0");
+    raw.installment_count = Number(raw.installment_count);
+    if (raw.valid_until) raw.valid_until = new Date(raw.valid_until).toISOString();
+    setBusy(button, true, "Avaliando…");
+    try {
+      const offer = await api(`/api/v1/negotiations/${negotiationId}/offers`, { method: "POST", body: JSON.stringify(compactObject(raw)) });
+      $("#negotiation-offer-dialog").close();
+      await loadClientDetail(state.selectedClient.id);
+      toast(engineDecisionLabels[offer.engine_decision] || "Proposta avaliada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function decideNegotiationOffer(button) {
+    const action = button.dataset.offerDecision;
+    const reason = window.prompt(action === "accepted" ? "Confirme o motivo da aprovação:" : "Informe o motivo da rejeição:", "") ?? null;
+    if (reason === null) return;
+    setBusy(button, true, action === "accepted" ? "Aceitando…" : "Rejeitando…");
+    try {
+      await api(`/api/v1/negotiations/${button.dataset.negotiationId}/offers/${button.dataset.offerId}/decision`, {
+        method: "POST", body: JSON.stringify({ status: action, reason: reason || null })
+      });
+      await loadClientDetail(state.selectedClient.id);
+      toast(action === "accepted" ? "Proposta aceita." : "Proposta rejeitada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   function toLocalDateTimeValue(value) {
@@ -3884,6 +4021,8 @@
     $("#collection-distribution-form").addEventListener("submit", saveCollectionDistribution);
     $("#new-recovery-case").addEventListener("click", openRecoveryCaseDialog);
     $("#recovery-case-form").addEventListener("submit", submitRecoveryCase);
+    $("#negotiation-form").addEventListener("submit", submitNegotiation);
+    $("#negotiation-offer-form").addEventListener("submit", submitNegotiationOffer);
     $("#recovery-filter-form").addEventListener("submit", (event) => {
       event.preventDefault();
       state.recovery.status = $("#recovery-status-filter").value || "all";
