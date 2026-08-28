@@ -74,6 +74,7 @@ def test_dashboard_counts_archived_clients(client, token):
     assert response.json()["clients_active"] == 0
     assert response.json()["clients_archived"] == 1
 
+<<<<<<< HEAD
 
 def test_archived_only_filter_and_restore(client, token):
     created = create_client(client, token)
@@ -95,3 +96,5 @@ def test_duplicate_cpf_has_clear_message(client, token):
     response = client.post("/api/v1/clients", headers=auth(token), json={"full_name": "CPF repetido", "cpf": "52998224725"})
     assert response.status_code == 409
     assert response.json()["error"]["message"] == "CPF já cadastrado nesta organização"
+=======
+>>>>>>> 6a81ade2942ff2fbe866de1c6f119b0854c6fc9b

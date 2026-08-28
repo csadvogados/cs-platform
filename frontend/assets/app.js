@@ -385,6 +385,9 @@
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("client.delete");
   }
+  function canRestoreClients() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("client.restore");
+  }
 
   function canReadRecovery() {
     return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.read");
@@ -438,7 +441,7 @@
     try {
       const body = await response.json();
       if (Array.isArray(body.detail)) return body.detail.map((item) => item.msg).join(" ");
-      return body.detail || body.message || `Erro ${response.status}`;
+      return body.detail || body.message || body.error?.message || `Erro ${response.status}`;
     } catch {
       return `Erro ${response.status} ao acessar a API.`;
     }
@@ -1430,8 +1433,10 @@
     });
     const query = $("#client-search").value.trim();
     const status = $("#client-status-filter").value;
+    const archiveFilter = $("#client-archive-filter").value;
     if (query) params.set("q", query);
     if (status !== "all") params.set("status", status);
+    if (archiveFilter === "archived") params.set("archived_only", "true");
     return params;
   }
 
@@ -2236,6 +2241,7 @@
     $("#client-prev-page").disabled = page <= 1 || pages === 0;
     $("#client-next-page").disabled = pages === 0 || page >= pages;
     $("#client-page-size").value = String(pageSize);
+    const showingArchived = $("#client-archive-filter").value === "archived";
     $("#clients-table").innerHTML = clients.length ? clients.map((client) => `
       <tr class="client-row" data-client-id="${escapeHtml(client.id)}">
         <td><strong>${escapeHtml(client.full_name)}</strong><br><small>${escapeHtml(client.cpf || "CPF não informado")}</small></td>
@@ -2243,7 +2249,7 @@
         <td>${escapeHtml([client.city, client.state].filter(Boolean).join(" / ") || "—")}</td>
         <td><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span></td>
         <td>${formatDate(client.created_at)}</td>
-        <td><button class="text-link" type="button" data-client-detail="${escapeHtml(client.id)}">Ver detalhes</button></td>
+        <td>${showingArchived ? (canRestoreClients() ? `<button class="text-link" type="button" data-restore-client="${escapeHtml(client.id)}">Restaurar</button>` : "—") : `<button class="text-link" type="button" data-client-detail="${escapeHtml(client.id)}">Ver detalhes</button>`}</td>
       </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum cliente encontrado.</td></tr>';
   }
 
@@ -2739,12 +2745,17 @@
   function renderNegotiationOffer(negotiation, offer) {
     const pendingActions = offer.status === "pending" && canApproveNegotiation()
       ? `<span class="financial-actions"><button class="edit-button" type="button" data-offer-decision="accepted" data-negotiation-id="${escapeHtml(negotiation.id)}" data-offer-id="${escapeHtml(offer.id)}">Aceitar</button><button class="delete-button" type="button" data-offer-decision="rejected" data-negotiation-id="${escapeHtml(negotiation.id)}" data-offer-id="${escapeHtml(offer.id)}">Rejeitar</button></span>` : "";
+    const agreementAction = offer.status === "accepted" && canApproveNegotiation()
+      ? offer.agreement_id
+        ? `<span class="badge">Acordo gerado</span>`
+        : `<button class="primary-button" type="button" data-generate-agreement="${escapeHtml(offer.id)}" data-negotiation-id="${escapeHtml(negotiation.id)}">Gerar acordo</button>`
+      : "";
     return `<article class="negotiation-offer">
       <span><small>Proposta ${escapeHtml(offer.sequence_number)} · ${escapeHtml(offer.origin === "creditor" ? "Credor" : offer.origin === "client" ? "Cliente" : "Sistema")}</small><strong>${formatCurrency(offer.offered_amount)}</strong></span>
       <span><small>Condição</small><strong>${escapeHtml(offer.installment_count)} × ${formatCurrency(offer.installment_amount)}</strong></span>
       <span><small>Uso da capacidade</small><strong>${Number(offer.capacity_usage_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong></span>
       <span><small>Situação</small><strong>${escapeHtml(offerStatusLabels[offer.status] || offer.status)}</strong></span>
-      <span class="engine-decision ${escapeHtml(offer.engine_decision)}"><small>${escapeHtml(engineDecisionLabels[offer.engine_decision] || offer.engine_decision)} · ${escapeHtml(offer.engine_score)} pontos</small><strong>${escapeHtml(offer.engine_reason)}</strong>${pendingActions}</span>
+      <span class="engine-decision ${escapeHtml(offer.engine_decision)}"><small>${escapeHtml(engineDecisionLabels[offer.engine_decision] || offer.engine_decision)} · ${escapeHtml(offer.engine_score)} pontos</small><strong>${escapeHtml(offer.engine_reason)}</strong>${pendingActions}${agreementAction}</span>
     </article>`;
   }
 
@@ -2774,7 +2785,7 @@
           <h1>${escapeHtml(client.full_name)}</h1>
           <p>${escapeHtml(client.cpf || "CPF não informado")} · ${escapeHtml(client.email || "E-mail não informado")} · ${escapeHtml(client.phone || "Telefone não informado")}</p>
         </div>
-        <div class="button-row"><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span><button id="edit-client-button" class="secondary-button" type="button">Editar cadastro</button>${canDeleteClients() ? '<button id="delete-client-button" class="danger-button" type="button">Apagar cliente</button>' : ""}</div>
+        <div class="button-row"><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span><button id="edit-client-button" class="secondary-button" type="button">Editar cadastro</button>${canDeleteClients() ? '<button id="delete-client-button" class="danger-button" type="button">Arquivar cliente</button>' : ""}</div>
       </div>
 
       <div class="client-profile-grid">
@@ -2860,6 +2871,7 @@
     $("#open-negotiation-dialog")?.addEventListener("click", openNegotiationDialog);
     $$('[data-new-offer]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openNegotiationOfferDialog(button.dataset.newOffer)));
     $$('[data-offer-decision]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => decideNegotiationOffer(button)));
+    $$('[data-generate-agreement]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => generateAgreementFromOffer(button)));
   }
 
   function clientName(id) {
@@ -2944,6 +2956,18 @@
       });
       await loadClientDetail(state.selectedClient.id);
       toast(action === "accepted" ? "Proposta aceita." : "Proposta rejeitada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function generateAgreementFromOffer(button) {
+    if (!window.confirm("Gerar o acordo e todas as parcelas a partir desta proposta aceita?")) return;
+    setBusy(button, true, "Gerando…");
+    try {
+      const result = await api(`/api/v1/negotiations/${button.dataset.negotiationId}/offers/${button.dataset.generateAgreement}/agreement`, { method: "POST" });
+      await loadClientDetail(state.selectedClient.id);
+      toast(`Acordo gerado com ${result.installment_count} parcela(s).`);
+      document.querySelector(".agreement-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) { toast(error.message, "error"); }
     finally { setBusy(button, false); }
   }
@@ -3742,26 +3766,36 @@
     const client = state.selectedClient;
     const button = event.currentTarget;
     if (!client || !canDeleteClients()) {
-      toast("Seu perfil não possui permissão para apagar clientes.", "error");
+      toast("Seu perfil não possui permissão para arquivar clientes.", "error");
       return;
     }
     const confirmed = window.confirm(
-      `Apagar o cliente "${client.full_name}"?\n\nEsta ação só será permitida se ele não possuir registros financeiros, diagnósticos ou vínculos no CRM.`
+      `Arquivar o cliente "${client.full_name}"?\n\nEle sairá da lista de ativos e poderá ser restaurado depois.`
     );
     if (!confirmed) return;
 
-    setBusy(button, true, "Apagando…");
+    setBusy(button, true, "Arquivando…");
     try {
       await api(`/api/v1/clients/${client.id}`, { method: "DELETE" });
       state.selectedClient = null;
       await Promise.all([loadClients(), loadDashboard()]);
       setView("clients");
-      toast(`Cliente "${client.full_name}" apagado com segurança.`);
+      toast(`Cliente "${client.full_name}" arquivado.`);
     } catch (error) {
       toast(error.message, "error");
     } finally {
       if (document.body.contains(button)) setBusy(button, false);
     }
+  }
+  async function restoreClient(clientId, button) {
+    if (!canRestoreClients()) return toast("Seu perfil não possui permissão para restaurar clientes.", "error");
+    setBusy(button, true, "Restaurando…");
+    try {
+      const restored = await api(`/api/v1/clients/${clientId}/restore`, { method: "POST" });
+      await Promise.all([loadClients(1), loadDashboard()]);
+      toast(`Cliente "${restored.full_name}" restaurado.`);
+    } catch (error) { toast(error.message, "error"); }
+    finally { if (document.body.contains(button)) setBusy(button, false); }
   }
 
   async function submitContact(event) {
@@ -3902,6 +3936,9 @@
     $("#sidebar-scrim").addEventListener("click", closeSidebar);
     $("#client-search").addEventListener("input", queueClientSearch);
     $("#client-status-filter").addEventListener("change", () => {
+      loadClientPage(1).catch((error) => toast(error.message, "error"));
+    });
+    $("#client-archive-filter").addEventListener("change", () => {
       loadClientPage(1).catch((error) => toast(error.message, "error"));
     });
     $("#client-page-size").addEventListener("change", (event) => {
@@ -4195,7 +4232,9 @@
     });
     $("#clients-table").addEventListener("click", (event) => {
       const button = event.target.closest("[data-client-detail]");
+      const restoreButton = event.target.closest("[data-restore-client]");
       if (button) openClientDetail(button.dataset.clientDetail);
+      else if (restoreButton) restoreClient(restoreButton.dataset.restoreClient, restoreButton);
     });
     $("#new-user-button").addEventListener("click", () => openDialog("user-dialog"));
     $("#user-list").addEventListener("click", (event) => {

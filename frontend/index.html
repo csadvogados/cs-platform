@@ -217,6 +217,7 @@
             <div class="toolbar">
               <label class="search-field"><span aria-hidden="true">⌕</span><input id="client-search" type="search" placeholder="Buscar por nome, CPF, cidade ou e-mail" /></label>
               <label class="client-status-filter"><span>Status</span><select id="client-status-filter"><option value="all">Todos</option><option value="lead">Potencial cliente</option><option value="triage">Triagem</option><option value="proposal">Proposta</option><option value="contracted">Contratado</option><option value="documents_pending">Documentos pendentes</option><option value="diagnosis">Diagnóstico</option><option value="negotiation">Negociação</option><option value="judicial_review">Análise judicial</option><option value="judicial">Judicial</option><option value="agreement">Acordo</option><option value="closed">Encerrado</option><option value="cancelled">Cancelado</option></select></label>
+              <label class="client-status-filter"><span>Cadastros</span><select id="client-archive-filter"><option value="active">Ativos</option><option value="archived">Arquivados</option></select></label>
               <label class="client-status-filter client-page-size"><span>Por página</span><select id="client-page-size"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select></label>
               <span id="client-count" class="result-count" aria-live="polite">0 clientes</span>
             </div>
@@ -785,6 +786,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.28.0-negotiation-engine"></script>
+    <script src="./assets/app.js?v=5.29.0-agreement-conversion"></script>
   </body>
 </html>
