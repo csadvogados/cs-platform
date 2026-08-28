@@ -7,7 +7,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0020_sprint1_client_soft_archive"
-down_revision = ""0019_offer_agreement_conversion"
+down_revision = "0019_offer_agreement_conversion"
 branch_labels = None
 depends_on = None
 
