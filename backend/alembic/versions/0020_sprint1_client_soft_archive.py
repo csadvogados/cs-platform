@@ -20,7 +20,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_clients_archived_at", table_name="clients")
     op.drop_column("clients", "archived_at")
-<<<<<<< HEAD
-=======
 
->>>>>>> 6a81ade2942ff2fbe866de1c6f119b0854c6fc9b

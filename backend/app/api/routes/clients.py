@@ -287,18 +287,9 @@ def _client_query(
     query: str | None,
     client_status: str | None,
     include_archived: bool = False,
-<<<<<<< HEAD
-    archived_only: bool = False,
-):
-    stmt = select(Client).where(Client.organization_id == organization_id)
-    if archived_only:
-        stmt = stmt.where(Client.archived_at.is_not(None))
-    elif not include_archived:
-=======
 ):
     stmt = select(Client).where(Client.organization_id == organization_id)
     if not include_archived:
->>>>>>> 6a81ade2942ff2fbe866de1c6f119b0854c6fc9b
         stmt = stmt.where(Client.archived_at.is_(None))
     if query and query.strip():
         term = f"%{query.strip()}%"
@@ -381,19 +372,11 @@ def list_clients(
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     include_archived: bool = Query(False),
-<<<<<<< HEAD
-    archived_only: bool = Query(False),
-=======
->>>>>>> 6a81ade2942ff2fbe866de1c6f119b0854c6fc9b
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
 ):
     stmt = (
-<<<<<<< HEAD
-        _client_query(actor.organization_id, q, client_status, include_archived, archived_only)
-=======
         _client_query(actor.organization_id, q, client_status, include_archived)
->>>>>>> 6a81ade2942ff2fbe866de1c6f119b0854c6fc9b
         .order_by(Client.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -408,20 +391,10 @@ def paginate_clients(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=10, le=100),
     include_archived: bool = Query(False),
-<<<<<<< HEAD
-    archived_only: bool = Query(False),
-    db: Session = Depends(get_db),
-    actor: User = Depends(get_current_user),
-):
-    filtered = _client_query(
-        actor.organization_id, q, client_status, include_archived, archived_only
-    )
-=======
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
 ):
     filtered = _client_query(actor.organization_id, q, client_status, include_archived)
->>>>>>> 6a81ade2942ff2fbe866de1c6f119b0854c6fc9b
     total = int(db.scalar(select(func.count()).select_from(filtered.subquery())) or 0)
     pages = (total + page_size - 1) // page_size if total else 0
     effective_page = min(page, pages) if pages else 1
@@ -801,40 +774,3 @@ def delete_client(
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-<<<<<<< HEAD
-
-@router.post("/{client_id}/restore", response_model=ClientRead)
-def restore_client(
-    client_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    identity: IdentityContext = Depends(
-        require_permissions(PermissionCode.CLIENT_RESTORE.value)
-    ),
-):
-    client = db.scalar(
-        select(Client)
-        .where(
-            Client.id == client_id,
-            Client.organization_id == identity.organization_id,
-            Client.archived_at.is_not(None),
-        )
-        .with_for_update()
-    )
-    if not client:
-        raise HTTPException(status_code=404, detail="Cliente arquivado não encontrado")
-    previous_archived_at = client.archived_at
-    client.archived_at = None
-    record_audit(
-        db,
-        organization_id=identity.organization_id,
-        user_id=identity.user_id,
-        entity_type="client",
-        entity_id=client.id,
-        action="restore",
-        new_values={"archived_at": None, "previous_archived_at": previous_archived_at.isoformat()},
-    )
-    db.commit()
-    db.refresh(client)
-    return client
-=======
->>>>>>> 6a81ade2942ff2fbe866de1c6f119b0854c6fc9b
