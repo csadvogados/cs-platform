@@ -25,7 +25,11 @@ def simulate_payment_plans(
 ):
     client = db.scalar(
         select(Client)
-        .where(Client.id == client_id, Client.organization_id == actor.organization_id)
+        .where(
+            Client.id == client_id,
+            Client.organization_id == actor.organization_id,
+            Client.archived_at.is_(None),
+        )
         .options(selectinload(Client.incomes), selectinload(Client.expenses), selectinload(Client.debts))
     )
     if not client:

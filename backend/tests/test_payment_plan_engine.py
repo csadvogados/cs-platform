@@ -75,3 +75,16 @@ def test_simulation_rejects_debt_from_another_client(client, token):
         json={"debt_ids": [foreign_debt]},
     )
     assert response.status_code == 422
+
+
+def test_simulation_rejects_archived_client(client, token):
+    client_id, _ = create_financial_profile(client, token)
+    assert client.delete(
+        f"/api/v1/clients/{client_id}", headers=auth(token)
+    ).status_code == 204
+    response = client.post(
+        f"/api/v1/payment-plans/{client_id}/simulate",
+        headers=auth(token),
+        json={},
+    )
+    assert response.status_code == 404

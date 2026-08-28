@@ -21,6 +21,7 @@
     editingClientId: null,
     clientImport: { filename: "", clients: [], preview: null },
     financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [], dossier: null },
+    paymentPlan: null,
     editingFinancial: null,
     installmentPaymentTarget: null,
     editingUserId: null,
@@ -2831,7 +2832,7 @@
       </section>
 
       <section class="panel agreement-panel">
-        <div class="panel-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h3>Acordos de pagamento</h3></div><div class="button-row"><span class="result-count">${agreements.length} ${agreements.length === 1 ? "acordo" : "acordos"}</span><button class="primary-button" type="button" data-open-dialog="agreement-dialog">Novo acordo</button></div></div>
+        <div class="panel-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h3>Acordos de pagamento</h3></div><div class="button-row"><span class="result-count">${agreements.length} ${agreements.length === 1 ? "acordo" : "acordos"}</span><button id="open-payment-plan" class="secondary-button" type="button">Simular plano</button><button class="primary-button" type="button" data-open-dialog="agreement-dialog">Novo acordo</button></div></div>
         <div class="agreement-list">${agreements.length ? agreements.map(renderAgreementCard).join("") : '<div class="empty-state">Nenhum acordo de pagamento cadastrado.</div>'}</div>
       </section>
 
@@ -2874,6 +2875,7 @@
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
     $("#save-diagnosis")?.addEventListener("click", saveDiagnosis);
     $("#open-negotiation-dialog")?.addEventListener("click", openNegotiationDialog);
+    $("#open-payment-plan")?.addEventListener("click", openPaymentPlanDialog);
     $$('[data-new-offer]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openNegotiationOfferDialog(button.dataset.newOffer)));
     $$('[data-offer-decision]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => decideNegotiationOffer(button)));
     $$('[data-generate-agreement]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => generateAgreementFromOffer(button)));
@@ -2881,6 +2883,63 @@
 
   function clientName(id) {
     return state.clients.find((client) => String(client.id) === String(id))?.full_name || "Cliente não identificado";
+  }
+
+  function openPaymentPlanDialog() {
+    if (!state.selectedClient || !state.financial.debts.length) {
+      toast("Cadastre ao menos uma dívida antes de simular o plano.", "error");
+      return;
+    }
+    const form = $("#payment-plan-form");
+    form.reset();
+    state.paymentPlan = null;
+    $("#payment-plan-results").innerHTML = '<div class="empty-state">Preencha as condições e clique em Simular.</div>';
+    $("#payment-plan-dialog").showModal();
+  }
+
+  function numericList(value, integer = false) {
+    return String(value || "").split(/[,;\s]+/).map((item) => Number(item)).filter((item) => Number.isFinite(item) && item >= 0).map((item) => integer ? Math.trunc(item) : item);
+  }
+
+  function renderPaymentPlanResults(result) {
+    const scenarios = Array.isArray(result?.scenarios) ? result.scenarios.slice(0, 12) : [];
+    const warnings = Array.isArray(result?.warnings) ? result.warnings : [];
+    $("#payment-plan-results").innerHTML = `
+      <div class="financial-summary">
+        <article><span>Dívida considerada</span><strong>${formatCurrency(result.total_debt_amount)}</strong></article>
+        <article><span>Capacidade calculada</span><strong>${formatCurrency(result.calculated_payment_capacity)}</strong></article>
+        <article><span>Limite aplicado</span><strong>${formatCurrency(result.applied_payment_limit)}</strong></article>
+        <article><span>Qualidade dos dados</span><strong>${escapeHtml(result.data_quality_score)}%</strong></article>
+      </div>
+      ${warnings.length ? `<div class="diagnosis-conclusion"><strong>Atenção</strong><ul>${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
+      <table><thead><tr><th>#</th><th>Desconto</th><th>Prazo</th><th>Entrada</th><th>Parcela</th><th>Total</th><th>Resultado</th></tr></thead><tbody>${scenarios.length ? scenarios.map((item) => `<tr><td>${escapeHtml(item.rank)}</td><td>${Number(item.discount_percentage || 0).toLocaleString("pt-BR")}%</td><td>${escapeHtml(item.term_months)} meses</td><td>${formatCurrency(item.down_payment)}</td><td>${formatCurrency(item.installment_amount)}</td><td>${formatCurrency(item.total_payable)}</td><td><span class="badge ${item.sustainable ? "" : "danger"}">${escapeHtml(item.recommendation)}</span></td></tr>`).join("") : '<tr><td colspan="7" class="empty-cell">Nenhum cenário foi gerado.</td></tr>'}</tbody></table>`;
+  }
+
+  async function submitPaymentPlan(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = $('button[type="submit"]', form);
+    const raw = Object.fromEntries(new FormData(form));
+    const payload = {
+      debt_ids: state.financial.debts.map((item) => item.id),
+      discount_percentages: numericList(raw.discount_percentages),
+      installment_terms: numericList(raw.installment_terms, true),
+      annual_interest_rate: raw.annual_interest_rate || "0",
+      down_payment: raw.down_payment || "0",
+      maximum_installment: raw.maximum_installment || null,
+      first_due_date: raw.first_due_date || null
+    };
+    if (!payload.discount_percentages.length || !payload.installment_terms.length) {
+      toast("Informe ao menos um desconto e um prazo válidos.", "error");
+      return;
+    }
+    setBusy(button, true, "Simulando…");
+    try {
+      state.paymentPlan = await api(`/api/v1/payment-plans/${state.selectedClient.id}/simulate`, { method: "POST", body: JSON.stringify(payload) });
+      renderPaymentPlanResults(state.paymentPlan);
+      toast("Cenários calculados e ordenados por sustentabilidade.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   function openNegotiationDialog() {
@@ -4069,6 +4128,7 @@
     $("#recovery-case-form").addEventListener("submit", submitRecoveryCase);
     $("#negotiation-form").addEventListener("submit", submitNegotiation);
     $("#negotiation-offer-form").addEventListener("submit", submitNegotiationOffer);
+    $("#payment-plan-form").addEventListener("submit", submitPaymentPlan);
     $("#recovery-filter-form").addEventListener("submit", (event) => {
       event.preventDefault();
       state.recovery.status = $("#recovery-status-filter").value || "all";

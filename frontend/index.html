@@ -766,6 +766,23 @@
       </form>
     </dialog>
 
+    <dialog id="payment-plan-dialog" class="modal">
+      <form id="payment-plan-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">PLANO DE PAGAMENTO</p><h2>Simular cenários</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="form-grid">
+          <label class="wide"><span>Descontos para comparar (%)</span><input name="discount_percentages" value="0, 10, 20" placeholder="0, 10, 20" /></label>
+          <label class="wide"><span>Prazos para comparar (meses)</span><input name="installment_terms" value="12, 24, 36, 48, 60" placeholder="12, 24, 36" /></label>
+          <label><span>Juros anuais (%)</span><input name="annual_interest_rate" type="number" min="0" max="100" step="0.01" value="0" /></label>
+          <label><span>Entrada</span><input name="down_payment" type="number" min="0" step="0.01" value="0" /></label>
+          <label><span>Limite mensal opcional</span><input name="maximum_installment" type="number" min="0.01" step="0.01" placeholder="Usar capacidade calculada" /></label>
+          <label><span>Primeiro vencimento</span><input name="first_due_date" type="date" /></label>
+        </div>
+        <p class="form-help">O sistema compara as dívidas cadastradas com a renda protegida do cliente e ordena os cenários mais sustentáveis.</p>
+        <div id="payment-plan-results" class="table-wrap compact-table"><div class="empty-state">Preencha as condições e clique em Simular.</div></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Fechar</button><button class="primary-button" value="default" type="submit">Simular</button></div>
+      </form>
+    </dialog>
+
     <dialog id="negotiation-offer-dialog" class="modal">
       <form id="negotiation-offer-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">PROPOSTA</p><h2>Registrar proposta</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
