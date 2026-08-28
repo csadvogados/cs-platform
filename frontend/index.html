@@ -687,6 +687,37 @@
       </form>
     </dialog>
 
+    <dialog id="judicial-process-dialog" class="modal">
+      <form id="judicial-process-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">ACOMPANHAMENTO JUDICIAL</p><h2>Dados do processo</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="case_id" type="hidden" /><input name="version" type="hidden" />
+        <div class="form-grid">
+          <label class="wide"><span>Número do processo *</span><input name="process_number" required minlength="5" maxlength="40" placeholder="0000000-00.0000.0.00.0000" /></label>
+          <label><span>Tribunal *</span><input name="court" required maxlength="160" placeholder="Ex.: TJSP" /></label>
+          <label><span>Comarca</span><input name="district" maxlength="160" /></label>
+          <label><span>Vara</span><input name="division" maxlength="160" /></label>
+          <label><span>Data do protocolo</span><input name="filed_at" type="datetime-local" /></label>
+          <label><span>Situação *</span><select name="status"><option value="filed">Protocolado</option><option value="awaiting_decision">Aguardando decisão</option><option value="hearing_scheduled">Audiência marcada</option><option value="decision_issued">Decisão proferida</option><option value="appeal">Em recurso</option><option value="closed">Encerrado</option></select></label>
+          <label><span>Próximo prazo</span><input name="next_deadline" type="datetime-local" /></label>
+          <label class="wide"><span>Observações</span><textarea name="notes" rows="3" maxlength="4000"></textarea></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar processo</button></div>
+      </form>
+      <section id="judicial-event-section" hidden>
+        <div class="panel-header"><div><p class="eyebrow dark">HISTÓRICO</p><h3>Movimentações</h3></div></div>
+        <div id="judicial-event-list" class="negotiation-list"></div>
+        <form id="judicial-event-form">
+          <div class="form-grid">
+            <label><span>Data *</span><input name="event_date" type="datetime-local" required /></label>
+            <label><span>Tipo *</span><select name="event_type"><option value="movement">Movimentação</option><option value="deadline">Prazo</option><option value="hearing">Audiência</option><option value="decision">Decisão</option><option value="appeal">Recurso</option><option value="filing">Protocolo</option><option value="note">Observação</option></select></label>
+            <label class="wide"><span>Título *</span><input name="title" required minlength="2" maxlength="200" /></label>
+            <label class="wide"><span>Descrição</span><textarea name="description" rows="2" maxlength="4000"></textarea></label>
+          </div>
+          <div class="modal-actions"><button class="secondary-button" type="submit">Registrar movimentação</button></div>
+        </form>
+      </section>
+    </dialog>
+
     <dialog id="income-dialog" class="modal small-modal">
       <form id="income-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">FINANCEIRO</p><h2>Nova receita</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
@@ -817,6 +848,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.29.0-agreement-conversion"></script>
+    <script src="./assets/app.js?v=5.31.0-judicial-tracking"></script>
   </body>
 </html>

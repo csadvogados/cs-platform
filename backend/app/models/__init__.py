@@ -7,7 +7,7 @@ from app.models.financial import CollectionAction, Income, Expense, Creditor, De
 from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask
 from app.models.performance import PerformanceGoal
 from app.models.notification import Notification, NotificationPreference
-from app.models.recovery import RecoveryCase, RecoveryCaseSource, RecoveryCaseStage, RecoveryCaseStatus
+from app.models.recovery import JudicialProcess, JudicialProcessEvent, RecoveryCase, RecoveryCaseSource, RecoveryCaseStage, RecoveryCaseStatus
 from app.models.negotiation import Negotiation, NegotiationOffer
 from app.models.document import ClientDocument
 from app.models.access_control import (
@@ -24,5 +24,6 @@ __all__ = [
     "PerformanceGoal",
     "Notification", "NotificationPreference",
     "RecoveryCase", "RecoveryCaseSource", "RecoveryCaseStage", "RecoveryCaseStatus",
+    "JudicialProcess", "JudicialProcessEvent",
     "Negotiation", "NegotiationOffer", "ClientDocument",
 ]

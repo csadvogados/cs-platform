@@ -14,6 +14,7 @@
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     recovery: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, status: "all" },
+    judicialProcess: null,
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
@@ -1472,6 +1473,7 @@
     }
     if (item.status === "on_hold") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Retomar</button>`);
     if (["resolved", "judicialized", "cancelled"].includes(item.status)) buttons.push(`<button class="edit-button" type="button" data-case-transition="archived" data-case-id="${escapeHtml(item.id)}">Arquivar</button>`);
+    if (item.status === "judicialized") buttons.unshift(`<button class="primary-button" type="button" data-judicial-process="${escapeHtml(item.id)}">Acompanhar processo</button>`);
     return buttons.join("");
   }
 
@@ -1578,6 +1580,67 @@
       toast(`Etapa atualizada para ${recoveryStageLabels[stage] || stage}.`);
     } catch (error) { toast(error.message, "error"); }
     finally { setBusy(button, false); }
+  }
+
+  function renderJudicialEvents(events = []) {
+    const labels = { filing: "Protocolo", movement: "Movimentação", deadline: "Prazo", hearing: "Audiência", decision: "Decisão", appeal: "Recurso", note: "Observação" };
+    $("#judicial-event-list").innerHTML = events.length ? events.map((item) => `<article class="negotiation-offer"><span><small>${escapeHtml(labels[item.event_type] || item.event_type)} · ${escapeHtml(formatDate(item.event_date, true))}</small><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.description || "")}</p></span></article>`).join("") : '<div class="empty-state">Nenhuma movimentação registrada.</div>';
+  }
+
+  async function openJudicialProcessDialog(caseId) {
+    const form = $("#judicial-process-form");
+    form.reset();
+    form.elements.case_id.value = caseId;
+    state.judicialProcess = null;
+    try {
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
+      for (const name of ["process_number", "court", "district", "division", "status", "notes"]) form.elements[name].value = state.judicialProcess[name] || "";
+      form.elements.version.value = state.judicialProcess.version;
+      form.elements.filed_at.value = state.judicialProcess.filed_at ? String(state.judicialProcess.filed_at).slice(0, 16) : "";
+      form.elements.next_deadline.value = state.judicialProcess.next_deadline ? String(state.judicialProcess.next_deadline).slice(0, 16) : "";
+      $("#judicial-event-section").hidden = false;
+      renderJudicialEvents(state.judicialProcess.events);
+    } catch (error) {
+      if (!String(error.message).includes("não cadastrado")) return toast(error.message, "error");
+      $("#judicial-event-section").hidden = true;
+    }
+    $("#judicial-process-dialog").showModal();
+  }
+
+  async function submitJudicialProcess(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const raw = Object.fromEntries(new FormData(form));
+    const caseId = raw.case_id;
+    const payload = compactObject({ process_number: raw.process_number, court: raw.court, district: raw.district,
+      division: raw.division, filed_at: raw.filed_at ? new Date(raw.filed_at).toISOString() : null,
+      status: raw.status, next_deadline: raw.next_deadline ? new Date(raw.next_deadline).toISOString() : null,
+      notes: raw.notes, version: raw.version ? Number(raw.version) : null });
+    try {
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`, { method: "PUT", body: JSON.stringify(payload) });
+      form.elements.version.value = state.judicialProcess.version;
+      $("#judicial-event-section").hidden = false;
+      renderJudicialEvents(state.judicialProcess.events);
+      toast("Processo judicial salvo.");
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function submitJudicialEvent(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const caseId = $("#judicial-process-form").elements.case_id.value;
+    const raw = Object.fromEntries(new FormData(form));
+    try {
+      await api(`/api/v1/recovery-cases/${caseId}/judicial-process/events`, { method: "POST", body: JSON.stringify({
+        event_date: new Date(raw.event_date).toISOString(), event_type: raw.event_type, title: raw.title, description: raw.description || null
+      }) });
+      form.reset();
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
+      renderJudicialEvents(state.judicialProcess.events);
+      toast("Movimentação registrada.");
+    } catch (error) { toast(error.message, "error"); }
   }
 
   async function loadClients(page = 1) {
@@ -4194,6 +4257,8 @@
     $("#collection-distribution-form").addEventListener("submit", saveCollectionDistribution);
     $("#new-recovery-case").addEventListener("click", openRecoveryCaseDialog);
     $("#recovery-case-form").addEventListener("submit", submitRecoveryCase);
+    $("#judicial-process-form").addEventListener("submit", submitJudicialProcess);
+    $("#judicial-event-form").addEventListener("submit", submitJudicialEvent);
     $("#negotiation-form").addEventListener("submit", submitNegotiation);
     $("#negotiation-offer-form").addEventListener("submit", submitNegotiationOffer);
     $("#payment-plan-form").addEventListener("submit", submitPaymentPlan);
@@ -4209,7 +4274,9 @@
       const clientButton = event.target.closest("[data-case-client]");
       const transitionButton = event.target.closest("[data-case-transition]");
       const stageButton = event.target.closest("[data-case-stage]");
+      const judicialButton = event.target.closest("[data-judicial-process]");
       if (clientButton) openClientDetail(clientButton.dataset.caseClient);
+      else if (judicialButton) openJudicialProcessDialog(judicialButton.dataset.judicialProcess);
       else if (transitionButton) transitionRecoveryCase(transitionButton.dataset.caseId, transitionButton.dataset.caseTransition, transitionButton);
       else if (stageButton) advanceRecoveryStage(stageButton.dataset.caseId, stageButton.dataset.caseStage, stageButton);
     });

@@ -3,14 +3,17 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_permissions
 from app.db.session import get_db
-from app.models.recovery import RecoveryCaseStage, RecoveryCaseStatus
+from app.models.recovery import JudicialProcess, JudicialProcessEvent, RecoveryCaseStage, RecoveryCaseStatus
 from app.schemas.recovery import (
     RecoveryCaseCreate, RecoveryCasePage, RecoveryCaseRead,
     RecoveryCaseTransition, RecoveryCaseUpdate,
+    JudicialProcessEventCreate, JudicialProcessEventRead, JudicialProcessRead, JudicialProcessUpsert,
 )
 from app.security.identity import IdentityContext
 from app.security.permissions import PermissionCode
@@ -85,3 +88,72 @@ def post_recovery_case_transition(
                              "reason": payload.reason, "version": case.version})
     db.commit(); db.refresh(case)
     return case
+
+
+def _judicial_process(db: Session, organization_id: uuid.UUID, case_id: uuid.UUID) -> JudicialProcess:
+    process = db.scalar(select(JudicialProcess).options(selectinload(JudicialProcess.events)).where(
+        JudicialProcess.recovery_case_id == case_id,
+        JudicialProcess.organization_id == organization_id,
+    ))
+    if process is None:
+        raise HTTPException(status_code=404, detail="Processo judicial não cadastrado")
+    return process
+
+
+@router.get("/{case_id}/judicial-process", response_model=JudicialProcessRead)
+def get_judicial_process(case_id: uuid.UUID, db: Session = Depends(get_db),
+                         identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_READ.value))):
+    get_case(db, identity.organization_id, case_id)
+    return _judicial_process(db, identity.organization_id, case_id)
+
+
+@router.put("/{case_id}/judicial-process", response_model=JudicialProcessRead)
+def upsert_judicial_process(case_id: uuid.UUID, payload: JudicialProcessUpsert, db: Session = Depends(get_db),
+                            identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_UPDATE.value))):
+    case = get_case(db, identity.organization_id, case_id)
+    if case.status != RecoveryCaseStatus.JUDICIALIZED.value:
+        raise HTTPException(status_code=422, detail="O caso precisa estar judicializado")
+    process = db.scalar(select(JudicialProcess).where(
+        JudicialProcess.recovery_case_id == case.id, JudicialProcess.organization_id == identity.organization_id))
+    duplicate = db.scalar(select(JudicialProcess.id).where(
+        JudicialProcess.organization_id == identity.organization_id,
+        JudicialProcess.process_number == payload.process_number,
+        JudicialProcess.recovery_case_id != case.id,
+    ))
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="Número de processo já cadastrado nesta organização")
+    values = payload.model_dump(exclude={"version"})
+    if process is None:
+        if payload.version is not None:
+            raise HTTPException(status_code=409, detail="O processo ainda não existe; recarregue a página")
+        process = JudicialProcess(organization_id=identity.organization_id, recovery_case_id=case.id, **values)
+        db.add(process)
+        action = "create"
+    else:
+        if payload.version != process.version:
+            raise HTTPException(status_code=409, detail="Processo alterado por outro usuário; recarregue e tente novamente")
+        for field, value in values.items():
+            setattr(process, field, value)
+        process.version += 1
+        action = "update"
+    db.flush()
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id,
+                 entity_type="judicial_process", entity_id=process.id, action=action,
+                 new_values={"case_id": str(case.id), "process_number": process.process_number, "status": process.status})
+    db.commit()
+    return _judicial_process(db, identity.organization_id, case.id)
+
+
+@router.post("/{case_id}/judicial-process/events", response_model=JudicialProcessEventRead, status_code=status.HTTP_201_CREATED)
+def create_judicial_process_event(case_id: uuid.UUID, payload: JudicialProcessEventCreate, db: Session = Depends(get_db),
+                                  identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_UPDATE.value))):
+    get_case(db, identity.organization_id, case_id)
+    process = _judicial_process(db, identity.organization_id, case_id)
+    event = JudicialProcessEvent(organization_id=identity.organization_id, judicial_process_id=process.id,
+                                 created_by_user_id=identity.user_id, **payload.model_dump())
+    db.add(event); db.flush()
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id,
+                 entity_type="judicial_process_event", entity_id=event.id, action="create",
+                 new_values={"process_id": str(process.id), "event_type": event.event_type, "title": event.title})
+    db.commit(); db.refresh(event)
+    return event
