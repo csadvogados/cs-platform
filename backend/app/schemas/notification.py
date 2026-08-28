@@ -35,6 +35,7 @@ class NotificationPreferencesRead(BaseModel):
     collections_enabled: bool = True
     promises_enabled: bool = True
     goals_enabled: bool = True
+    judicial_enabled: bool = True
     only_assigned_items: bool = False
 
 

@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_permissions, require_roles
@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.models.client import Client
 from app.models.crm import CRMInteraction, CRMOpportunity, CRMTask
 from app.models.financial import CollectionAction, Creditor, Debt, Expense, Income, PaymentAgreement, PaymentInstallment
+from app.models.recovery import JudicialProcess, RecoveryCase
 from app.models.user import User
 from app.schemas.financial import (
     CreditorCreate,
@@ -842,6 +843,12 @@ def list_operational_alerts(
             due_at = due_at.replace(tzinfo=timezone.utc)
         if due_at and due_at < now:
             overdue_tasks += 1
+    overdue_judicial = db.scalar(select(func.count(JudicialProcess.id)).where(
+        JudicialProcess.organization_id == actor.organization_id,
+        JudicialProcess.status != "closed",
+        JudicialProcess.next_deadline.is_not(None),
+        JudicialProcess.next_deadline < now,
+    )) or 0
 
     definitions = (
         (
@@ -863,6 +870,11 @@ def list_operational_alerts(
             "overdue_tasks", "critical", "Tarefas do CRM atrasadas",
             "Tarefas pendentes com prazo vencido.",
             overdue_tasks, "crm", "task:overdue",
+        ),
+        (
+            "overdue_judicial", "critical", "Prazos judiciais vencidos",
+            "Processos judicializados com prazo de acompanhamento vencido.",
+            overdue_judicial, "agenda", "kind:judicial_deadline",
         ),
     )
     items = [OperationalAlertRead(
@@ -952,6 +964,26 @@ def list_operational_agenda(
                 assigned_user_id=task.assigned_to_id, assigned_user_name=user_names.get(task.assigned_to_id),
                 target_filter="task:overdue" if due_at.date() < today else "task:all",
             ))
+    judicial_rows = db.execute(select(JudicialProcess, RecoveryCase).join(
+        RecoveryCase, RecoveryCase.id == JudicialProcess.recovery_case_id
+    ).where(
+        JudicialProcess.organization_id == actor.organization_id,
+        JudicialProcess.status != "closed",
+        JudicialProcess.next_deadline.is_not(None),
+    )).all()
+    for process, case in judicial_rows:
+        due_at = process.next_deadline
+        if due_at and due_at.tzinfo is None:
+            due_at = due_at.replace(tzinfo=timezone.utc)
+        if due_at and date_from <= due_at.date() <= date_to:
+            items.append(OperationalAgendaItemRead(
+                id=f"judicial-deadline:{process.id}", kind="judicial_deadline",
+                title=f"Prazo judicial · {process.process_number}", client_id=case.client_id,
+                client_name=client_names.get(case.client_id), due_at=due_at,
+                status=agenda_status(due_at.date()), priority="urgent" if due_at.date() <= today else "high",
+                assigned_user_id=case.assigned_user_id, assigned_user_name=user_names.get(case.assigned_user_id),
+                target_filter=f"judicial:{case.id}",
+            ))
     status_order = {"overdue": 0, "today": 1, "upcoming": 2}
     priority_order = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
     items.sort(key=lambda item: (status_order[item.status], item.due_at, priority_order[item.priority], item.title.casefold()))
@@ -993,7 +1025,7 @@ def export_operational_agenda_csv(
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
 ):
-    if kind not in {"all", "task", "follow_up", "promise"}:
+    if kind not in {"all", "task", "follow_up", "promise", "judicial_deadline"}:
         raise HTTPException(status_code=422, detail="Tipo de compromisso inválido")
     if agenda_status not in {"all", "overdue", "today", "upcoming"}:
         raise HTTPException(status_code=422, detail="Situação da agenda inválida")
@@ -1015,7 +1047,7 @@ def export_operational_agenda_csv(
         items = [item for item in items if item.assigned_user_id == responsible_id]
 
     labels = {
-        "task": "Tarefa do CRM", "follow_up": "Acompanhamento", "promise": "Promessa",
+        "task": "Tarefa do CRM", "follow_up": "Acompanhamento", "promise": "Promessa", "judicial_deadline": "Prazo judicial",
         "overdue": "Atrasado", "today": "Para hoje", "upcoming": "Próximo",
         "low": "Baixa", "normal": "Normal", "high": "Alta", "urgent": "Urgente",
     }

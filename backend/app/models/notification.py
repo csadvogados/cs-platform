@@ -37,6 +37,7 @@ class NotificationPreference(TimestampMixin, Base):
     collections_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     promises_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     goals_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    judicial_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     only_assigned_items: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     user = relationship("User")

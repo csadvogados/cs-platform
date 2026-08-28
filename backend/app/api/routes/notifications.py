@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.crm import CRMTask
 from app.models.financial import CollectionAction, PaymentInstallment
 from app.models.notification import Notification, NotificationPreference
+from app.models.recovery import JudicialProcess, RecoveryCase
 from app.models.user import User
 from app.schemas.notification import (
     NotificationPage, NotificationPreferencesRead, NotificationPreferencesUpdate,
@@ -129,6 +130,27 @@ def synchronize_notifications(db: Session, actor: User) -> None:
                     message=f"A projeção atual indica {metric.projected_percent}% da meta mensal.",
                     event_at=now, target_view="performance", target_filter=metric.metric,
                 )
+    if preferences.judicial_enabled:
+        query = select(JudicialProcess, RecoveryCase).join(
+            RecoveryCase, RecoveryCase.id == JudicialProcess.recovery_case_id
+        ).where(
+            JudicialProcess.organization_id == actor.organization_id,
+            JudicialProcess.status != "closed",
+            JudicialProcess.next_deadline.is_not(None),
+            JudicialProcess.next_deadline <= now + timedelta(days=3),
+        )
+        if preferences.only_assigned_items:
+            query = query.where(RecoveryCase.assigned_user_id == actor.id)
+        for process, case in db.execute(query):
+            due = utc_value(process.next_deadline)
+            overdue = bool(due and due < now)
+            add_notification(
+                db, actor, key=f"judicial:{process.id}:{'overdue' if overdue else 'soon'}",
+                kind="judicial", priority="critical" if overdue else "high",
+                title="Prazo judicial vencido" if overdue else "Prazo judicial próximo",
+                message=f"Processo {process.process_number} · prazo em {due.astimezone().strftime('%d/%m/%Y %H:%M') if due else 'breve'}",
+                event_at=due or now, target_view="agenda", target_filter="kind:judicial_deadline",
+            )
     db.commit()
 
 

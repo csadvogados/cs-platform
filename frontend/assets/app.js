@@ -1114,7 +1114,8 @@
     $("#agenda-task-count").textContent = items.filter((item) => item.kind === "task").length;
     $("#agenda-follow-up-count").textContent = items.filter((item) => item.kind === "follow_up").length;
     $("#agenda-promise-count").textContent = items.filter((item) => item.kind === "promise").length;
-    const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa" };
+    $("#agenda-judicial-count").textContent = items.filter((item) => item.kind === "judicial_deadline").length;
+    const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa", judicial_deadline: "Prazo judicial" };
     const statusLabels = { overdue: "Atrasado", today: "Hoje", upcoming: "Próximo" };
     $("#agenda-list").innerHTML = items.length ? items.map((item) => `<article class="agenda-item ${escapeHtml(item.status)}"><button class="agenda-open" type="button" data-agenda-id="${escapeHtml(item.id)}">
       <span class="agenda-date"><strong>${escapeHtml(formatDate(item.due_at, true))}</strong><small>${escapeHtml(statusLabels[item.status] || item.status)}</small></span>
@@ -1185,6 +1186,15 @@
       $$(".crm-tab").forEach((entry) => entry.classList.toggle("active", entry === tab));
       $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === "crm-tasks"));
       renderCrm();
+      return;
+    }
+    if (item.kind === "judicial_deadline") {
+      const caseId = String(item.target_filter || "").replace(/^judicial:/, "");
+      setView("recovery");
+      state.recovery.status = "judicialized";
+      $("#recovery-status-filter").value = "judicialized";
+      await loadRecoveryCases(1);
+      if (caseId) await openJudicialProcessDialog(caseId);
       return;
     }
     state.collections.filters.q = item.client_name || "";
@@ -1262,7 +1272,7 @@
       list.innerHTML = '<div class="alert-empty"><strong>Tudo em dia</strong><span>Nenhuma notificação não lida.</span></div>';
       return;
     }
-    const icons = { task: "✓", collection: "$", promise: "↻", goal: "◎" };
+    const icons = { task: "✓", collection: "$", promise: "↻", judicial: "⚖", goal: "◎" };
     list.innerHTML = state.alerts.items.map((item) => `<button class="alert-item ${escapeHtml(item.priority)}" type="button" data-notification-id="${item.id}" data-alert-view="${escapeHtml(item.target_view || "")}" data-alert-filter="${escapeHtml(item.target_filter || "")}">
       <span class="alert-item-count">${icons[item.notification_type] || "!"}</span>
       <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.message)}</small></span>
@@ -1307,6 +1317,16 @@
       await loadOperationalAlerts();
       return;
     }
+    if (targetView === "agenda") {
+      const [field, value] = String(targetFilter || "").split(":");
+      if (field === "kind") state.agenda.filters.kind = value || "all";
+      setView("agenda");
+      $("#agenda-filter-form").elements.kind.value = state.agenda.filters.kind;
+      await loadOperationalAgenda();
+      $("#agenda-filter-form").scrollIntoView({ behavior: "smooth", block: "start" });
+      await loadOperationalAlerts();
+      return;
+    }
     if (targetView === "performance") {
       setView("performance");
       await loadPerformance();
@@ -1344,7 +1364,7 @@
     $("#notifications-critical").textContent = state.notifications.criticalUnreadCount;
     $("#notifications-total").textContent = state.notifications.total;
     $("#notification-list-count").textContent = `${state.notifications.items.length} ${state.notifications.items.length === 1 ? "notificação" : "notificações"}`;
-    const typeLabels = { task: "Tarefa", collection: "Cobrança", promise: "Promessa", goal: "Meta" };
+    const typeLabels = { task: "Tarefa", collection: "Cobrança", promise: "Promessa", judicial: "Prazo judicial", goal: "Meta" };
     $("#notification-page-list").innerHTML = state.notifications.items.length ? state.notifications.items.map((item) => `<article class="notification-row ${item.read_at ? "read" : "unread"} ${escapeHtml(item.priority)}" data-notification-row="${item.id}">
       <span class="notification-dot"></span><div class="notification-copy"><div><span class="badge">${escapeHtml(typeLabels[item.notification_type] || item.notification_type)}</span><small>${formatDate(item.event_at, true)}</small></div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p></div>
       <div class="notification-actions"><button class="text-link" type="button" data-open-notification="${item.id}" data-alert-view="${escapeHtml(item.target_view || "")}" data-alert-filter="${escapeHtml(item.target_filter || "")}">Abrir</button><button class="secondary-button compact-button" type="button" data-toggle-notification="${item.id}" data-read="${item.read_at ? "false" : "true"}">${item.read_at ? "Marcar não lida" : "Marcar lida"}</button></div>
@@ -1354,7 +1374,7 @@
   function renderNotificationPreferences() {
     const form = $("#notification-preferences-form");
     const preferences = state.notifications.preferences || {};
-    ["tasks_enabled", "collections_enabled", "promises_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { form.elements[name].checked = Boolean(preferences[name]); });
+    ["tasks_enabled", "collections_enabled", "promises_enabled", "judicial_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { form.elements[name].checked = Boolean(preferences[name]); });
   }
 
   async function markAllNotificationsRead() {
@@ -1372,7 +1392,7 @@
     event.preventDefault();
     const form = event.currentTarget;
     const payload = {};
-    ["tasks_enabled", "collections_enabled", "promises_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { payload[name] = form.elements[name].checked; });
+    ["tasks_enabled", "collections_enabled", "promises_enabled", "judicial_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { payload[name] = form.elements[name].checked; });
     const button = $('button[type="submit"]', form); setBusy(button, true, "Salvando…");
     try { state.notifications.preferences = await api("/api/v1/notifications/preferences", { method: "PUT", body: JSON.stringify(payload) }); toast("Preferências salvas."); }
     catch (error) { toast(error.message, "error"); }
