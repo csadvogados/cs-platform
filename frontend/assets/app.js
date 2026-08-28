@@ -2668,6 +2668,8 @@
     form.elements.phone.value = client.phone || "";
     form.elements.city.value = client.city || "";
     form.elements.state.value = client.state || "";
+    form.elements.good_faith_declared.value = client.good_faith_declared == null ? "" : String(client.good_faith_declared);
+    form.elements.can_pay_without_harming_basics.value = client.can_pay_without_harming_basics == null ? "" : String(client.can_pay_without_harming_basics);
     form.elements.notes.value = client.notes || "";
     setSelectValue(form.elements.status, client.status || "lead", clientStatusLabel(client.status));
 
@@ -3733,6 +3735,8 @@
     setBusy(button, true, "Salvando…");
     try {
       if (data.state) data.state = data.state.toUpperCase();
+      data.good_faith_declared = data.good_faith_declared === "" ? null : data.good_faith_declared === "true";
+      data.can_pay_without_harming_basics = data.can_pay_without_harming_basics === "" ? null : data.can_pay_without_harming_basics === "true";
       let updatedClient = null;
       if (editingId) {
         const payload = {
@@ -3743,6 +3747,8 @@
           city: data.city || null,
           state: data.state || null,
           status: data.status || "lead",
+          good_faith_declared: data.good_faith_declared,
+          can_pay_without_harming_basics: data.can_pay_without_harming_basics,
           notes: data.notes || null
         };
         updatedClient = await api(`/api/v1/clients/${editingId}`, { method: "PATCH", body: JSON.stringify(payload) });

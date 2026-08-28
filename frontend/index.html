@@ -593,6 +593,8 @@
           <label><span>Telefone</span><input name="phone" type="tel" /></label>
           <label><span>Cidade</span><input name="city" /></label>
           <label><span>Estado</span><input name="state" maxlength="2" placeholder="SP" /></label>
+          <label><span>Declaração de boa-fé</span><select name="good_faith_declared"><option value="">Não informado</option><option value="true">Confirmada</option><option value="false">Não confirmada</option></select></label>
+          <label><span>Consegue pagar sem comprometer o básico?</span><select name="can_pay_without_harming_basics"><option value="">Não informado</option><option value="false">Não</option><option value="true">Sim</option></select></label>
           <label class="wide"><span>Observações</span><textarea name="notes" rows="3"></textarea></label>
         </div>
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar cliente</button></div>
