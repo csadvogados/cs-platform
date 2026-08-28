@@ -1466,6 +1466,9 @@
     if (item.status === "active") {
       buttons.push(`<button class="edit-button" type="button" data-case-transition="on_hold" data-case-id="${escapeHtml(item.id)}">Pausar</button>`);
       buttons.push(`<button class="edit-button" type="button" data-case-transition="resolved" data-case-id="${escapeHtml(item.id)}">Concluir</button>`);
+      const nextStages = { intake: "documents", documents: "diagnosis", diagnosis: "planning", planning: "negotiation", negotiation: "judicial_preparation" };
+      if (nextStages[item.stage]) buttons.push(`<button class="edit-button" type="button" data-case-stage="${nextStages[item.stage]}" data-case-id="${escapeHtml(item.id)}">Avançar etapa</button>`);
+      if (item.stage === "judicial_preparation") buttons.push(`<button class="edit-button" type="button" data-case-transition="judicialized" data-case-id="${escapeHtml(item.id)}">Judicializar</button>`);
     }
     if (item.status === "on_hold") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Retomar</button>`);
     if (["resolved", "judicialized", "cancelled"].includes(item.status)) buttons.push(`<button class="edit-button" type="button" data-case-transition="archived" data-case-id="${escapeHtml(item.id)}">Arquivar</button>`);
@@ -1561,6 +1564,18 @@
       });
       await loadRecoveryCases(state.recovery.page);
       toast("Situação do caso atualizada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function advanceRecoveryStage(caseId, stage, button) {
+    const item = state.recovery.items.find((entry) => String(entry.id) === String(caseId));
+    if (!item) return;
+    setBusy(button, true, "Avançando…");
+    try {
+      await api(`/api/v1/recovery-cases/${caseId}`, { method: "PATCH", body: JSON.stringify({ stage, version: item.version }) });
+      await loadRecoveryCases(state.recovery.page);
+      toast(`Etapa atualizada para ${recoveryStageLabels[stage] || stage}.`);
     } catch (error) { toast(error.message, "error"); }
     finally { setBusy(button, false); }
   }
@@ -4193,8 +4208,10 @@
     $("#recovery-table").addEventListener("click", (event) => {
       const clientButton = event.target.closest("[data-case-client]");
       const transitionButton = event.target.closest("[data-case-transition]");
+      const stageButton = event.target.closest("[data-case-stage]");
       if (clientButton) openClientDetail(clientButton.dataset.caseClient);
       else if (transitionButton) transitionRecoveryCase(transitionButton.dataset.caseId, transitionButton.dataset.caseTransition, transitionButton);
+      else if (stageButton) advanceRecoveryStage(stageButton.dataset.caseId, stageButton.dataset.caseStage, stageButton);
     });
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());

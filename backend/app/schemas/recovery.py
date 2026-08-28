@@ -22,6 +22,7 @@ class RecoveryCaseUpdate(BaseModel):
 
     assigned_user_id: uuid.UUID | None = None
     notes: str | None = Field(default=None, max_length=4000)
+    stage: RecoveryCaseStage | None = None
     version: int = Field(ge=1)
 
 
