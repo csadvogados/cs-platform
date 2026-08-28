@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from pydantic import BaseModel, ConfigDict
 class DiagnosisPreview(BaseModel):
     total_income: Decimal
@@ -47,3 +48,13 @@ class DiagnosisRead(BaseModel):
     score_breakdown: dict[str, int]
     analysis_snapshot: dict
     created_at: datetime
+
+
+class ClientDossier(BaseModel):
+    client: dict[str, Any]
+    financial_summary: DiagnosisPreview
+    creditors: list[dict[str, Any]]
+    debts: list[dict[str, Any]]
+    latest_diagnosis: DiagnosisRead | None = None
+    missing_information: list[str]
+    generated_at: datetime

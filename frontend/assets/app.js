@@ -20,7 +20,7 @@
     selectedClient: null,
     editingClientId: null,
     clientImport: { filename: "", clients: [], preview: null },
-    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [] },
+    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [], dossier: null },
     editingFinancial: null,
     installmentPaymentTarget: null,
     editingUserId: null,
@@ -1585,7 +1585,8 @@
       `/api/v1/diagnoses/${client.id}/history?limit=50`,
       `/api/v1/financial/clients/${client.id}/agreements`,
       `/api/v1/negotiations?client_id=${encodeURIComponent(client.id)}`,
-      `/api/v1/recovery-cases?page=1&page_size=100&client_id=${encodeURIComponent(client.id)}`
+      `/api/v1/recovery-cases?page=1&page_size=100&client_id=${encodeURIComponent(client.id)}`,
+      `/api/v1/diagnoses/${client.id}/dossier`
     ];
     const results = await Promise.allSettled(paths.map((path) => api(path)));
     const valueAt = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
@@ -1598,7 +1599,8 @@
       history: Array.isArray(valueAt(5, [])) ? valueAt(5, []) : [],
       agreements: Array.isArray(valueAt(6, [])) ? valueAt(6, []) : [],
       negotiations: Array.isArray(valueAt(7, [])) ? valueAt(7, []) : [],
-      recoveryCases: Array.isArray(valueAt(8, {}).items) ? valueAt(8, {}).items : []
+      recoveryCases: Array.isArray(valueAt(8, {}).items) ? valueAt(8, {}).items : [],
+      dossier: valueAt(9, null)
     };
     fillCreditorSelect();
     fillAgreementDebtSelect();
@@ -2771,7 +2773,7 @@
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
-    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history } = state.financial;
+    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history, dossier } = state.financial;
     const totalIncome = incomes.reduce((total, item) => total + Number(item.net_amount || 0), 0);
     const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount || 0), 0);
     const totalDebt = debts.reduce((total, item) => total + Number(item.current_balance || 0), 0);
@@ -2832,7 +2834,8 @@
       </section>
 
       <section class="panel diagnosis-panel">
-        <div class="panel-header"><div><p class="eyebrow dark">ANÁLISE ECONÔMICA</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir relatório</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
+        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ CONSOLIDADO</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir dossiê</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
+        ${dossier ? `<div class="diagnosis-conclusion"><strong>Conferência do dossiê</strong>${dossier.missing_information?.length ? `<ul>${dossier.missing_information.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<p class="muted">Dossiê completo para revisão profissional.</p>'}<p class="muted">${dossier.creditors?.length || 0} credor(es) · ${dossier.debts?.length || 0} dívida(s) · ${dossier.latest_diagnosis ? `diagnóstico salvo v${escapeHtml(dossier.latest_diagnosis.version)}` : "sem diagnóstico salvo"}</p></div>` : ""}
         ${diagnosis ? `<div class="diagnosis-grid">
           <article class="diagnosis-score"><span>Pontuação</span><strong>${escapeHtml(diagnosis.eligibility_score)}</strong><small>${escapeHtml(diagnosis.eligibility_result)}</small></article>
           <dl class="definition-list"><div><dt>Renda total</dt><dd>${formatCurrency(diagnosis.total_income)}</dd></div><div><dt>Despesas</dt><dd>${formatCurrency(diagnosis.total_expenses)}</dd></div><div><dt>Parcelas mensais</dt><dd>${formatCurrency(diagnosis.total_installments)}</dd></div><div><dt>Comprometimento</dt><dd>${Number(diagnosis.commitment_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</dd></div></dl>
