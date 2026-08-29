@@ -1,12 +1,12 @@
 """Add judicial deadline notification preference.
 
-Revision ID: 0023_judicial_deadline_notifications
+Revision ID: 0023_judicial_deadlines
 Revises: 0022_judicial_process_tracking
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0023_judicial_deadline_notifications"
+revision = "0023_judicial_deadlines"
 down_revision = "0022_judicial_process_tracking"
 branch_labels = None
 depends_on = None
