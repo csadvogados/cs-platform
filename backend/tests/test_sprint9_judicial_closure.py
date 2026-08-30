@@ -60,11 +60,35 @@ def test_closure_requires_dedicated_action_and_cannot_repeat(client, token):
     assert repeated.status_code == 409
 
 
+def test_only_closure_reason_can_be_corrected_after_closing(client, token):
+    case, process = create_open_judicial_process(client, token)
+    closed = client.post(f"/api/v1/recovery-cases/{case['id']}/judicial-process/close", headers=auth(token), json={
+        "outcome": "dismissed", "closed_at": datetime.now(timezone.utc).isoformat(),
+        "reason": "Texto inicial a corrigir.", "version": process["version"],
+    }).json()
+    corrected = client.patch(
+        f"/api/v1/recovery-cases/{case['id']}/judicial-process/closure-reason",
+        headers=auth(token),
+        json={"reason": "Extinto sem resolução do mérito por ausência de pressuposto processual.", "version": closed["version"]},
+    )
+    assert corrected.status_code == 200, corrected.text
+    result = corrected.json()
+    assert result["closure_reason"].startswith("Extinto sem resolução")
+    assert result["outcome"] == closed["outcome"]
+    assert result["closed_at"] == closed["closed_at"]
+    assert result["status"] == "closed"
+    assert result["version"] == closed["version"] + 1
+    assert result["events"][0]["title"] == "Motivo do encerramento corrigido"
+
+
 def test_frontend_exposes_controlled_closure():
     frontend = Path(__file__).parents[2] / "frontend"
     index = (frontend / "index.html").read_text(encoding="utf-8")
     app = (frontend / "assets" / "app.js").read_text(encoding="utf-8")
     assert 'id="judicial-closure-dialog"' in index
     assert 'id="close-judicial-process"' in index
+    assert 'id="edit-judicial-closure-reason"' in index
+    assert 'id="judicial-closure-reason-dialog"' in index
     assert "/judicial-process/close" in app
+    assert "/judicial-process/closure-reason" in app
     assert "5.34.0-judicial-closure" in index

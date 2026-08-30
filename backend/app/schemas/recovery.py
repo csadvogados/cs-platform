@@ -104,6 +104,12 @@ class JudicialProcessClose(BaseModel):
     version: int = Field(ge=1)
 
 
+class JudicialClosureReasonUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=3, max_length=2000)
+    version: int = Field(ge=1)
+
+
 class JudicialProcessEventRead(JudicialProcessEventCreate):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID

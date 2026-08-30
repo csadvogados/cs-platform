@@ -1683,6 +1683,7 @@
     form.elements.case_id.value = caseId;
     state.judicialProcess = null;
     $("#close-judicial-process").hidden = true;
+    $("#edit-judicial-closure-reason").hidden = true;
     $("#judicial-closure-summary").hidden = true;
     try {
       state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
@@ -1693,6 +1694,7 @@
       const closed = state.judicialProcess.status === "closed";
       const outcomes = { favorable: "Favorável", partially_favorable: "Parcialmente favorável", unfavorable: "Desfavorável", settlement: "Acordo judicial", dismissed: "Extinto sem decisão de mérito", other: "Outro resultado" };
       $("#close-judicial-process").hidden = closed || !canCloseJudicial();
+      $("#edit-judicial-closure-reason").hidden = !closed || !canCloseJudicial();
       $('button[type="submit"]', form).hidden = closed || !canUpdateJudicial();
       $("#judicial-event-form").hidden = closed || !canUpdateJudicial();
       const closure = $("#judicial-closure-summary");
@@ -1785,6 +1787,35 @@
       closeDialog($("#judicial-process-dialog"));
       await Promise.all([loadRecoveryCases(state.recovery.page), loadOperationalAgenda(), loadOperationalAlerts()]);
       toast("Processo judicial encerrado e registrado no histórico.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  function openJudicialClosureReasonDialog() {
+    if (!state.judicialProcess || state.judicialProcess.status !== "closed" || !canCloseJudicial()) return;
+    const form = $("#judicial-closure-reason-form");
+    form.reset();
+    form.elements.case_id.value = state.judicialProcess.recovery_case_id;
+    form.elements.version.value = state.judicialProcess.version;
+    form.elements.reason.value = state.judicialProcess.closure_reason || "";
+    $("#judicial-closure-reason-dialog").showModal();
+  }
+
+  async function submitJudicialClosureReason(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const raw = Object.fromEntries(new FormData(form));
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Salvando…");
+    try {
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${raw.case_id}/judicial-process/closure-reason`, {
+        method: "PATCH", body: JSON.stringify({ reason: raw.reason, version: Number(raw.version) })
+      });
+      closeDialog($("#judicial-closure-reason-dialog"));
+      closeDialog($("#judicial-process-dialog"));
+      await openJudicialProcessDialog(raw.case_id);
+      toast("Motivo do encerramento corrigido e registrado no histórico.");
     } catch (error) { toast(error.message, "error"); }
     finally { setBusy(button, false); }
   }
@@ -4407,6 +4438,8 @@
     $("#judicial-event-form").addEventListener("submit", submitJudicialEvent);
     $("#close-judicial-process").addEventListener("click", openJudicialClosureDialog);
     $("#judicial-closure-form").addEventListener("submit", submitJudicialClosure);
+    $("#edit-judicial-closure-reason").addEventListener("click", openJudicialClosureReasonDialog);
+    $("#judicial-closure-reason-form").addEventListener("submit", submitJudicialClosureReason);
     $("#judicial-report-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const raw = Object.fromEntries(new FormData(event.currentTarget));

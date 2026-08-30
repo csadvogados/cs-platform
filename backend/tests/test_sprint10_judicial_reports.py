@@ -59,4 +59,4 @@ def test_frontend_exposes_judicial_report():
     assert 'id="judicial-report-panel"' in index
     assert 'id="judicial-report-export"' in index
     assert "/api/v1/judicial-reports/summary" in app
-    assert "5.37.0-production-ready" in index
+    assert "5.38.0-closure-reason-edit" in index
