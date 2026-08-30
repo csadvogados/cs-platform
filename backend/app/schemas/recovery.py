@@ -96,6 +96,14 @@ class JudicialDeadlineComplete(BaseModel):
     version: int = Field(ge=1)
 
 
+class JudicialProcessClose(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    outcome: Literal["favorable", "partially_favorable", "unfavorable", "settlement", "dismissed", "other"]
+    closed_at: datetime
+    reason: str = Field(min_length=3, max_length=2000)
+    version: int = Field(ge=1)
+
+
 class JudicialProcessEventRead(JudicialProcessEventCreate):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -115,6 +123,9 @@ class JudicialProcessRead(BaseModel):
     filed_at: datetime | None
     status: JudicialProcessStatus
     next_deadline: datetime | None
+    outcome: str | None
+    closed_at: datetime | None
+    closure_reason: str | None
     notes: str | None
     version: int
     events: list[JudicialProcessEventRead] = Field(default_factory=list)

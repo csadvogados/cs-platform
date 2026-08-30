@@ -13,7 +13,7 @@ from app.models.recovery import JudicialProcess, JudicialProcessEvent, RecoveryC
 from app.schemas.recovery import (
     RecoveryCaseCreate, RecoveryCasePage, RecoveryCaseRead,
     RecoveryCaseTransition, RecoveryCaseUpdate,
-    JudicialDeadlineComplete, JudicialProcessEventCreate, JudicialProcessEventRead, JudicialProcessRead, JudicialProcessUpsert,
+    JudicialDeadlineComplete, JudicialProcessClose, JudicialProcessEventCreate, JudicialProcessEventRead, JudicialProcessRead, JudicialProcessUpsert,
 )
 from app.security.identity import IdentityContext
 from app.security.permissions import PermissionCode
@@ -113,6 +113,8 @@ def upsert_judicial_process(case_id: uuid.UUID, payload: JudicialProcessUpsert, 
     case = get_case(db, identity.organization_id, case_id)
     if case.status != RecoveryCaseStatus.JUDICIALIZED.value:
         raise HTTPException(status_code=422, detail="O caso precisa estar judicializado")
+    if payload.status == "closed":
+        raise HTTPException(status_code=422, detail="Use a ação Encerrar processo para informar o resultado judicial")
     process = db.scalar(select(JudicialProcess).where(
         JudicialProcess.recovery_case_id == case.id, JudicialProcess.organization_id == identity.organization_id))
     duplicate = db.scalar(select(JudicialProcess.id).where(
@@ -183,5 +185,35 @@ def complete_judicial_deadline(case_id: uuid.UUID, payload: JudicialDeadlineComp
                  entity_type="judicial_process", entity_id=process.id, action="deadline_complete",
                  new_values={"case_id": str(case_id), "previous_deadline": previous_deadline.isoformat(),
                              "completed_at": payload.completed_at.isoformat()})
+    db.commit()
+    return _judicial_process(db, identity.organization_id, case_id)
+
+
+@router.post("/{case_id}/judicial-process/close", response_model=JudicialProcessRead)
+def close_judicial_process(case_id: uuid.UUID, payload: JudicialProcessClose, db: Session = Depends(get_db),
+                           identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_TRANSITION.value))):
+    get_case(db, identity.organization_id, case_id)
+    process = _judicial_process(db, identity.organization_id, case_id)
+    if process.version != payload.version:
+        raise HTTPException(status_code=409, detail="Processo alterado por outro usuário; recarregue e tente novamente")
+    if process.status == "closed":
+        raise HTTPException(status_code=409, detail="O processo judicial já está encerrado")
+    process.status = "closed"
+    process.outcome = payload.outcome
+    process.closed_at = payload.closed_at
+    process.closure_reason = payload.reason
+    process.next_deadline = None
+    process.version += 1
+    event = JudicialProcessEvent(
+        organization_id=identity.organization_id, judicial_process_id=process.id,
+        created_by_user_id=identity.user_id, event_date=payload.closed_at,
+        event_type="decision", title="Processo judicial encerrado",
+        description=payload.reason,
+    )
+    db.add(event); db.flush()
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id,
+                 entity_type="judicial_process", entity_id=process.id, action="close",
+                 new_values={"case_id": str(case_id), "outcome": payload.outcome,
+                             "closed_at": payload.closed_at.isoformat(), "reason": payload.reason})
     db.commit()
     return _judicial_process(db, identity.organization_id, case_id)

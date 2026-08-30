@@ -66,6 +66,6 @@ def test_frontend_exposes_deadline_completion():
     frontend = Path(__file__).parents[2] / "frontend"
     index = (frontend / "index.html").read_text(encoding="utf-8")
     app = (frontend / "assets" / "app.js").read_text(encoding="utf-8")
-    assert "5.33.0-judicial-deadline-workflow" in index
+    assert "judicial-closure" in index
     assert "data-complete-judicial" in app
     assert "/deadline/complete" in app

@@ -697,11 +697,12 @@
           <label><span>Comarca</span><input name="district" maxlength="160" /></label>
           <label><span>Vara</span><input name="division" maxlength="160" /></label>
           <label><span>Data do protocolo</span><input name="filed_at" type="datetime-local" /></label>
-          <label><span>Situação *</span><select name="status"><option value="filed">Protocolado</option><option value="awaiting_decision">Aguardando decisão</option><option value="hearing_scheduled">Audiência marcada</option><option value="decision_issued">Decisão proferida</option><option value="appeal">Em recurso</option><option value="closed">Encerrado</option></select></label>
+          <label><span>Situação *</span><select name="status"><option value="filed">Protocolado</option><option value="awaiting_decision">Aguardando decisão</option><option value="hearing_scheduled">Audiência marcada</option><option value="decision_issued">Decisão proferida</option><option value="appeal">Em recurso</option><option value="closed" disabled>Encerrado</option></select></label>
           <label><span>Próximo prazo</span><input name="next_deadline" type="datetime-local" /></label>
           <label class="wide"><span>Observações</span><textarea name="notes" rows="3" maxlength="4000"></textarea></label>
         </div>
-        <div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar processo</button></div>
+        <div id="judicial-closure-summary" class="diagnosis-conclusion" hidden></div>
+        <div class="modal-actions"><button id="close-judicial-process" type="button" class="delete-button" hidden>Encerrar processo</button><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar processo</button></div>
       </form>
       <section id="judicial-event-section" hidden>
         <div class="panel-header"><div><p class="eyebrow dark">HISTÓRICO</p><h3>Movimentações</h3></div></div>
@@ -716,6 +717,20 @@
           <div class="modal-actions"><button class="secondary-button" type="submit">Registrar movimentação</button></div>
         </form>
       </section>
+    </dialog>
+
+    <dialog id="judicial-closure-dialog" class="modal small-modal">
+      <form id="judicial-closure-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">CONCLUSÃO JUDICIAL</p><h2>Encerrar processo</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="case_id" type="hidden" /><input name="version" type="hidden" />
+        <div class="form-grid single">
+          <label><span>Resultado *</span><select name="outcome" required><option value="">Selecione</option><option value="favorable">Favorável</option><option value="partially_favorable">Parcialmente favorável</option><option value="unfavorable">Desfavorável</option><option value="settlement">Acordo judicial</option><option value="dismissed">Extinto sem decisão de mérito</option><option value="other">Outro resultado</option></select></label>
+          <label><span>Data do encerramento *</span><input name="closed_at" type="datetime-local" required /></label>
+          <label><span>Motivo e conclusão *</span><textarea name="reason" rows="5" minlength="3" maxlength="2000" required placeholder="Informe a decisão, acordo ou motivo do encerramento"></textarea></label>
+        </div>
+        <p class="form-help">Ao encerrar, eventual prazo pendente será removido da Agenda e a conclusão ficará registrada no histórico.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="delete-button" type="submit">Confirmar encerramento</button></div>
+      </form>
     </dialog>
 
     <dialog id="income-dialog" class="modal small-modal">
@@ -848,6 +863,6 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.33.0-judicial-deadline-workflow"></script>
+    <script src="./assets/app.js?v=5.34.0-judicial-closure"></script>
   </body>
 </html>

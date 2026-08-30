@@ -1612,12 +1612,20 @@
     form.reset();
     form.elements.case_id.value = caseId;
     state.judicialProcess = null;
+    $("#close-judicial-process").hidden = true;
+    $("#judicial-closure-summary").hidden = true;
     try {
       state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
       for (const name of ["process_number", "court", "district", "division", "status", "notes"]) form.elements[name].value = state.judicialProcess[name] || "";
       form.elements.version.value = state.judicialProcess.version;
       form.elements.filed_at.value = state.judicialProcess.filed_at ? String(state.judicialProcess.filed_at).slice(0, 16) : "";
       form.elements.next_deadline.value = state.judicialProcess.next_deadline ? String(state.judicialProcess.next_deadline).slice(0, 16) : "";
+      const closed = state.judicialProcess.status === "closed";
+      const outcomes = { favorable: "Favorável", partially_favorable: "Parcialmente favorável", unfavorable: "Desfavorável", settlement: "Acordo judicial", dismissed: "Extinto sem decisão de mérito", other: "Outro resultado" };
+      $("#close-judicial-process").hidden = closed;
+      const closure = $("#judicial-closure-summary");
+      closure.hidden = !closed;
+      closure.innerHTML = closed ? `<strong>Processo encerrado · ${escapeHtml(outcomes[state.judicialProcess.outcome] || state.judicialProcess.outcome || "Resultado não informado")}</strong><p>${escapeHtml(state.judicialProcess.closure_reason || "")}</p><small>${escapeHtml(formatDate(state.judicialProcess.closed_at, true))}</small>` : "";
       $("#judicial-event-section").hidden = false;
       renderJudicialEvents(state.judicialProcess.events);
     } catch (error) {
@@ -1675,6 +1683,35 @@
       });
       await Promise.all([loadOperationalAgenda(), loadOperationalAlerts()]);
       toast("Prazo judicial concluído e registrado no histórico.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  function openJudicialClosureDialog() {
+    if (!state.judicialProcess || state.judicialProcess.status === "closed") return;
+    const form = $("#judicial-closure-form");
+    form.reset();
+    form.elements.case_id.value = state.judicialProcess.recovery_case_id;
+    form.elements.version.value = state.judicialProcess.version;
+    form.elements.closed_at.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    $("#judicial-closure-dialog").showModal();
+  }
+
+  async function submitJudicialClosure(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const raw = Object.fromEntries(new FormData(form));
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Encerrando…");
+    try {
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${raw.case_id}/judicial-process/close`, {
+        method: "POST", body: JSON.stringify({ outcome: raw.outcome, closed_at: new Date(raw.closed_at).toISOString(), reason: raw.reason, version: Number(raw.version) })
+      });
+      closeDialog($("#judicial-closure-dialog"));
+      closeDialog($("#judicial-process-dialog"));
+      await Promise.all([loadRecoveryCases(state.recovery.page), loadOperationalAgenda(), loadOperationalAlerts()]);
+      toast("Processo judicial encerrado e registrado no histórico.");
     } catch (error) { toast(error.message, "error"); }
     finally { setBusy(button, false); }
   }
@@ -4295,6 +4332,8 @@
     $("#recovery-case-form").addEventListener("submit", submitRecoveryCase);
     $("#judicial-process-form").addEventListener("submit", submitJudicialProcess);
     $("#judicial-event-form").addEventListener("submit", submitJudicialEvent);
+    $("#close-judicial-process").addEventListener("click", openJudicialClosureDialog);
+    $("#judicial-closure-form").addEventListener("submit", submitJudicialClosure);
     $("#negotiation-form").addEventListener("submit", submitNegotiation);
     $("#negotiation-offer-form").addEventListener("submit", submitNegotiationOffer);
     $("#payment-plan-form").addEventListener("submit", submitPaymentPlan);
