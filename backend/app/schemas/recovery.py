@@ -89,6 +89,13 @@ class JudicialProcessEventCreate(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
 
 
+class JudicialDeadlineComplete(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    completed_at: datetime
+    notes: str | None = Field(default=None, max_length=1000)
+    version: int = Field(ge=1)
+
+
 class JudicialProcessEventRead(JudicialProcessEventCreate):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID

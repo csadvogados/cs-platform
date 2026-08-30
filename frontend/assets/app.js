@@ -1123,7 +1123,7 @@
       <span class="agenda-copy"><small>${escapeHtml(kindLabels[item.kind] || item.kind)}</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.client_name || "Sem cliente vinculado")} · ${escapeHtml(item.assigned_user_name || "Sem responsável")}</span></span>
       <span class="badge ${item.priority === "urgent" ? "priority-urgent" : `priority-${escapeHtml(item.priority || "normal")}`} ">${escapeHtml(priorityLabels[item.priority] || "Normal")}</span>
       <span class="agenda-arrow" aria-hidden="true">→</span>
-    </button>${item.kind === "task" ? `<button class="complete-button agenda-complete-task" type="button" data-agenda-complete-task="${escapeHtml(String(item.id).replace(/^task:/, ""))}">Concluir</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
+    </button>${item.kind === "task" ? `<button class="complete-button agenda-complete-task" type="button" data-agenda-complete-task="${escapeHtml(String(item.id).replace(/^task:/, ""))}">Concluir</button>` : item.kind === "judicial_deadline" ? `<button class="complete-button agenda-complete-judicial" type="button" data-complete-judicial="${escapeHtml(String(item.target_filter || "").replace(/^judicial:/, ""))}">Concluir prazo</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
     const workload = state.agenda.workload;
     $("#agenda-workload-summary").textContent = `${workload.length} ${workload.length === 1 ? "responsável" : "responsáveis"}`;
     $("#agenda-workload-list").innerHTML = workload.length ? workload.map((row) => `<button type="button" class="agenda-workload-card ${String(filters.responsible) === String(row.user_id || "unassigned") ? "active" : ""}" data-agenda-responsible="${escapeHtml(row.user_id || "unassigned")}">
@@ -1661,6 +1661,22 @@
       renderJudicialEvents(state.judicialProcess.events);
       toast("Movimentação registrada.");
     } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function completeJudicialDeadline(caseId, button) {
+    if (!window.confirm("Confirmar a conclusão deste prazo judicial?")) return;
+    setBusy(button, true, "Concluindo…");
+    try {
+      let process = state.judicialProcess?.recovery_case_id === caseId ? state.judicialProcess : null;
+      if (!process) process = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
+      const notes = window.prompt("Observação sobre o cumprimento do prazo (opcional):") || null;
+      await api(`/api/v1/recovery-cases/${caseId}/judicial-process/deadline/complete`, {
+        method: "POST", body: JSON.stringify({ completed_at: new Date().toISOString(), notes, version: process.version })
+      });
+      await Promise.all([loadOperationalAgenda(), loadOperationalAlerts()]);
+      toast("Prazo judicial concluído e registrado no histórico.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   async function loadClients(page = 1) {
@@ -4356,8 +4372,10 @@
     });
     $("#agenda-list").addEventListener("click", (event) => {
       const complete = event.target.closest("[data-agenda-complete-task]");
+      const completeJudicial = event.target.closest("[data-complete-judicial]");
       const item = event.target.closest("[data-agenda-id]");
       if (complete) completeCrmTask(complete.dataset.agendaCompleteTask, complete);
+      else if (completeJudicial) completeJudicialDeadline(completeJudicial.dataset.completeJudicial, completeJudicial);
       else if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error"));
     });
     $("#agenda-week-grid").addEventListener("click", (event) => { const item = event.target.closest("[data-agenda-id]"); if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error")); });

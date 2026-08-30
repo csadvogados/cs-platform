@@ -13,7 +13,7 @@ from app.models.recovery import JudicialProcess, JudicialProcessEvent, RecoveryC
 from app.schemas.recovery import (
     RecoveryCaseCreate, RecoveryCasePage, RecoveryCaseRead,
     RecoveryCaseTransition, RecoveryCaseUpdate,
-    JudicialProcessEventCreate, JudicialProcessEventRead, JudicialProcessRead, JudicialProcessUpsert,
+    JudicialDeadlineComplete, JudicialProcessEventCreate, JudicialProcessEventRead, JudicialProcessRead, JudicialProcessUpsert,
 )
 from app.security.identity import IdentityContext
 from app.security.permissions import PermissionCode
@@ -94,7 +94,7 @@ def _judicial_process(db: Session, organization_id: uuid.UUID, case_id: uuid.UUI
     process = db.scalar(select(JudicialProcess).options(selectinload(JudicialProcess.events)).where(
         JudicialProcess.recovery_case_id == case_id,
         JudicialProcess.organization_id == organization_id,
-    ))
+    ).execution_options(populate_existing=True))
     if process is None:
         raise HTTPException(status_code=404, detail="Processo judicial não cadastrado")
     return process
@@ -157,3 +157,31 @@ def create_judicial_process_event(case_id: uuid.UUID, payload: JudicialProcessEv
                  new_values={"process_id": str(process.id), "event_type": event.event_type, "title": event.title})
     db.commit(); db.refresh(event)
     return event
+
+
+@router.post("/{case_id}/judicial-process/deadline/complete", response_model=JudicialProcessRead)
+def complete_judicial_deadline(case_id: uuid.UUID, payload: JudicialDeadlineComplete, db: Session = Depends(get_db),
+                               identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_UPDATE.value))):
+    get_case(db, identity.organization_id, case_id)
+    process = _judicial_process(db, identity.organization_id, case_id)
+    if process.version != payload.version:
+        raise HTTPException(status_code=409, detail="Processo alterado por outro usuário; recarregue e tente novamente")
+    if process.next_deadline is None:
+        raise HTTPException(status_code=409, detail="O processo não possui prazo pendente")
+    previous_deadline = process.next_deadline
+    event = JudicialProcessEvent(
+        organization_id=identity.organization_id, judicial_process_id=process.id,
+        created_by_user_id=identity.user_id, event_date=payload.completed_at,
+        event_type="deadline", title="Prazo judicial concluído",
+        description=payload.notes or f"Prazo previsto para {previous_deadline:%d/%m/%Y %H:%M} concluído.",
+    )
+    db.add(event)
+    process.next_deadline = None
+    process.version += 1
+    db.flush()
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id,
+                 entity_type="judicial_process", entity_id=process.id, action="deadline_complete",
+                 new_values={"case_id": str(case_id), "previous_deadline": previous_deadline.isoformat(),
+                             "completed_at": payload.completed_at.isoformat()})
+    db.commit()
+    return _judicial_process(db, identity.organization_id, case_id)
