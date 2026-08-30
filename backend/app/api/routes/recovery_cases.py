@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi import HTTPException
@@ -102,14 +103,14 @@ def _judicial_process(db: Session, organization_id: uuid.UUID, case_id: uuid.UUI
 
 @router.get("/{case_id}/judicial-process", response_model=JudicialProcessRead)
 def get_judicial_process(case_id: uuid.UUID, db: Session = Depends(get_db),
-                         identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_READ.value))):
+                         identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_PROCESS_READ.value))):
     get_case(db, identity.organization_id, case_id)
     return _judicial_process(db, identity.organization_id, case_id)
 
 
 @router.put("/{case_id}/judicial-process", response_model=JudicialProcessRead)
 def upsert_judicial_process(case_id: uuid.UUID, payload: JudicialProcessUpsert, db: Session = Depends(get_db),
-                            identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_UPDATE.value))):
+                            identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_PROCESS_UPDATE.value))):
     case = get_case(db, identity.organization_id, case_id)
     if case.status != RecoveryCaseStatus.JUDICIALIZED.value:
         raise HTTPException(status_code=422, detail="O caso precisa estar judicializado")
@@ -117,6 +118,8 @@ def upsert_judicial_process(case_id: uuid.UUID, payload: JudicialProcessUpsert, 
         raise HTTPException(status_code=422, detail="Use a ação Encerrar processo para informar o resultado judicial")
     process = db.scalar(select(JudicialProcess).where(
         JudicialProcess.recovery_case_id == case.id, JudicialProcess.organization_id == identity.organization_id))
+    if process is not None and process.status == "closed":
+        raise HTTPException(status_code=409, detail="Processo encerrado não pode ser alterado")
     duplicate = db.scalar(select(JudicialProcess.id).where(
         JudicialProcess.organization_id == identity.organization_id,
         JudicialProcess.process_number == payload.process_number,
@@ -148,9 +151,11 @@ def upsert_judicial_process(case_id: uuid.UUID, payload: JudicialProcessUpsert, 
 
 @router.post("/{case_id}/judicial-process/events", response_model=JudicialProcessEventRead, status_code=status.HTTP_201_CREATED)
 def create_judicial_process_event(case_id: uuid.UUID, payload: JudicialProcessEventCreate, db: Session = Depends(get_db),
-                                  identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_UPDATE.value))):
+                                  identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_PROCESS_UPDATE.value))):
     get_case(db, identity.organization_id, case_id)
     process = _judicial_process(db, identity.organization_id, case_id)
+    if process.status == "closed":
+        raise HTTPException(status_code=409, detail="Processo encerrado não aceita novas movimentações")
     event = JudicialProcessEvent(organization_id=identity.organization_id, judicial_process_id=process.id,
                                  created_by_user_id=identity.user_id, **payload.model_dump())
     db.add(event); db.flush()
@@ -163,9 +168,11 @@ def create_judicial_process_event(case_id: uuid.UUID, payload: JudicialProcessEv
 
 @router.post("/{case_id}/judicial-process/deadline/complete", response_model=JudicialProcessRead)
 def complete_judicial_deadline(case_id: uuid.UUID, payload: JudicialDeadlineComplete, db: Session = Depends(get_db),
-                               identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_UPDATE.value))):
+                               identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_PROCESS_UPDATE.value))):
     get_case(db, identity.organization_id, case_id)
     process = _judicial_process(db, identity.organization_id, case_id)
+    if process.status == "closed":
+        raise HTTPException(status_code=409, detail="Processo judicial já está encerrado")
     if process.version != payload.version:
         raise HTTPException(status_code=409, detail="Processo alterado por outro usuário; recarregue e tente novamente")
     if process.next_deadline is None:
@@ -191,13 +198,18 @@ def complete_judicial_deadline(case_id: uuid.UUID, payload: JudicialDeadlineComp
 
 @router.post("/{case_id}/judicial-process/close", response_model=JudicialProcessRead)
 def close_judicial_process(case_id: uuid.UUID, payload: JudicialProcessClose, db: Session = Depends(get_db),
-                           identity: IdentityContext = Depends(require_permissions(PermissionCode.RECOVERY_CASE_TRANSITION.value))):
+                           identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_PROCESS_CLOSE.value))):
     get_case(db, identity.organization_id, case_id)
     process = _judicial_process(db, identity.organization_id, case_id)
     if process.version != payload.version:
         raise HTTPException(status_code=409, detail="Processo alterado por outro usuário; recarregue e tente novamente")
     if process.status == "closed":
         raise HTTPException(status_code=409, detail="O processo judicial já está encerrado")
+    filed_at = process.filed_at or process.created_at
+    if filed_at and payload.closed_at.replace(tzinfo=None) < filed_at.replace(tzinfo=None):
+        raise HTTPException(status_code=422, detail="A data de encerramento não pode ser anterior ao protocolo")
+    if payload.closed_at.replace(tzinfo=None) > datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5):
+        raise HTTPException(status_code=422, detail="A data de encerramento não pode estar no futuro")
     process.status = "closed"
     process.outcome = payload.outcome
     process.closed_at = payload.closed_at

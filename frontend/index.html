@@ -248,6 +248,27 @@
               <article><span>Em andamento</span><strong id="recovery-active">—</strong><small>Ativos ou pausados</small></article>
               <article><span>Concluídos</span><strong id="recovery-closed">—</strong><small>Resolvidos ou judicializados</small></article>
             </div>
+            <details id="judicial-report-panel" class="collection-report-panel" open hidden>
+              <summary><span><small>GESTÃO JUDICIAL</small><strong>Relatório de processos</strong></span><span>Indicadores e resultados da organização</span></summary>
+              <div class="collection-report-content">
+                <form id="judicial-report-form" class="collection-report-toolbar">
+                  <label><span>Período de</span><input name="date_from" type="date" /></label>
+                  <label><span>Até</span><input name="date_to" type="date" /></label>
+                  <button class="primary-button" type="submit">Atualizar relatório</button>
+                  <button id="judicial-report-export" class="secondary-button" type="button">Exportar CSV</button>
+                </form>
+                <div class="collection-report-grid">
+                  <article><span>Processos</span><strong id="judicial-report-total">—</strong><small>Total no período</small></article>
+                  <article><span>Ativos</span><strong id="judicial-report-active">—</strong><small>Em acompanhamento</small></article>
+                  <article class="paid-summary"><span>Encerrados</span><strong id="judicial-report-closed">—</strong><small>Com resultado registrado</small></article>
+                  <article class="danger-summary"><span>Prazos vencidos</span><strong id="judicial-report-overdue">—</strong><small>Exigem atenção imediata</small></article>
+                  <article><span>Próximos 7 dias</span><strong id="judicial-report-upcoming">—</strong><small>Prazos a cumprir</small></article>
+                  <article><span>Duração média</span><strong id="judicial-report-duration">—</strong><small>Em dias</small></article>
+                  <article><span>Resultados favoráveis</span><strong id="judicial-report-favorable">—</strong><small>Favorável, parcial ou acordo</small></article>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>Resultado</th><th>Quantidade</th></tr></thead><tbody id="judicial-report-outcomes"><tr><td colspan="2" class="empty-cell">Nenhum processo encerrado no período.</td></tr></tbody></table></div>
+              </div>
+            </details>
             <form id="recovery-filter-form" class="toolbar">
               <label class="search-field"><span aria-hidden="true">⌕</span><input id="recovery-search" type="search" placeholder="Buscar cliente ou número do caso" /></label>
               <label class="client-status-filter"><span>Situação</span><select id="recovery-status-filter" name="status"><option value="all">Todas</option><option value="draft">Rascunho</option><option value="active">Ativo</option><option value="on_hold">Pausado</option><option value="resolved">Resolvido</option><option value="judicialized">Judicializado</option><option value="cancelled">Cancelado</option><option value="archived">Arquivado</option></select></label>
@@ -863,6 +884,7 @@
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
-    <script src="./assets/app.js?v=5.34.0-judicial-closure"></script>
+    <!-- previous release: 5.34.0-judicial-closure -->
+    <script src="./assets/app.js?v=5.37.0-production-ready"></script>
   </body>
 </html>

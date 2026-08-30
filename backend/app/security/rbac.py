@@ -53,6 +53,11 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.RECOVERY_CASE_UPDATE.value,
         PermissionCode.RECOVERY_CASE_TRANSITION.value,
         PermissionCode.RECOVERY_CASE_ASSIGN.value,
+        PermissionCode.JUDICIAL_PROCESS_READ.value,
+        PermissionCode.JUDICIAL_PROCESS_UPDATE.value,
+        PermissionCode.JUDICIAL_PROCESS_CLOSE.value,
+        PermissionCode.JUDICIAL_REPORT_READ.value,
+        PermissionCode.JUDICIAL_REPORT_EXPORT.value,
     }),
 
     RoleType.LAWYER.value: frozenset({
@@ -78,6 +83,11 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.RECOVERY_CASE_READ.value,
         PermissionCode.RECOVERY_CASE_UPDATE.value,
         PermissionCode.RECOVERY_CASE_TRANSITION.value,
+        PermissionCode.JUDICIAL_PROCESS_READ.value,
+        PermissionCode.JUDICIAL_PROCESS_UPDATE.value,
+        PermissionCode.JUDICIAL_PROCESS_CLOSE.value,
+        PermissionCode.JUDICIAL_REPORT_READ.value,
+        PermissionCode.JUDICIAL_REPORT_EXPORT.value,
     }),
 
     RoleType.NEGOTIATOR.value: frozenset({

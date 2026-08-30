@@ -15,6 +15,7 @@
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
     recovery: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, status: "all" },
     judicialProcess: null,
+    judicialReport: { data: null, dateFrom: "", dateTo: "" },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
@@ -401,6 +402,26 @@
 
   function canTransitionRecovery() {
     return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.transition");
+  }
+
+  function canReadJudicial() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.process.read");
+  }
+
+  function canUpdateJudicial() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.process.update");
+  }
+
+  function canCloseJudicial() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.process.close");
+  }
+
+  function canReadJudicialReport() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.report.read");
+  }
+
+  function canExportJudicialReport() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.report.export");
   }
 
   function canCreateNegotiation() {
@@ -1481,19 +1502,18 @@
   }
 
   function recoveryActionButtons(item) {
-    if (!canTransitionRecovery()) return "";
     const buttons = [];
-    if (item.status === "draft") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Iniciar</button>`);
-    if (item.status === "active") {
+    if (canTransitionRecovery() && item.status === "draft") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Iniciar</button>`);
+    if (canTransitionRecovery() && item.status === "active") {
       buttons.push(`<button class="edit-button" type="button" data-case-transition="on_hold" data-case-id="${escapeHtml(item.id)}">Pausar</button>`);
       buttons.push(`<button class="edit-button" type="button" data-case-transition="resolved" data-case-id="${escapeHtml(item.id)}">Concluir</button>`);
       const nextStages = { intake: "documents", documents: "diagnosis", diagnosis: "planning", planning: "negotiation", negotiation: "judicial_preparation" };
       if (nextStages[item.stage]) buttons.push(`<button class="edit-button" type="button" data-case-stage="${nextStages[item.stage]}" data-case-id="${escapeHtml(item.id)}">Avançar etapa</button>`);
       if (item.stage === "judicial_preparation") buttons.push(`<button class="edit-button" type="button" data-case-transition="judicialized" data-case-id="${escapeHtml(item.id)}">Judicializar</button>`);
     }
-    if (item.status === "on_hold") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Retomar</button>`);
-    if (["resolved", "judicialized", "cancelled"].includes(item.status)) buttons.push(`<button class="edit-button" type="button" data-case-transition="archived" data-case-id="${escapeHtml(item.id)}">Arquivar</button>`);
-    if (item.status === "judicialized") buttons.unshift(`<button class="primary-button" type="button" data-judicial-process="${escapeHtml(item.id)}">Acompanhar processo</button>`);
+    if (canTransitionRecovery() && item.status === "on_hold") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Retomar</button>`);
+    if (canTransitionRecovery() && ["resolved", "judicialized", "cancelled"].includes(item.status)) buttons.push(`<button class="edit-button" type="button" data-case-transition="archived" data-case-id="${escapeHtml(item.id)}">Arquivar</button>`);
+    if (canReadJudicial() && item.status === "judicialized") buttons.unshift(`<button class="primary-button" type="button" data-judicial-process="${escapeHtml(item.id)}">Acompanhar processo</button>`);
     return buttons.join("");
   }
 
@@ -1540,7 +1560,57 @@
     $("#recovery-active").textContent = active + onHold;
     $("#recovery-closed").textContent = resolved + judicialized;
     renderRecoveryCases();
+    await loadJudicialReport();
     if (showNotice) toast("Casos atualizados.");
+  }
+
+  function judicialReportParams() {
+    const params = new URLSearchParams();
+    if (state.judicialReport.dateFrom) params.set("date_from", state.judicialReport.dateFrom);
+    if (state.judicialReport.dateTo) params.set("date_to", state.judicialReport.dateTo);
+    return params;
+  }
+
+  function renderJudicialReport() {
+    const report = state.judicialReport.data || {};
+    $("#judicial-report-total").textContent = report.total || 0;
+    $("#judicial-report-active").textContent = report.active || 0;
+    $("#judicial-report-closed").textContent = report.closed || 0;
+    $("#judicial-report-overdue").textContent = report.overdue_deadlines || 0;
+    $("#judicial-report-upcoming").textContent = report.deadlines_next_7_days || 0;
+    $("#judicial-report-duration").textContent = `${Number(report.average_duration_days || 0).toLocaleString("pt-BR")} dias`;
+    $("#judicial-report-favorable").textContent = `${Number(report.favorable_rate || 0).toLocaleString("pt-BR")}%`;
+    const outcomes = Array.isArray(report.outcomes) ? report.outcomes : [];
+    $("#judicial-report-outcomes").innerHTML = outcomes.length
+      ? outcomes.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td>${item.count || 0}</td></tr>`).join("")
+      : '<tr><td colspan="2" class="empty-cell">Nenhum processo encerrado no período.</td></tr>';
+  }
+
+  async function loadJudicialReport() {
+    const panel = $("#judicial-report-panel");
+    panel.hidden = !canReadJudicialReport();
+    if (!canReadJudicialReport()) return;
+    $("#judicial-report-export").hidden = !canExportJudicialReport();
+    const query = judicialReportParams().toString();
+    state.judicialReport.data = await api(`/api/v1/judicial-reports/summary${query ? `?${query}` : ""}`);
+    renderJudicialReport();
+  }
+
+  async function exportJudicialReport() {
+    if (!canExportJudicialReport()) return toast("Seu perfil não pode exportar este relatório.", "error");
+    const button = $("#judicial-report-export");
+    setBusy(button, true, "Gerando…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const query = judicialReportParams().toString();
+      const response = await fetch(`${API_BASE}/api/v1/judicial-reports/summary.csv${query ? `?${query}` : ""}`, { headers });
+      if (!response.ok) throw new Error(await readError(response));
+      saveBlob(await response.blob(), `relatorio_judicial_${state.judicialReport.dateFrom || "inicio"}_${state.judicialReport.dateTo || "hoje"}.csv`);
+      toast("Relatório judicial exportado em CSV.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   async function openRecoveryCaseDialog() {
@@ -1622,7 +1692,9 @@
       form.elements.next_deadline.value = state.judicialProcess.next_deadline ? String(state.judicialProcess.next_deadline).slice(0, 16) : "";
       const closed = state.judicialProcess.status === "closed";
       const outcomes = { favorable: "Favorável", partially_favorable: "Parcialmente favorável", unfavorable: "Desfavorável", settlement: "Acordo judicial", dismissed: "Extinto sem decisão de mérito", other: "Outro resultado" };
-      $("#close-judicial-process").hidden = closed;
+      $("#close-judicial-process").hidden = closed || !canCloseJudicial();
+      $('button[type="submit"]', form).hidden = closed || !canUpdateJudicial();
+      $("#judicial-event-form").hidden = closed || !canUpdateJudicial();
       const closure = $("#judicial-closure-summary");
       closure.hidden = !closed;
       closure.innerHTML = closed ? `<strong>Processo encerrado · ${escapeHtml(outcomes[state.judicialProcess.outcome] || state.judicialProcess.outcome || "Resultado não informado")}</strong><p>${escapeHtml(state.judicialProcess.closure_reason || "")}</p><small>${escapeHtml(formatDate(state.judicialProcess.closed_at, true))}</small>` : "";
@@ -1631,6 +1703,7 @@
     } catch (error) {
       if (!String(error.message).includes("não cadastrado")) return toast(error.message, "error");
       $("#judicial-event-section").hidden = true;
+      $('button[type="submit"]', form).hidden = !canUpdateJudicial();
     }
     $("#judicial-process-dialog").showModal();
   }
@@ -4334,6 +4407,15 @@
     $("#judicial-event-form").addEventListener("submit", submitJudicialEvent);
     $("#close-judicial-process").addEventListener("click", openJudicialClosureDialog);
     $("#judicial-closure-form").addEventListener("submit", submitJudicialClosure);
+    $("#judicial-report-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const raw = Object.fromEntries(new FormData(event.currentTarget));
+      if (raw.date_from && raw.date_to && raw.date_from > raw.date_to) return toast("A data inicial não pode ser posterior à data final.", "error");
+      state.judicialReport.dateFrom = String(raw.date_from || "");
+      state.judicialReport.dateTo = String(raw.date_to || "");
+      loadJudicialReport().then(() => toast("Relatório judicial atualizado.")).catch((error) => toast(error.message, "error"));
+    });
+    $("#judicial-report-export").addEventListener("click", exportJudicialReport);
     $("#negotiation-form").addEventListener("submit", submitNegotiation);
     $("#negotiation-offer-form").addEventListener("submit", submitNegotiationOffer);
     $("#payment-plan-form").addEventListener("submit", submitPaymentPlan);

@@ -30,6 +30,7 @@ from app.api.routes import (
     users,
     access_control,
     documents,
+    judicial_reports,
 )
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -215,6 +216,11 @@ app.include_router(
     recovery_cases.router,
     prefix=f"{settings.api_v1_prefix}/recovery-cases",
     tags=["Recovery Cases"],
+)
+app.include_router(
+    judicial_reports.router,
+    prefix=f"{settings.api_v1_prefix}/judicial-reports",
+    tags=["Judicial Reports"],
 )
 app.include_router(
     negotiations.router,
