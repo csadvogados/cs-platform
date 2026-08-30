@@ -81,14 +81,35 @@ def test_only_closure_reason_can_be_corrected_after_closing(client, token):
     assert result["events"][0]["title"] == "Motivo do encerramento corrigido"
 
 
+def test_closure_options_can_be_reopened_and_corrected(client, token):
+    case, process = create_open_judicial_process(client, token)
+    closed = client.post(f"/api/v1/recovery-cases/{case['id']}/judicial-process/close", headers=auth(token), json={
+        "outcome": "dismissed", "closed_at": datetime.now(timezone.utc).isoformat(),
+        "reason": "Informação inicial incorreta.", "version": process["version"],
+    }).json()
+    corrected_at = datetime.now(timezone.utc)
+    corrected = client.patch(
+        f"/api/v1/recovery-cases/{case['id']}/judicial-process/closure",
+        headers=auth(token),
+        json={"outcome": "unfavorable", "closed_at": corrected_at.isoformat(),
+              "reason": "Pedido julgado improcedente.", "version": closed["version"]},
+    )
+    assert corrected.status_code == 200, corrected.text
+    result = corrected.json()
+    assert result["outcome"] == "unfavorable"
+    assert result["closure_reason"] == "Pedido julgado improcedente."
+    assert result["status"] == "closed"
+    assert result["events"][0]["title"] == "Dados do encerramento corrigidos"
+
+
 def test_frontend_exposes_controlled_closure():
     frontend = Path(__file__).parents[2] / "frontend"
     index = (frontend / "index.html").read_text(encoding="utf-8")
     app = (frontend / "assets" / "app.js").read_text(encoding="utf-8")
     assert 'id="judicial-closure-dialog"' in index
     assert 'id="close-judicial-process"' in index
-    assert 'id="edit-judicial-closure-reason"' in index
-    assert 'id="judicial-closure-reason-dialog"' in index
-    assert "/judicial-process/close" in app
-    assert "/judicial-process/closure-reason" in app
+    assert 'id="edit-judicial-closure"' in index
+    assert 'id="judicial-closure-title"' in index
+    assert "/judicial-process/${path}" in app
+    assert 'editing ? "closure" : "close"' in app
     assert "5.34.0-judicial-closure" in index

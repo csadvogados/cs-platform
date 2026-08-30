@@ -1683,7 +1683,7 @@
     form.elements.case_id.value = caseId;
     state.judicialProcess = null;
     $("#close-judicial-process").hidden = true;
-    $("#edit-judicial-closure-reason").hidden = true;
+    $("#edit-judicial-closure").hidden = true;
     $("#judicial-closure-summary").hidden = true;
     try {
       state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
@@ -1694,7 +1694,7 @@
       const closed = state.judicialProcess.status === "closed";
       const outcomes = { favorable: "Favorável", partially_favorable: "Parcialmente favorável", unfavorable: "Desfavorável", settlement: "Acordo judicial", dismissed: "Extinto sem decisão de mérito", other: "Outro resultado" };
       $("#close-judicial-process").hidden = closed || !canCloseJudicial();
-      $("#edit-judicial-closure-reason").hidden = !closed || !canCloseJudicial();
+      $("#edit-judicial-closure").hidden = !closed || !canCloseJudicial();
       $('button[type="submit"]', form).hidden = closed || !canUpdateJudicial();
       $("#judicial-event-form").hidden = closed || !canUpdateJudicial();
       const closure = $("#judicial-closure-summary");
@@ -1763,12 +1763,20 @@
   }
 
   function openJudicialClosureDialog() {
-    if (!state.judicialProcess || state.judicialProcess.status === "closed") return;
+    if (!state.judicialProcess || !canCloseJudicial()) return;
     const form = $("#judicial-closure-form");
     form.reset();
+    const editing = state.judicialProcess.status === "closed";
+    form.dataset.mode = editing ? "edit" : "close";
     form.elements.case_id.value = state.judicialProcess.recovery_case_id;
     form.elements.version.value = state.judicialProcess.version;
-    form.elements.closed_at.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    form.elements.outcome.value = editing ? state.judicialProcess.outcome || "" : "";
+    form.elements.reason.value = editing ? state.judicialProcess.closure_reason || "" : "";
+    const closureDate = editing && state.judicialProcess.closed_at ? new Date(state.judicialProcess.closed_at) : new Date();
+    form.elements.closed_at.value = new Date(closureDate.getTime() - closureDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    $("#judicial-closure-title").textContent = editing ? "Editar encerramento" : "Encerrar processo";
+    $("#judicial-closure-submit").textContent = editing ? "Salvar alterações" : "Confirmar encerramento";
+    $("#judicial-closure-submit").className = editing ? "primary-button" : "delete-button";
     $("#judicial-closure-dialog").showModal();
   }
 
@@ -1778,44 +1786,17 @@
     if (!form.reportValidity()) return;
     const raw = Object.fromEntries(new FormData(form));
     const button = $('button[type="submit"]', form);
-    setBusy(button, true, "Encerrando…");
+    const editing = form.dataset.mode === "edit";
+    setBusy(button, true, editing ? "Salvando…" : "Encerrando…");
     try {
-      state.judicialProcess = await api(`/api/v1/recovery-cases/${raw.case_id}/judicial-process/close`, {
-        method: "POST", body: JSON.stringify({ outcome: raw.outcome, closed_at: new Date(raw.closed_at).toISOString(), reason: raw.reason, version: Number(raw.version) })
+      const path = editing ? "closure" : "close";
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${raw.case_id}/judicial-process/${path}`, {
+        method: editing ? "PATCH" : "POST", body: JSON.stringify({ outcome: raw.outcome, closed_at: new Date(raw.closed_at).toISOString(), reason: raw.reason, version: Number(raw.version) })
       });
       closeDialog($("#judicial-closure-dialog"));
       closeDialog($("#judicial-process-dialog"));
       await Promise.all([loadRecoveryCases(state.recovery.page), loadOperationalAgenda(), loadOperationalAlerts()]);
-      toast("Processo judicial encerrado e registrado no histórico.");
-    } catch (error) { toast(error.message, "error"); }
-    finally { setBusy(button, false); }
-  }
-
-  function openJudicialClosureReasonDialog() {
-    if (!state.judicialProcess || state.judicialProcess.status !== "closed" || !canCloseJudicial()) return;
-    const form = $("#judicial-closure-reason-form");
-    form.reset();
-    form.elements.case_id.value = state.judicialProcess.recovery_case_id;
-    form.elements.version.value = state.judicialProcess.version;
-    form.elements.reason.value = state.judicialProcess.closure_reason || "";
-    $("#judicial-closure-reason-dialog").showModal();
-  }
-
-  async function submitJudicialClosureReason(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!form.reportValidity()) return;
-    const raw = Object.fromEntries(new FormData(form));
-    const button = $('button[type="submit"]', form);
-    setBusy(button, true, "Salvando…");
-    try {
-      state.judicialProcess = await api(`/api/v1/recovery-cases/${raw.case_id}/judicial-process/closure-reason`, {
-        method: "PATCH", body: JSON.stringify({ reason: raw.reason, version: Number(raw.version) })
-      });
-      closeDialog($("#judicial-closure-reason-dialog"));
-      closeDialog($("#judicial-process-dialog"));
-      await openJudicialProcessDialog(raw.case_id);
-      toast("Motivo do encerramento corrigido e registrado no histórico.");
+      toast(editing ? "Encerramento atualizado e registrado no histórico." : "Processo judicial encerrado e registrado no histórico.");
     } catch (error) { toast(error.message, "error"); }
     finally { setBusy(button, false); }
   }
@@ -4438,8 +4419,7 @@
     $("#judicial-event-form").addEventListener("submit", submitJudicialEvent);
     $("#close-judicial-process").addEventListener("click", openJudicialClosureDialog);
     $("#judicial-closure-form").addEventListener("submit", submitJudicialClosure);
-    $("#edit-judicial-closure-reason").addEventListener("click", openJudicialClosureReasonDialog);
-    $("#judicial-closure-reason-form").addEventListener("submit", submitJudicialClosureReason);
+    $("#edit-judicial-closure").addEventListener("click", openJudicialClosureDialog);
     $("#judicial-report-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const raw = Object.fromEntries(new FormData(event.currentTarget));

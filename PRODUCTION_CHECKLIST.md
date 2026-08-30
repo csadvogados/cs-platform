@@ -11,7 +11,7 @@
 
 - Publicar primeiro a API. O inicializador aplicará as migrations pendentes até `0024`.
 - Confirmar `/api/v1/health`, `/ping` e os logs de inicialização sem erros.
-- Publicar a interface web e confirmar que ela está usando a versão `5.38.0-closure-reason-edit`.
+- Publicar a interface web e confirmar que ela está usando a versão `5.39.0-closure-edit`.
 - Entrar com um administrador e atualizar a página sem usar conteúdo antigo do navegador.
 
 ## Teste rápido após o deploy

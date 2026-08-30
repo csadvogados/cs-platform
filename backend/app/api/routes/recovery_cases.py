@@ -231,6 +231,54 @@ def close_judicial_process(case_id: uuid.UUID, payload: JudicialProcessClose, db
     return _judicial_process(db, identity.organization_id, case_id)
 
 
+@router.patch("/{case_id}/judicial-process/closure", response_model=JudicialProcessRead)
+def update_judicial_closure(
+    case_id: uuid.UUID,
+    payload: JudicialProcessClose,
+    db: Session = Depends(get_db),
+    identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_PROCESS_CLOSE.value)),
+):
+    get_case(db, identity.organization_id, case_id)
+    process = _judicial_process(db, identity.organization_id, case_id)
+    if process.status != "closed":
+        raise HTTPException(status_code=409, detail="Somente processos encerrados podem ter a conclusão editada")
+    if process.version != payload.version:
+        raise HTTPException(status_code=409, detail="Processo alterado por outro usuário; recarregue e tente novamente")
+    filed_at = process.filed_at or process.created_at
+    if filed_at and payload.closed_at.replace(tzinfo=None) < filed_at.replace(tzinfo=None):
+        raise HTTPException(status_code=422, detail="A data de encerramento não pode ser anterior ao protocolo")
+    if payload.closed_at.replace(tzinfo=None) > datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5):
+        raise HTTPException(status_code=422, detail="A data de encerramento não pode estar no futuro")
+    previous = {
+        "outcome": process.outcome,
+        "closed_at": process.closed_at.isoformat() if process.closed_at else None,
+        "reason": process.closure_reason,
+    }
+    process.outcome = payload.outcome
+    process.closed_at = payload.closed_at
+    process.closure_reason = payload.reason
+    process.version += 1
+    db.add(JudicialProcessEvent(
+        organization_id=identity.organization_id,
+        judicial_process_id=process.id,
+        created_by_user_id=identity.user_id,
+        event_date=datetime.now(timezone.utc),
+        event_type="note",
+        title="Dados do encerramento corrigidos",
+        description=payload.reason,
+    ))
+    db.flush()
+    record_audit(
+        db, organization_id=identity.organization_id, user_id=identity.user_id,
+        entity_type="judicial_process", entity_id=process.id, action="closure_update",
+        new_values={"case_id": str(case_id), "previous": previous, "outcome": payload.outcome,
+                    "closed_at": payload.closed_at.isoformat(), "reason": payload.reason,
+                    "version": process.version},
+    )
+    db.commit()
+    return _judicial_process(db, identity.organization_id, case_id)
+
+
 @router.patch("/{case_id}/judicial-process/closure-reason", response_model=JudicialProcessRead)
 def update_judicial_closure_reason(
     case_id: uuid.UUID,

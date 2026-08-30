@@ -723,7 +723,7 @@
           <label class="wide"><span>Observações</span><textarea name="notes" rows="3" maxlength="4000"></textarea></label>
         </div>
         <div id="judicial-closure-summary" class="diagnosis-conclusion" hidden></div>
-        <div class="modal-actions"><button id="edit-judicial-closure-reason" type="button" class="secondary-button" hidden>Editar motivo</button><button id="close-judicial-process" type="button" class="delete-button" hidden>Encerrar processo</button><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar processo</button></div>
+        <div class="modal-actions"><button id="edit-judicial-closure" type="button" class="secondary-button" hidden>Editar encerramento</button><button id="close-judicial-process" type="button" class="delete-button" hidden>Encerrar processo</button><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar processo</button></div>
       </form>
       <section id="judicial-event-section" hidden>
         <div class="panel-header"><div><p class="eyebrow dark">HISTÓRICO</p><h3>Movimentações</h3></div></div>
@@ -740,19 +740,9 @@
       </section>
     </dialog>
 
-    <dialog id="judicial-closure-reason-dialog" class="modal small-modal">
-      <form id="judicial-closure-reason-form" method="dialog">
-        <div class="modal-header"><div><p class="eyebrow dark">CORREÇÃO CONTROLADA</p><h2>Editar motivo do encerramento</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
-        <input name="case_id" type="hidden" /><input name="version" type="hidden" />
-        <div class="form-grid single"><label><span>Motivo e conclusão *</span><textarea name="reason" rows="6" minlength="3" maxlength="2000" required></textarea></label></div>
-        <p class="form-help">Somente o texto será alterado. Resultado, data e situação do processo permanecerão iguais, e a correção será registrada no histórico.</p>
-        <div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar correção</button></div>
-      </form>
-    </dialog>
-
     <dialog id="judicial-closure-dialog" class="modal small-modal">
       <form id="judicial-closure-form" method="dialog">
-        <div class="modal-header"><div><p class="eyebrow dark">CONCLUSÃO JUDICIAL</p><h2>Encerrar processo</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <div class="modal-header"><div><p class="eyebrow dark">CONCLUSÃO JUDICIAL</p><h2 id="judicial-closure-title">Encerrar processo</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
         <input name="case_id" type="hidden" /><input name="version" type="hidden" />
         <div class="form-grid single">
           <label><span>Resultado *</span><select name="outcome" required><option value="">Selecione</option><option value="favorable">Favorável</option><option value="partially_favorable">Parcialmente favorável</option><option value="unfavorable">Desfavorável</option><option value="settlement">Acordo judicial</option><option value="dismissed">Extinto sem decisão de mérito</option><option value="other">Outro resultado</option></select></label>
@@ -760,7 +750,7 @@
           <label><span>Motivo e conclusão *</span><textarea name="reason" rows="5" minlength="3" maxlength="2000" required placeholder="Informe a decisão, acordo ou motivo do encerramento"></textarea></label>
         </div>
         <p class="form-help">Ao encerrar, eventual prazo pendente será removido da Agenda e a conclusão ficará registrada no histórico.</p>
-        <div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button class="delete-button" type="submit">Confirmar encerramento</button></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">Cancelar</button><button id="judicial-closure-submit" class="delete-button" type="submit">Confirmar encerramento</button></div>
       </form>
     </dialog>
 
@@ -895,6 +885,6 @@
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
     <!-- previous release: 5.34.0-judicial-closure -->
-    <script src="./assets/app.js?v=5.38.0-closure-reason-edit"></script>
+    <script src="./assets/app.js?v=5.39.0-closure-edit"></script>
   </body>
 </html>
