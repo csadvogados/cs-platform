@@ -177,12 +177,12 @@ class CollectionsRead(BaseModel):
 
 
 class OperationalAlertRead(BaseModel):
-    key: Literal["critical_collections", "overdue_promises", "overdue_follow_ups", "overdue_tasks"]
+    key: Literal["critical_collections", "overdue_promises", "overdue_follow_ups", "overdue_tasks", "overdue_judicial"]
     severity: Literal["critical", "warning"]
     title: str
     detail: str
     count: int
-    target_view: Literal["collections", "crm"]
+    target_view: Literal["collections", "crm", "agenda"]
     target_filter: str
 
 
@@ -194,7 +194,7 @@ class OperationalAlertsRead(BaseModel):
 
 class OperationalAgendaItemRead(BaseModel):
     id: str
-    kind: Literal["task", "follow_up", "promise"]
+    kind: Literal["task", "follow_up", "promise", "judicial_deadline"]
     title: str
     client_id: uuid.UUID | None = None
     client_name: str | None = None

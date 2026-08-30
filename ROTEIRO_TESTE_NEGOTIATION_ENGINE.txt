@@ -1,0 +1,36 @@
+TESTE DE HOMOLOGAÇÃO - NEGOTIATION ENGINE
+
+PRÉ-REQUISITOS
+1. Entre na homologação com um usuário administrador.
+2. Escolha um cliente que tenha receita, despesa e dívida cadastradas.
+3. Confirme que esse cliente possui um caso aberto no menu CS Recupera.
+
+TESTE 1 - ABRIR NEGOCIAÇÃO
+1. Abra o cadastro do cliente.
+2. Localize "Negociações e propostas".
+3. Clique em "Abrir negociação".
+4. Selecione o caso, a dívida e o canal.
+5. Clique em "Abrir negociação".
+Resultado esperado: aparece um cartão com situação "Em aberto".
+
+TESTE 2 - PROPOSTA SUSTENTÁVEL
+1. Clique em "Nova proposta".
+2. Informe valor ofertado menor que a dívida.
+3. Informe uma parcela menor que a capacidade mensal do diagnóstico.
+4. Clique em "Avaliar proposta".
+Resultado esperado: proposta salva e recomendação "Aceitar" ou "Contraproposta".
+
+TESTE 3 - PROPOSTA INSUSTENTÁVEL
+1. Registre outra proposta.
+2. Informe uma parcela superior à capacidade do cliente.
+3. Clique em "Avaliar proposta".
+Resultado esperado: motor informa que a parcela supera a capacidade e recomenda rejeitar.
+
+TESTE 4 - DECISÃO
+1. Em uma proposta pendente, clique em "Aceitar".
+2. Informe o motivo.
+Resultado esperado: negociação muda para "Aceita" e outras propostas pendentes ficam retiradas.
+
+TESTE 5 - SEGURANÇA
+1. Saia do sistema e tente abrir novamente a aplicação.
+Resultado esperado: a aplicação solicita login; a API não permite consultar negociações sem JWT.

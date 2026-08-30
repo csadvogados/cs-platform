@@ -1,6 +1,6 @@
 import uuid
-from datetime import date
-from sqlalchemy import Boolean, Date, ForeignKey, String, Text, UniqueConstraint, Uuid
+from datetime import date, datetime
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 from app.models.enums import ClientStatus
@@ -25,9 +25,12 @@ class Client(TimestampMixin, Base):
     good_faith_declared: Mapped[bool | None] = mapped_column(Boolean)
     can_pay_without_harming_basics: Mapped[bool | None] = mapped_column(Boolean)
     notes: Mapped[str | None] = mapped_column(Text)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     organization = relationship("Organization", back_populates="clients")
     assigned_user = relationship("User")
     incomes = relationship("Income", back_populates="client", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="client", cascade="all, delete-orphan")
     debts = relationship("Debt", back_populates="client", cascade="all, delete-orphan")
     diagnoses = relationship("Diagnosis", back_populates="client", cascade="all, delete-orphan")
+    recovery_cases = relationship("RecoveryCase", back_populates="client", cascade="all, delete-orphan")
+

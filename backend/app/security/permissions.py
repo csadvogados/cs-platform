@@ -24,6 +24,20 @@ class PermissionCode(StrEnum):
     CLIENT_RESTORE = "client.restore"
     CLIENT_EXPORT = "client.export"
 
+    # CS Recupera
+    RECOVERY_CASE_CREATE = "recovery.case.create"
+    RECOVERY_CASE_READ = "recovery.case.read"
+    RECOVERY_CASE_UPDATE = "recovery.case.update"
+    RECOVERY_CASE_TRANSITION = "recovery.case.transition"
+    RECOVERY_CASE_ASSIGN = "recovery.case.assign"
+
+    # Acompanhamento judicial
+    JUDICIAL_PROCESS_READ = "judicial.process.read"
+    JUDICIAL_PROCESS_UPDATE = "judicial.process.update"
+    JUDICIAL_PROCESS_CLOSE = "judicial.process.close"
+    JUDICIAL_REPORT_READ = "judicial.report.read"
+    JUDICIAL_REPORT_EXPORT = "judicial.report.export"
+
     # Financeiro
     CREDITOR_CREATE = "creditor.create"
     CREDITOR_READ = "creditor.read"

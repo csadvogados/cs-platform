@@ -6,15 +6,15 @@ from app.core.constants import APP_VERSION
 BACKEND = Path(__file__).resolve().parents[1]
 
 
-def test_release_version_is_v542():
-    assert APP_VERSION == "5.4.2"
+def test_release_version_matches_current_platform():
+    assert APP_VERSION == "5.25.0"
 
 
 def test_docker_entrypoint_uses_runtime_port_and_runs_migrations():
     content = (BACKEND / "docker-entrypoint.sh").read_text(encoding="utf-8")
     assert 'PORT="${PORT:-8000}"' in content
     assert "python -m alembic -c /app/alembic.ini upgrade head" in content
-    assert "0006_crm_stabilization.py" in content
+    assert "python -m alembic -c /app/alembic.ini heads" in content
     assert "exec python -m uvicorn" in content
     assert '--port "$PORT"' in content
 

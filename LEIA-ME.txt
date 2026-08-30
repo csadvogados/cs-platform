@@ -1,0 +1,19 @@
+CS Recupera - Interface do Negotiation Engine 1.0
+
+INSTALAÇÃO
+1. Extraia o ZIP.
+2. Copie a pasta frontend.
+3. Cole na raiz do projeto CS Platform.
+4. Confirme a substituição de index.html, assets/app.js e assets/styles.css.
+5. Faça o commit na branch staging-cs-recupera.
+6. Clique em Push origin no GitHub Desktop.
+7. Aguarde o serviço cs-platform-web ficar Active no Railway.
+8. Atualize a página de homologação com Ctrl+F5.
+
+TESTES
+- O arquivo ROTEIRO_TESTE_NEGOTIATION_ENGINE.txt contém cinco testes manuais.
+- O arquivo frontend/tests/negotiation_ui.smoke.test.mjs contém os testes automatizados da interface.
+
+IMPORTANTE
+- Esta entrega pressupõe que a API com a migração 0018 já esteja publicada.
+- Não publique na branch main nesta etapa.

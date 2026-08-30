@@ -1,5 +1,5 @@
 import re, uuid
-from datetime import date
+from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.models.enums import ClientStatus
 
@@ -53,6 +53,7 @@ class ClientRead(ClientBase):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     organization_id: uuid.UUID
+    archived_at: datetime | None = None
 
 
 class ClientPage(BaseModel):
@@ -90,3 +91,4 @@ class ClientImportRequest(BaseModel):
 class ClientImportResult(BaseModel):
     imported: int
     client_ids: list[uuid.UUID]
+

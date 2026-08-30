@@ -9,5 +9,13 @@ def test_financial_diagnosis_flow(client,token):
     d=client.get(f'/api/v1/diagnoses/{cid}/preview',headers=h)
     assert d.status_code==200,d.text
     assert d.json()['eligibility_score']>=85
+    assert d.json()['risk_level'] == 'critical'
+    assert d.json()['recommended_strategy'] == 'protected_negotiation'
+    assert d.json()['max_payment_capacity'] == '900.00'
+    assert d.json()['data_quality_score'] == 100
+    assert sum(d.json()['score_breakdown'].values()) == d.json()['eligibility_score']
+    saved=client.post(f'/api/v1/diagnoses/{cid}',headers=h)
+    assert saved.status_code==201,saved.text
+    assert saved.json()['analysis_snapshot']['eligible_debts'] == 1
     r=client.get(f'/api/v1/diagnoses/{cid}/report',headers=h)
-    assert r.status_code==200 and 'PARECER ECONÔMICO' in r.text
+    assert r.status_code==200 and 'Maria Teste' in r.text

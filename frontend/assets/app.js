@@ -6,19 +6,24 @@
     user: null,
     dashboard: null,
     alerts: { total: 0, criticalCount: 0, items: [], open: false },
+    notifications: { items: [], total: 0, unreadCount: 0, criticalUnreadCount: 0, preferences: null, filters: { notificationType: "all", priority: "all", readStatus: "all" } },
     management: { report: null, filters: { period: "30", dateFrom: "", dateTo: "" } },
     performance: { report: null, month: "" },
     agenda: { summary: null, workload: [], items: [], viewMode: "timeline", weekStart: null, filters: { search: "", kind: "all", status: "all", responsible: "all", dateFrom: "", dateTo: "" } },
     collections: { summary: null, workload: [], aging: [], items: [], total: 0, report: null, reportFilters: { dateFrom: "", dateTo: "" }, filters: { q: "", status: "all", dueFrom: "", dueTo: "", followUp: "all", promise: "all", responsible: "all", priority: "all", aging: "all", attention: "all", sortOrder: "recommended" }, selectedItem: null, selectedAssignmentItem: null, selectedIds: [], selectedActionId: null, actions: [] },
     clients: [],
     clientPage: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, requestId: 0 },
+    recovery: { items: [], total: 0, page: 1, pageSize: 25, pages: 0, status: "all" },
+    judicialProcess: null,
+    judicialReport: { data: null, dateFrom: "", dateTo: "" },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
     editingClientId: null,
     clientImport: { filename: "", clients: [], preview: null },
-    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], diagnosis: null, history: [] },
+    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [], dossier: null, documents: [], judicialChecklist: null },
+    paymentPlan: null,
     editingFinancial: null,
     installmentPaymentTarget: null,
     editingUserId: null,
@@ -45,7 +50,9 @@
     dashboard: ["VISÃO GERAL", "Painel de operação", "Novo cliente"],
     management: ["INTELIGÊNCIA OPERACIONAL", "Central Gerencial", "Atualizar"],
     performance: ["GESTÃO POR RESULTADOS", "Metas e desempenho", "Atualizar"],
+    notifications: ["ACOMPANHAMENTO PESSOAL", "Central de notificações", "Atualizar"],
     clients: ["RELACIONAMENTO", "Clientes", "Novo cliente"],
+    recovery: ["RECOVERY CORE", "CS Recupera", "Abrir caso"],
     collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
     agenda: ["ROTINA UNIFICADA", "Agenda operacional", "Atualizar"],
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
@@ -113,7 +120,20 @@
     crm_contact: "Contato CRM",
     crm_interaction: "Atendimento",
     crm_opportunity: "Oportunidade",
-    crm_task: "Tarefa"
+    crm_task: "Tarefa",
+    recovery_case: "Caso de recuperação"
+    ,negotiation: "Negociação"
+    ,negotiation_offer: "Proposta de negociação"
+  };
+
+  const recoveryStatusLabels = {
+    draft: "Rascunho", active: "Ativo", on_hold: "Pausado", resolved: "Resolvido",
+    judicialized: "Judicializado", cancelled: "Cancelado", archived: "Arquivado"
+  };
+  const recoveryStageLabels = {
+    intake: "Triagem", documents: "Documentos", diagnosis: "Diagnóstico", planning: "Planejamento",
+    negotiation: "Negociação", agreement_monitoring: "Acompanhamento do acordo",
+    judicial_preparation: "Preparação judicial", closed: "Encerrado"
   };
 
   const auditActionLabels = {
@@ -368,6 +388,53 @@
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("client.delete");
   }
+  function canRestoreClients() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("client.restore");
+  }
+
+  function canReadRecovery() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.read");
+  }
+
+  function canCreateRecovery() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.create");
+  }
+
+  function canTransitionRecovery() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("recovery.case.transition");
+  }
+
+  function canReadJudicial() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.process.read");
+  }
+
+  function canUpdateJudicial() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.process.update");
+  }
+
+  function canCloseJudicial() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.process.close");
+  }
+
+  function canReadJudicialReport() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.report.read");
+  }
+
+  function canExportJudicialReport() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("judicial.report.export");
+  }
+
+  function canCreateNegotiation() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("negotiation.create");
+  }
+
+  function canUpdateNegotiation() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("negotiation.update");
+  }
+
+  function canApproveNegotiation() {
+    return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("negotiation.approve");
+  }
 
   function canManageCollectionQueue() {
     return Boolean(state.user?.is_superuser) || ["admin", "supervisor"].includes(String(state.user?.role || ""));
@@ -397,7 +464,7 @@
     try {
       const body = await response.json();
       if (Array.isArray(body.detail)) return body.detail.map((item) => item.msg).join(" ");
-      return body.detail || body.message || `Erro ${response.status}`;
+      return body.detail || body.message || body.error?.message || `Erro ${response.status}`;
     } catch {
       return `Erro ${response.status} ao acessar a API.`;
     }
@@ -507,12 +574,15 @@
     $("#performance-new-goal").hidden = !canManagePerformance();
     $("#export-clients-button").hidden = !canExportClients();
     $("#import-clients-button").hidden = !canImportClients();
+    $("#recovery-nav-item").hidden = !canReadRecovery();
+    $("#new-recovery-case").hidden = !canCreateRecovery();
   }
 
   function setView(view) {
     if (view === "audit" && !canViewAudit()) view = "dashboard";
     if (view === "management" && !canViewManagement()) view = "dashboard";
     if (view === "performance" && !canViewPerformance()) view = "dashboard";
+    if (view === "recovery" && !canReadRecovery()) view = "dashboard";
     if (!viewMeta[view]) return;
     state.currentView = view;
     $$(".page-view").forEach((section) => section.classList.toggle("active-view", section.id === `view-${view}`));
@@ -520,7 +590,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management", "performance"].includes(view);
+    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management", "performance", "notifications", "recovery"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -765,6 +835,7 @@
     if (state.currentView === "performance" && canViewPerformance()) {
       loaders.push(loadPerformance());
     }
+    if (state.currentView === "notifications") loaders.push(loadNotificationsPage());
     if (state.currentView === "audit" && canViewAudit()) {
       loaders.push(loadAudit(state.audit.page));
     }
@@ -1019,12 +1090,12 @@
   }
 
   async function loadOperationalAlerts(showNotice = false) {
-    const response = await api("/api/v1/financial/operational-alerts");
-    state.alerts.total = Number(response.total || 0);
-    state.alerts.criticalCount = Number(response.critical_count || 0);
+    const response = await api("/api/v1/notifications?limit=8&read_status=unread");
+    state.alerts.total = Number(response.unread_count || 0);
+    state.alerts.criticalCount = Number(response.critical_unread_count || 0);
     state.alerts.items = Array.isArray(response.items) ? response.items : [];
     renderOperationalAlerts();
-    if (showNotice) toast("Alertas atualizados.");
+    if (showNotice) toast("Notificações atualizadas.");
   }
 
   async function loadOperationalAgenda(showNotice = false) {
@@ -1064,7 +1135,8 @@
     $("#agenda-task-count").textContent = items.filter((item) => item.kind === "task").length;
     $("#agenda-follow-up-count").textContent = items.filter((item) => item.kind === "follow_up").length;
     $("#agenda-promise-count").textContent = items.filter((item) => item.kind === "promise").length;
-    const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa" };
+    $("#agenda-judicial-count").textContent = items.filter((item) => item.kind === "judicial_deadline").length;
+    const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa", judicial_deadline: "Prazo judicial" };
     const statusLabels = { overdue: "Atrasado", today: "Hoje", upcoming: "Próximo" };
     $("#agenda-list").innerHTML = items.length ? items.map((item) => `<article class="agenda-item ${escapeHtml(item.status)}"><button class="agenda-open" type="button" data-agenda-id="${escapeHtml(item.id)}">
       <span class="agenda-date"><strong>${escapeHtml(formatDate(item.due_at, true))}</strong><small>${escapeHtml(statusLabels[item.status] || item.status)}</small></span>
@@ -1072,7 +1144,7 @@
       <span class="agenda-copy"><small>${escapeHtml(kindLabels[item.kind] || item.kind)}</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.client_name || "Sem cliente vinculado")} · ${escapeHtml(item.assigned_user_name || "Sem responsável")}</span></span>
       <span class="badge ${item.priority === "urgent" ? "priority-urgent" : `priority-${escapeHtml(item.priority || "normal")}`} ">${escapeHtml(priorityLabels[item.priority] || "Normal")}</span>
       <span class="agenda-arrow" aria-hidden="true">→</span>
-    </button>${item.kind === "task" ? `<button class="complete-button agenda-complete-task" type="button" data-agenda-complete-task="${escapeHtml(String(item.id).replace(/^task:/, ""))}">Concluir</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
+    </button>${item.kind === "task" ? `<button class="complete-button agenda-complete-task" type="button" data-agenda-complete-task="${escapeHtml(String(item.id).replace(/^task:/, ""))}">Concluir</button>` : item.kind === "judicial_deadline" ? `<button class="complete-button agenda-complete-judicial" type="button" data-complete-judicial="${escapeHtml(String(item.target_filter || "").replace(/^judicial:/, ""))}">Concluir prazo</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
     const workload = state.agenda.workload;
     $("#agenda-workload-summary").textContent = `${workload.length} ${workload.length === 1 ? "responsável" : "responsáveis"}`;
     $("#agenda-workload-list").innerHTML = workload.length ? workload.map((row) => `<button type="button" class="agenda-workload-card ${String(filters.responsible) === String(row.user_id || "unassigned") ? "active" : ""}" data-agenda-responsible="${escapeHtml(row.user_id || "unassigned")}">
@@ -1135,6 +1207,15 @@
       $$(".crm-tab").forEach((entry) => entry.classList.toggle("active", entry === tab));
       $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === "crm-tasks"));
       renderCrm();
+      return;
+    }
+    if (item.kind === "judicial_deadline") {
+      const caseId = String(item.target_filter || "").replace(/^judicial:/, "");
+      setView("recovery");
+      state.recovery.status = "judicialized";
+      $("#recovery-status-filter").value = "judicialized";
+      await loadRecoveryCases(1);
+      if (caseId) await openJudicialProcessDialog(caseId);
       return;
     }
     state.collections.filters.q = item.client_name || "";
@@ -1209,12 +1290,13 @@
     button.setAttribute("aria-label", total ? `Abrir central de alertas, ${total} pendência(s)` : "Abrir central de alertas, nenhuma pendência");
     const list = $("#alert-list");
     if (!state.alerts.items.length) {
-      list.innerHTML = '<div class="alert-empty"><strong>Tudo em dia</strong><span>Nenhum alerta operacional ativo.</span></div>';
+      list.innerHTML = '<div class="alert-empty"><strong>Tudo em dia</strong><span>Nenhuma notificação não lida.</span></div>';
       return;
     }
-    list.innerHTML = state.alerts.items.map((item) => `<button class="alert-item ${escapeHtml(item.severity)}" type="button" data-alert-view="${escapeHtml(item.target_view)}" data-alert-filter="${escapeHtml(item.target_filter)}">
-      <span class="alert-item-count">${escapeHtml(item.count)}</span>
-      <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span>
+    const icons = { task: "✓", collection: "$", promise: "↻", judicial: "⚖", goal: "◎" };
+    list.innerHTML = state.alerts.items.map((item) => `<button class="alert-item ${escapeHtml(item.priority)}" type="button" data-notification-id="${item.id}" data-alert-view="${escapeHtml(item.target_view || "")}" data-alert-filter="${escapeHtml(item.target_filter || "")}">
+      <span class="alert-item-count">${icons[item.notification_type] || "!"}</span>
+      <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.message)}</small></span>
       <span class="alert-item-arrow" aria-hidden="true">→</span>
     </button>`).join("");
   }
@@ -1225,18 +1307,21 @@
     $("#alert-center-button").setAttribute("aria-expanded", String(state.alerts.open));
   }
 
-  async function openOperationalAlert(targetView, targetFilter) {
+  async function openOperationalAlert(targetView, targetFilter, notificationId = null) {
+    if (notificationId) await api(`/api/v1/notifications/${notificationId}`, { method: "PATCH", body: JSON.stringify({ read: true }) });
     setAlertPopover(false);
     if (targetView === "collections") {
       const [field, value] = String(targetFilter || "").split(":");
       if (field === "attention") state.collections.filters.attention = value || "all";
       if (field === "promise") state.collections.filters.promise = value || "all";
       if (field === "follow_up") state.collections.filters.followUp = value || "all";
+      if (field === "status") state.collections.filters.status = value || "all";
       setView("collections");
       const form = $("#collection-filter-form");
       form.elements.attention_filter.value = state.collections.filters.attention;
       form.elements.promise_filter.value = state.collections.filters.promise;
       form.elements.follow_up_filter.value = state.collections.filters.followUp;
+      form.elements.status.value = state.collections.filters.status;
       await loadCollections();
       form.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
@@ -1250,7 +1335,89 @@
       $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === "crm-tasks"));
       renderCrm();
       $("#crm-task-status-filter").scrollIntoView({ behavior: "smooth", block: "center" });
+      await loadOperationalAlerts();
+      return;
     }
+    if (targetView === "agenda") {
+      const [field, value] = String(targetFilter || "").split(":");
+      if (field === "kind") state.agenda.filters.kind = value || "all";
+      setView("agenda");
+      $("#agenda-filter-form").elements.kind.value = state.agenda.filters.kind;
+      await loadOperationalAgenda();
+      $("#agenda-filter-form").scrollIntoView({ behavior: "smooth", block: "start" });
+      await loadOperationalAlerts();
+      return;
+    }
+    if (targetView === "performance") {
+      setView("performance");
+      await loadPerformance();
+      $("#performance-metric-grid").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    await loadOperationalAlerts();
+  }
+
+  function notificationParams() {
+    const filters = state.notifications.filters;
+    const params = new URLSearchParams({ limit: "200", read_status: filters.readStatus || "all" });
+    if (filters.notificationType !== "all") params.set("notification_type", filters.notificationType);
+    if (filters.priority !== "all") params.set("priority", filters.priority);
+    return params;
+  }
+
+  async function loadNotificationsPage(showNotice = false) {
+    const [page, preferences] = await Promise.all([
+      api(`/api/v1/notifications?${notificationParams()}`),
+      api("/api/v1/notifications/preferences")
+    ]);
+    state.notifications.items = Array.isArray(page.items) ? page.items : [];
+    state.notifications.total = Number(page.total || 0);
+    state.notifications.unreadCount = Number(page.unread_count || 0);
+    state.notifications.criticalUnreadCount = Number(page.critical_unread_count || 0);
+    state.notifications.preferences = preferences;
+    renderNotificationsPage();
+    renderNotificationPreferences();
+    await loadOperationalAlerts();
+    if (showNotice) toast("Central de notificações atualizada.");
+  }
+
+  function renderNotificationsPage() {
+    $("#notifications-unread").textContent = state.notifications.unreadCount;
+    $("#notifications-critical").textContent = state.notifications.criticalUnreadCount;
+    $("#notifications-total").textContent = state.notifications.total;
+    $("#notification-list-count").textContent = `${state.notifications.items.length} ${state.notifications.items.length === 1 ? "notificação" : "notificações"}`;
+    const typeLabels = { task: "Tarefa", collection: "Cobrança", promise: "Promessa", judicial: "Prazo judicial", goal: "Meta" };
+    $("#notification-page-list").innerHTML = state.notifications.items.length ? state.notifications.items.map((item) => `<article class="notification-row ${item.read_at ? "read" : "unread"} ${escapeHtml(item.priority)}" data-notification-row="${item.id}">
+      <span class="notification-dot"></span><div class="notification-copy"><div><span class="badge">${escapeHtml(typeLabels[item.notification_type] || item.notification_type)}</span><small>${formatDate(item.event_at, true)}</small></div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p></div>
+      <div class="notification-actions"><button class="text-link" type="button" data-open-notification="${item.id}" data-alert-view="${escapeHtml(item.target_view || "")}" data-alert-filter="${escapeHtml(item.target_filter || "")}">Abrir</button><button class="secondary-button compact-button" type="button" data-toggle-notification="${item.id}" data-read="${item.read_at ? "false" : "true"}">${item.read_at ? "Marcar não lida" : "Marcar lida"}</button></div>
+    </article>`).join("") : '<div class="empty-state">Nenhuma notificação encontrada com estes filtros.</div>';
+  }
+
+  function renderNotificationPreferences() {
+    const form = $("#notification-preferences-form");
+    const preferences = state.notifications.preferences || {};
+    ["tasks_enabled", "collections_enabled", "promises_enabled", "judicial_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { form.elements[name].checked = Boolean(preferences[name]); });
+  }
+
+  async function markAllNotificationsRead() {
+    await api("/api/v1/notifications/read-all", { method: "POST" });
+    await (state.currentView === "notifications" ? loadNotificationsPage() : loadOperationalAlerts());
+    toast("Todas as notificações foram marcadas como lidas.");
+  }
+
+  async function toggleNotificationStatus(id, read) {
+    await api(`/api/v1/notifications/${id}`, { method: "PATCH", body: JSON.stringify({ read }) });
+    await loadNotificationsPage();
+  }
+
+  async function saveNotificationPreferences(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const payload = {};
+    ["tasks_enabled", "collections_enabled", "promises_enabled", "judicial_enabled", "goals_enabled", "only_assigned_items"].forEach((name) => { payload[name] = form.elements[name].checked; });
+    const button = $('button[type="submit"]', form); setBusy(button, true, "Salvando…");
+    try { state.notifications.preferences = await api("/api/v1/notifications/preferences", { method: "PUT", body: JSON.stringify(payload) }); toast("Preferências salvas."); }
+    catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   function collectionParams() {
@@ -1309,8 +1476,10 @@
     });
     const query = $("#client-search").value.trim();
     const status = $("#client-status-filter").value;
+    const archiveFilter = $("#client-archive-filter").value;
     if (query) params.set("q", query);
     if (status !== "all") params.set("status", status);
+    if (archiveFilter === "archived") params.set("archived_only", "true");
     return params;
   }
 
@@ -1332,6 +1501,306 @@
     renderClients();
   }
 
+  function recoveryActionButtons(item) {
+    const buttons = [];
+    if (canTransitionRecovery() && item.status === "draft") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Iniciar</button>`);
+    if (canTransitionRecovery() && item.status === "active") {
+      buttons.push(`<button class="edit-button" type="button" data-case-transition="on_hold" data-case-id="${escapeHtml(item.id)}">Pausar</button>`);
+      buttons.push(`<button class="edit-button" type="button" data-case-transition="resolved" data-case-id="${escapeHtml(item.id)}">Concluir</button>`);
+      const nextStages = { intake: "documents", documents: "diagnosis", diagnosis: "planning", planning: "negotiation", negotiation: "judicial_preparation" };
+      if (nextStages[item.stage]) buttons.push(`<button class="edit-button" type="button" data-case-stage="${nextStages[item.stage]}" data-case-id="${escapeHtml(item.id)}">Avançar etapa</button>`);
+      if (item.stage === "judicial_preparation") buttons.push(`<button class="edit-button" type="button" data-case-transition="judicialized" data-case-id="${escapeHtml(item.id)}">Judicializar</button>`);
+    }
+    if (canTransitionRecovery() && item.status === "on_hold") buttons.push(`<button class="edit-button" type="button" data-case-transition="active" data-case-id="${escapeHtml(item.id)}">Retomar</button>`);
+    if (canTransitionRecovery() && ["resolved", "judicialized", "cancelled"].includes(item.status)) buttons.push(`<button class="edit-button" type="button" data-case-transition="archived" data-case-id="${escapeHtml(item.id)}">Arquivar</button>`);
+    if (canReadJudicial() && item.status === "judicialized") buttons.unshift(`<button class="primary-button" type="button" data-judicial-process="${escapeHtml(item.id)}">Acompanhar processo</button>`);
+    return buttons.join("");
+  }
+
+  function renderRecoveryCases() {
+    const term = $("#recovery-search").value.trim().toLocaleLowerCase("pt-BR");
+    const visible = state.recovery.items.filter((item) => {
+      const name = clientName(item.client_id);
+      return !term || `${item.case_number} ${name}`.toLocaleLowerCase("pt-BR").includes(term);
+    });
+    $("#recovery-table").innerHTML = visible.length ? visible.map((item) => `
+      <tr>
+        <td><strong>${escapeHtml(item.case_number)}</strong><small>${escapeHtml(item.source)}</small></td>
+        <td><button class="text-link" type="button" data-case-client="${escapeHtml(item.client_id)}">${escapeHtml(clientName(item.client_id))}</button></td>
+        <td><span class="badge ${item.status === "cancelled" ? "danger" : ""}">${escapeHtml(recoveryStatusLabels[item.status] || item.status)}</span></td>
+        <td>${escapeHtml(recoveryStageLabels[item.stage] || item.stage)}</td>
+        <td>${formatDate(item.updated_at, true)}</td>
+        <td><span class="financial-actions">${recoveryActionButtons(item)}</span></td>
+      </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum caso encontrado.</td></tr>';
+    const first = state.recovery.total ? ((state.recovery.page - 1) * state.recovery.pageSize) + 1 : 0;
+    const last = Math.min(state.recovery.total, first + state.recovery.items.length - 1);
+    $("#recovery-page-range").textContent = state.recovery.total ? `${first}–${last} de ${state.recovery.total} casos` : "Nenhum caso para mostrar";
+    $("#recovery-page-label").textContent = `Página ${state.recovery.pages ? state.recovery.page : 0} de ${state.recovery.pages}`;
+    $("#recovery-prev-page").disabled = state.recovery.page <= 1;
+    $("#recovery-next-page").disabled = state.recovery.page >= state.recovery.pages;
+  }
+
+  async function recoveryCount(statusValue) {
+    const response = await api(`/api/v1/recovery-cases?page=1&page_size=1&status=${encodeURIComponent(statusValue)}`);
+    return Number(response.total || 0);
+  }
+
+  async function loadRecoveryCases(page = state.recovery.page, showNotice = false) {
+    if (!canReadRecovery()) return;
+    if (!state.clients.length) await loadClientOptions();
+    const params = new URLSearchParams({ page: String(Math.max(1, page)), page_size: String(state.recovery.pageSize) });
+    if (state.recovery.status !== "all") params.set("status", state.recovery.status);
+    const [response, draft, active, onHold, resolved, judicialized] = await Promise.all([
+      api(`/api/v1/recovery-cases?${params.toString()}`), recoveryCount("draft"), recoveryCount("active"),
+      recoveryCount("on_hold"), recoveryCount("resolved"), recoveryCount("judicialized")
+    ]);
+    state.recovery = { ...state.recovery, items: response.items || [], total: response.total || 0,
+      page: response.page || 1, pages: response.pages || 0 };
+    $("#recovery-total").textContent = draft + active + onHold + resolved + judicialized;
+    $("#recovery-active").textContent = active + onHold;
+    $("#recovery-closed").textContent = resolved + judicialized;
+    renderRecoveryCases();
+    await loadJudicialReport();
+    if (showNotice) toast("Casos atualizados.");
+  }
+
+  function judicialReportParams() {
+    const params = new URLSearchParams();
+    if (state.judicialReport.dateFrom) params.set("date_from", state.judicialReport.dateFrom);
+    if (state.judicialReport.dateTo) params.set("date_to", state.judicialReport.dateTo);
+    return params;
+  }
+
+  function renderJudicialReport() {
+    const report = state.judicialReport.data || {};
+    $("#judicial-report-total").textContent = report.total || 0;
+    $("#judicial-report-active").textContent = report.active || 0;
+    $("#judicial-report-closed").textContent = report.closed || 0;
+    $("#judicial-report-overdue").textContent = report.overdue_deadlines || 0;
+    $("#judicial-report-upcoming").textContent = report.deadlines_next_7_days || 0;
+    $("#judicial-report-duration").textContent = `${Number(report.average_duration_days || 0).toLocaleString("pt-BR")} dias`;
+    $("#judicial-report-favorable").textContent = `${Number(report.favorable_rate || 0).toLocaleString("pt-BR")}%`;
+    const outcomes = Array.isArray(report.outcomes) ? report.outcomes : [];
+    $("#judicial-report-outcomes").innerHTML = outcomes.length
+      ? outcomes.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td>${item.count || 0}</td></tr>`).join("")
+      : '<tr><td colspan="2" class="empty-cell">Nenhum processo encerrado no período.</td></tr>';
+  }
+
+  async function loadJudicialReport() {
+    const panel = $("#judicial-report-panel");
+    panel.hidden = !canReadJudicialReport();
+    if (!canReadJudicialReport()) return;
+    $("#judicial-report-export").hidden = !canExportJudicialReport();
+    const query = judicialReportParams().toString();
+    state.judicialReport.data = await api(`/api/v1/judicial-reports/summary${query ? `?${query}` : ""}`);
+    renderJudicialReport();
+  }
+
+  async function exportJudicialReport() {
+    if (!canExportJudicialReport()) return toast("Seu perfil não pode exportar este relatório.", "error");
+    const button = $("#judicial-report-export");
+    setBusy(button, true, "Gerando…");
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const query = judicialReportParams().toString();
+      const response = await fetch(`${API_BASE}/api/v1/judicial-reports/summary.csv${query ? `?${query}` : ""}`, { headers });
+      if (!response.ok) throw new Error(await readError(response));
+      saveBlob(await response.blob(), `relatorio_judicial_${state.judicialReport.dateFrom || "inicio"}_${state.judicialReport.dateTo || "hoje"}.csv`);
+      toast("Relatório judicial exportado em CSV.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function openRecoveryCaseDialog() {
+    if (!canCreateRecovery()) return toast("Seu perfil não pode abrir casos.", "error");
+    try {
+      await loadClientOptions();
+      const form = $("#recovery-case-form");
+      form.reset();
+      $("#recovery-client").innerHTML = '<option value="">Selecione o cliente</option>' + state.clients.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.full_name)} · ${escapeHtml(item.cpf)}</option>`).join("");
+      $("#recovery-assignee").innerHTML = '<option value="">Sem responsável</option>' + (state.user ? `<option value="${escapeHtml(state.user.id)}">${escapeHtml(state.user.full_name)} (eu)</option>` : "");
+      $("#recovery-case-dialog").showModal();
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function submitRecoveryCase(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Abrindo…");
+    try {
+      const raw = Object.fromEntries(new FormData(form));
+      await api("/api/v1/recovery-cases", { method: "POST", body: JSON.stringify(compactObject(raw)) });
+      closeDialog(form.closest("dialog"));
+      await loadRecoveryCases(1);
+      toast("Caso de recuperação aberto.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function transitionRecoveryCase(caseId, target, button) {
+    const item = state.recovery.items.find((entry) => String(entry.id) === String(caseId));
+    if (!item) return;
+    let reason = null;
+    if (target === "archived") {
+      reason = window.prompt("Informe o motivo do arquivamento:");
+      if (!reason) return;
+    }
+    setBusy(button, true, "Salvando…");
+    try {
+      await api(`/api/v1/recovery-cases/${caseId}/transitions`, {
+        method: "POST", body: JSON.stringify({ status: target, version: item.version, reason })
+      });
+      await loadRecoveryCases(state.recovery.page);
+      toast("Situação do caso atualizada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function advanceRecoveryStage(caseId, stage, button) {
+    const item = state.recovery.items.find((entry) => String(entry.id) === String(caseId));
+    if (!item) return;
+    setBusy(button, true, "Avançando…");
+    try {
+      await api(`/api/v1/recovery-cases/${caseId}`, { method: "PATCH", body: JSON.stringify({ stage, version: item.version }) });
+      await loadRecoveryCases(state.recovery.page);
+      toast(`Etapa atualizada para ${recoveryStageLabels[stage] || stage}.`);
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  function renderJudicialEvents(events = []) {
+    const labels = { filing: "Protocolo", movement: "Movimentação", deadline: "Prazo", hearing: "Audiência", decision: "Decisão", appeal: "Recurso", note: "Observação" };
+    $("#judicial-event-list").innerHTML = events.length ? events.map((item) => `<article class="negotiation-offer"><span><small>${escapeHtml(labels[item.event_type] || item.event_type)} · ${escapeHtml(formatDate(item.event_date, true))}</small><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.description || "")}</p></span></article>`).join("") : '<div class="empty-state">Nenhuma movimentação registrada.</div>';
+  }
+
+  async function openJudicialProcessDialog(caseId) {
+    const form = $("#judicial-process-form");
+    form.reset();
+    form.elements.case_id.value = caseId;
+    state.judicialProcess = null;
+    $("#close-judicial-process").hidden = true;
+    $("#edit-judicial-closure").hidden = true;
+    $("#judicial-closure-summary").hidden = true;
+    try {
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
+      for (const name of ["process_number", "court", "district", "division", "status", "notes"]) form.elements[name].value = state.judicialProcess[name] || "";
+      form.elements.version.value = state.judicialProcess.version;
+      form.elements.filed_at.value = state.judicialProcess.filed_at ? String(state.judicialProcess.filed_at).slice(0, 16) : "";
+      form.elements.next_deadline.value = state.judicialProcess.next_deadline ? String(state.judicialProcess.next_deadline).slice(0, 16) : "";
+      const closed = state.judicialProcess.status === "closed";
+      const outcomes = { favorable: "Favorável", partially_favorable: "Parcialmente favorável", unfavorable: "Desfavorável", settlement: "Acordo judicial", dismissed: "Extinto sem decisão de mérito", other: "Outro resultado" };
+      $("#close-judicial-process").hidden = closed || !canCloseJudicial();
+      $("#edit-judicial-closure").hidden = !closed || !canCloseJudicial();
+      $('button[type="submit"]', form).hidden = closed || !canUpdateJudicial();
+      $("#judicial-event-form").hidden = closed || !canUpdateJudicial();
+      const closure = $("#judicial-closure-summary");
+      closure.hidden = !closed;
+      closure.innerHTML = closed ? `<strong>Processo encerrado · ${escapeHtml(outcomes[state.judicialProcess.outcome] || state.judicialProcess.outcome || "Resultado não informado")}</strong><p>${escapeHtml(state.judicialProcess.closure_reason || "")}</p><small>${escapeHtml(formatDate(state.judicialProcess.closed_at, true))}</small>` : "";
+      $("#judicial-event-section").hidden = false;
+      renderJudicialEvents(state.judicialProcess.events);
+    } catch (error) {
+      if (!String(error.message).includes("não cadastrado")) return toast(error.message, "error");
+      $("#judicial-event-section").hidden = true;
+      $('button[type="submit"]', form).hidden = !canUpdateJudicial();
+    }
+    $("#judicial-process-dialog").showModal();
+  }
+
+  async function submitJudicialProcess(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const raw = Object.fromEntries(new FormData(form));
+    const caseId = raw.case_id;
+    const payload = compactObject({ process_number: raw.process_number, court: raw.court, district: raw.district,
+      division: raw.division, filed_at: raw.filed_at ? new Date(raw.filed_at).toISOString() : null,
+      status: raw.status, next_deadline: raw.next_deadline ? new Date(raw.next_deadline).toISOString() : null,
+      notes: raw.notes, version: raw.version ? Number(raw.version) : null });
+    try {
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`, { method: "PUT", body: JSON.stringify(payload) });
+      form.elements.version.value = state.judicialProcess.version;
+      $("#judicial-event-section").hidden = false;
+      renderJudicialEvents(state.judicialProcess.events);
+      toast("Processo judicial salvo.");
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function submitJudicialEvent(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const caseId = $("#judicial-process-form").elements.case_id.value;
+    const raw = Object.fromEntries(new FormData(form));
+    try {
+      await api(`/api/v1/recovery-cases/${caseId}/judicial-process/events`, { method: "POST", body: JSON.stringify({
+        event_date: new Date(raw.event_date).toISOString(), event_type: raw.event_type, title: raw.title, description: raw.description || null
+      }) });
+      form.reset();
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
+      renderJudicialEvents(state.judicialProcess.events);
+      toast("Movimentação registrada.");
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function completeJudicialDeadline(caseId, button) {
+    if (!window.confirm("Confirmar a conclusão deste prazo judicial?")) return;
+    setBusy(button, true, "Concluindo…");
+    try {
+      let process = state.judicialProcess?.recovery_case_id === caseId ? state.judicialProcess : null;
+      if (!process) process = await api(`/api/v1/recovery-cases/${caseId}/judicial-process`);
+      const notes = window.prompt("Observação sobre o cumprimento do prazo (opcional):") || null;
+      await api(`/api/v1/recovery-cases/${caseId}/judicial-process/deadline/complete`, {
+        method: "POST", body: JSON.stringify({ completed_at: new Date().toISOString(), notes, version: process.version })
+      });
+      await Promise.all([loadOperationalAgenda(), loadOperationalAlerts()]);
+      toast("Prazo judicial concluído e registrado no histórico.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  function openJudicialClosureDialog() {
+    if (!state.judicialProcess || !canCloseJudicial()) return;
+    const form = $("#judicial-closure-form");
+    form.reset();
+    const editing = state.judicialProcess.status === "closed";
+    form.dataset.mode = editing ? "edit" : "close";
+    form.elements.case_id.value = state.judicialProcess.recovery_case_id;
+    form.elements.version.value = state.judicialProcess.version;
+    form.elements.outcome.value = editing ? state.judicialProcess.outcome || "" : "";
+    form.elements.reason.value = editing ? state.judicialProcess.closure_reason || "" : "";
+    const closureDate = editing && state.judicialProcess.closed_at ? new Date(state.judicialProcess.closed_at) : new Date();
+    form.elements.closed_at.value = new Date(closureDate.getTime() - closureDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    $("#judicial-closure-title").textContent = editing ? "Editar encerramento" : "Encerrar processo";
+    $("#judicial-closure-submit").textContent = editing ? "Salvar alterações" : "Confirmar encerramento";
+    $("#judicial-closure-submit").className = editing ? "primary-button" : "delete-button";
+    $("#judicial-closure-dialog").showModal();
+  }
+
+  async function submitJudicialClosure(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const raw = Object.fromEntries(new FormData(form));
+    const button = $('button[type="submit"]', form);
+    const editing = form.dataset.mode === "edit";
+    setBusy(button, true, editing ? "Salvando…" : "Encerrando…");
+    try {
+      const path = editing ? "closure" : "close";
+      state.judicialProcess = await api(`/api/v1/recovery-cases/${raw.case_id}/judicial-process/${path}`, {
+        method: editing ? "PATCH" : "POST", body: JSON.stringify({ outcome: raw.outcome, closed_at: new Date(raw.closed_at).toISOString(), reason: raw.reason, version: Number(raw.version) })
+      });
+      closeDialog($("#judicial-closure-dialog"));
+      closeDialog($("#judicial-process-dialog"));
+      await Promise.all([loadRecoveryCases(state.recovery.page), loadOperationalAgenda(), loadOperationalAlerts()]);
+      toast(editing ? "Encerramento atualizado e registrado no histórico." : "Processo judicial encerrado e registrado no histórico.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
   async function loadClients(page = 1) {
     await Promise.all([loadClientOptions(), loadClientPage(page)]);
   }
@@ -1351,7 +1820,12 @@
       "/api/v1/financial/creditors",
       `/api/v1/diagnoses/${client.id}/preview`,
       `/api/v1/diagnoses/${client.id}/history?limit=50`,
-      `/api/v1/financial/clients/${client.id}/agreements`
+      `/api/v1/financial/clients/${client.id}/agreements`,
+      `/api/v1/negotiations?client_id=${encodeURIComponent(client.id)}`,
+      `/api/v1/recovery-cases?page=1&page_size=100&client_id=${encodeURIComponent(client.id)}`,
+      `/api/v1/diagnoses/${client.id}/dossier`,
+      `/api/v1/documents/clients/${client.id}`,
+      `/api/v1/documents/clients/${client.id}/judicial-checklist`
     ];
     const results = await Promise.allSettled(paths.map((path) => api(path)));
     const valueAt = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
@@ -1362,7 +1836,12 @@
       creditors: Array.isArray(valueAt(3, [])) ? valueAt(3, []) : [],
       diagnosis: valueAt(4, null),
       history: Array.isArray(valueAt(5, [])) ? valueAt(5, []) : [],
-      agreements: Array.isArray(valueAt(6, [])) ? valueAt(6, []) : []
+      agreements: Array.isArray(valueAt(6, [])) ? valueAt(6, []) : [],
+      negotiations: Array.isArray(valueAt(7, [])) ? valueAt(7, []) : [],
+      recoveryCases: Array.isArray(valueAt(8, {}).items) ? valueAt(8, {}).items : [],
+      dossier: valueAt(9, null),
+      documents: Array.isArray(valueAt(10, [])) ? valueAt(10, []) : [],
+      judicialChecklist: valueAt(11, null)
     };
     fillCreditorSelect();
     fillAgreementDebtSelect();
@@ -2005,6 +2484,7 @@
     $("#client-prev-page").disabled = page <= 1 || pages === 0;
     $("#client-next-page").disabled = pages === 0 || page >= pages;
     $("#client-page-size").value = String(pageSize);
+    const showingArchived = $("#client-archive-filter").value === "archived";
     $("#clients-table").innerHTML = clients.length ? clients.map((client) => `
       <tr class="client-row" data-client-id="${escapeHtml(client.id)}">
         <td><strong>${escapeHtml(client.full_name)}</strong><br><small>${escapeHtml(client.cpf || "CPF não informado")}</small></td>
@@ -2012,7 +2492,7 @@
         <td>${escapeHtml([client.city, client.state].filter(Boolean).join(" / ") || "—")}</td>
         <td><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span></td>
         <td>${formatDate(client.created_at)}</td>
-        <td><button class="text-link" type="button" data-client-detail="${escapeHtml(client.id)}">Ver detalhes</button></td>
+        <td>${showingArchived ? (canRestoreClients() ? `<button class="text-link" type="button" data-restore-client="${escapeHtml(client.id)}">Restaurar</button>` : "—") : `<button class="text-link" type="button" data-client-detail="${escapeHtml(client.id)}">Ver detalhes</button>`}</td>
       </tr>`).join("") : '<tr><td colspan="6" class="empty-cell">Nenhum cliente encontrado.</td></tr>';
   }
 
@@ -2429,6 +2909,8 @@
     form.elements.phone.value = client.phone || "";
     form.elements.city.value = client.city || "";
     form.elements.state.value = client.state || "";
+    form.elements.good_faith_declared.value = client.good_faith_declared == null ? "" : String(client.good_faith_declared);
+    form.elements.can_pay_without_harming_basics.value = client.can_pay_without_harming_basics == null ? "" : String(client.can_pay_without_harming_basics);
     form.elements.notes.value = client.notes || "";
     setSelectValue(form.elements.status, client.status || "lead", clientStatusLabel(client.status));
 
@@ -2497,10 +2979,44 @@
     dialog.showModal();
   }
 
+  const negotiationStatusLabels = { open: "Em aberto", accepted: "Aceita", rejected: "Recusada", expired: "Expirada", cancelled: "Cancelada" };
+  const offerStatusLabels = { pending: "Pendente", accepted: "Aceita", rejected: "Recusada", expired: "Expirada", withdrawn: "Retirada" };
+  const engineDecisionLabels = { accept: "Recomenda aceitar", counter: "Recomenda contraproposta", reject: "Recomenda rejeitar", manual_review: "Revisão manual" };
+
+  function negotiationDebt(negotiation) {
+    return state.financial.debts.find((item) => String(item.id) === String(negotiation.debt_id));
+  }
+
+  function renderNegotiationOffer(negotiation, offer) {
+    const pendingActions = offer.status === "pending" && canApproveNegotiation()
+      ? `<span class="financial-actions"><button class="edit-button" type="button" data-offer-decision="accepted" data-negotiation-id="${escapeHtml(negotiation.id)}" data-offer-id="${escapeHtml(offer.id)}">Aceitar</button><button class="delete-button" type="button" data-offer-decision="rejected" data-negotiation-id="${escapeHtml(negotiation.id)}" data-offer-id="${escapeHtml(offer.id)}">Rejeitar</button></span>` : "";
+    const agreementAction = offer.status === "accepted" && canApproveNegotiation()
+      ? offer.agreement_id
+        ? `<span class="badge">Acordo gerado</span>`
+        : `<button class="primary-button" type="button" data-generate-agreement="${escapeHtml(offer.id)}" data-negotiation-id="${escapeHtml(negotiation.id)}">Gerar acordo</button>`
+      : "";
+    return `<article class="negotiation-offer">
+      <span><small>Proposta ${escapeHtml(offer.sequence_number)} · ${escapeHtml(offer.origin === "creditor" ? "Credor" : offer.origin === "client" ? "Cliente" : "Sistema")}</small><strong>${formatCurrency(offer.offered_amount)}</strong></span>
+      <span><small>Condição</small><strong>${escapeHtml(offer.installment_count)} × ${formatCurrency(offer.installment_amount)}</strong></span>
+      <span><small>Uso da capacidade</small><strong>${Number(offer.capacity_usage_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong></span>
+      <span><small>Situação</small><strong>${escapeHtml(offerStatusLabels[offer.status] || offer.status)}</strong></span>
+      <span class="engine-decision ${escapeHtml(offer.engine_decision)}"><small>${escapeHtml(engineDecisionLabels[offer.engine_decision] || offer.engine_decision)} · ${escapeHtml(offer.engine_score)} pontos</small><strong>${escapeHtml(offer.engine_reason)}</strong>${pendingActions}${agreementAction}</span>
+    </article>`;
+  }
+
+  function renderNegotiationCard(item) {
+    const debt = negotiationDebt(item);
+    const offers = Array.isArray(item.offers) ? item.offers : [];
+    return `<article class="negotiation-card">
+      <header><div><h4>${escapeHtml(debtNatureLabel(debt?.nature || "Dívida"))}</h4><p>${escapeHtml(creditorName(debt?.creditor_id))} · ${escapeHtml(item.channel)} · aberta em ${escapeHtml(formatDate(item.opened_at, true))}</p></div><div class="button-row"><span class="badge ${item.status === "rejected" || item.status === "cancelled" ? "danger" : ""}">${escapeHtml(negotiationStatusLabels[item.status] || item.status)}</span>${item.status === "open" && canUpdateNegotiation() ? `<button class="secondary-button" type="button" data-new-offer="${escapeHtml(item.id)}">Nova proposta</button>` : ""}</div></header>
+      <div class="negotiation-offers">${offers.length ? offers.map((offer) => renderNegotiationOffer(item, offer)).join("") : '<div class="negotiation-empty">Nenhuma proposta registrada nesta negociação.</div>'}</div>
+    </article>`;
+  }
+
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
-    const { incomes, expenses, debts, agreements, diagnosis, history } = state.financial;
+    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history, dossier, documents, judicialChecklist } = state.financial;
     const totalIncome = incomes.reduce((total, item) => total + Number(item.net_amount || 0), 0);
     const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount || 0), 0);
     const totalDebt = debts.reduce((total, item) => total + Number(item.current_balance || 0), 0);
@@ -2514,7 +3030,7 @@
           <h1>${escapeHtml(client.full_name)}</h1>
           <p>${escapeHtml(client.cpf || "CPF não informado")} · ${escapeHtml(client.email || "E-mail não informado")} · ${escapeHtml(client.phone || "Telefone não informado")}</p>
         </div>
-        <div class="button-row"><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span><button id="edit-client-button" class="secondary-button" type="button">Editar cadastro</button>${canDeleteClients() ? '<button id="delete-client-button" class="danger-button" type="button">Apagar cliente</button>' : ""}</div>
+        <div class="button-row"><span class="badge ${isClosedClientStatus(client.status) ? "neutral" : ""}">${escapeHtml(clientStatusLabel(client.status))}</span><button id="edit-client-button" class="secondary-button" type="button">Editar cadastro</button>${canDeleteClients() ? '<button id="delete-client-button" class="danger-button" type="button">Arquivar cliente</button>' : ""}</div>
       </div>
 
       <div class="client-profile-grid">
@@ -2550,13 +3066,25 @@
         </div>
       </section>
 
+      <section class="panel negotiation-panel">
+        <div class="panel-header"><div><p class="eyebrow dark">NEGOTIATION ENGINE</p><h3>Negociações e propostas</h3></div><div class="button-row"><span class="result-count">${negotiations.length} ${negotiations.length === 1 ? "negociação" : "negociações"}</span>${canCreateNegotiation() ? '<button id="open-negotiation-dialog" class="primary-button" type="button">Abrir negociação</button>' : ""}</div></div>
+        <div class="negotiation-list">${negotiations.length ? negotiations.map(renderNegotiationCard).join("") : '<div class="empty-state">Nenhuma negociação aberta para este cliente.</div>'}</div>
+      </section>
+
       <section class="panel agreement-panel">
-        <div class="panel-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h3>Acordos de pagamento</h3></div><div class="button-row"><span class="result-count">${agreements.length} ${agreements.length === 1 ? "acordo" : "acordos"}</span><button class="primary-button" type="button" data-open-dialog="agreement-dialog">Novo acordo</button></div></div>
+        <div class="panel-header"><div><p class="eyebrow dark">NEGOCIAÇÃO</p><h3>Acordos de pagamento</h3></div><div class="button-row"><span class="result-count">${agreements.length} ${agreements.length === 1 ? "acordo" : "acordos"}</span><button id="open-payment-plan" class="secondary-button" type="button">Simular plano</button><button class="primary-button" type="button" data-open-dialog="agreement-dialog">Novo acordo</button></div></div>
         <div class="agreement-list">${agreements.length ? agreements.map(renderAgreementCard).join("") : '<div class="empty-state">Nenhum acordo de pagamento cadastrado.</div>'}</div>
       </section>
 
+      <section class="panel detail-panel document-panel">
+        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ JUDICIAL</p><h3>Documentos do cliente</h3></div><div class="button-row"><span class="badge ${judicialChecklist?.ready ? "" : "danger"}">${judicialChecklist?.ready ? "Pronto para revisão" : "Documentação pendente"}</span><button class="primary-button" type="button" data-open-dialog="document-dialog">Adicionar documento</button></div></div>
+        ${judicialChecklist?.missing_categories?.length ? `<div class="diagnosis-conclusion"><strong>Itens pendentes</strong><ul>${judicialChecklist.missing_categories.map((item) => `<li>${escapeHtml({identification:"Identificação",income_proof:"Comprovante de renda",residence_proof:"Comprovante de residência",debt_statement:"Demonstrativo da dívida"}[item] || item)}</li>`).join("")}</ul></div>` : ""}
+        <div class="detail-list">${documents.length ? documents.map((item) => `<article><span><strong>${escapeHtml(item.filename)}</strong><small>${escapeHtml(item.category)} · ${(Number(item.size_bytes || 0) / 1024).toLocaleString("pt-BR", {maximumFractionDigits:1})} KB</small></span><div class="detail-item-actions"><span class="badge ${item.status === "rejected" ? "danger" : ""}">${escapeHtml({pending:"Pendente",validated:"Validado",rejected:"Rejeitado"}[item.status] || item.status)}</span><span class="financial-actions"><button class="edit-button" type="button" data-download-document="${escapeHtml(item.id)}">Abrir</button>${item.status === "pending" ? `<button class="edit-button" type="button" data-validate-document="${escapeHtml(item.id)}" data-document-status="validated">Validar</button><button class="delete-button" type="button" data-validate-document="${escapeHtml(item.id)}" data-document-status="rejected">Rejeitar</button>` : ""}</span></div></article>`).join("") : '<div class="empty-state">Nenhum documento enviado.</div>'}</div>
+      </section>
+
       <section class="panel diagnosis-panel">
-        <div class="panel-header"><div><p class="eyebrow dark">ANÁLISE ECONÔMICA</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir relatório</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
+        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ CONSOLIDADO</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir dossiê</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
+        ${dossier ? `<div class="diagnosis-conclusion"><strong>Conferência do dossiê</strong>${dossier.missing_information?.length ? `<ul>${dossier.missing_information.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<p class="muted">Dossiê completo para revisão profissional.</p>'}<p class="muted">${dossier.creditors?.length || 0} credor(es) · ${dossier.debts?.length || 0} dívida(s) · ${dossier.latest_diagnosis ? `diagnóstico salvo v${escapeHtml(dossier.latest_diagnosis.version)}` : "sem diagnóstico salvo"}</p></div>` : ""}
         ${diagnosis ? `<div class="diagnosis-grid">
           <article class="diagnosis-score"><span>Pontuação</span><strong>${escapeHtml(diagnosis.eligibility_score)}</strong><small>${escapeHtml(diagnosis.eligibility_result)}</small></article>
           <dl class="definition-list"><div><dt>Renda total</dt><dd>${formatCurrency(diagnosis.total_income)}</dd></div><div><dt>Despesas</dt><dd>${formatCurrency(diagnosis.total_expenses)}</dd></div><div><dt>Parcelas mensais</dt><dd>${formatCurrency(diagnosis.total_installments)}</dd></div><div><dt>Comprometimento</dt><dd>${Number(diagnosis.commitment_percentage || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</dd></div></dl>
@@ -2592,10 +3120,209 @@
     $$("[data-open-saved-report]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/history/${button.dataset.openSavedReport}/report`, button)));
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
     $("#save-diagnosis")?.addEventListener("click", saveDiagnosis);
+    $("#open-negotiation-dialog")?.addEventListener("click", openNegotiationDialog);
+    $("#open-payment-plan")?.addEventListener("click", openPaymentPlanDialog);
+    $$('[data-new-offer]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openNegotiationOfferDialog(button.dataset.newOffer)));
+    $$('[data-offer-decision]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => decideNegotiationOffer(button)));
+    $$('[data-generate-agreement]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => generateAgreementFromOffer(button)));
+    $$('[data-download-document]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => downloadDocument(button.dataset.downloadDocument)));
+    $$('[data-validate-document]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => validateDocument(button.dataset.validateDocument, button.dataset.documentStatus, button)));
+  }
+
+  async function submitDocument(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !state.selectedClient) return;
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Enviando…");
+    try {
+      await api(`/api/v1/documents/clients/${state.selectedClient.id}`, { method: "POST", body: new FormData(form) });
+      form.closest("dialog").close();
+      await loadClientDetail(state.selectedClient.id);
+      toast("Documento enviado para validação.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function downloadDocument(documentId) {
+    try {
+      const headers = new Headers();
+      const access = getTokens().access;
+      if (access) headers.set("Authorization", `Bearer ${access}`);
+      const response = await fetch(`${API_BASE}/api/v1/documents/${documentId}/download`, { headers });
+      if (!response.ok) throw new Error(await readError(response));
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) { toast(error.message, "error"); }
+  }
+
+  async function validateDocument(documentId, statusValue, button) {
+    const notes = window.prompt(statusValue === "validated" ? "Observação da validação (opcional):" : "Informe o motivo da rejeição:", "");
+    if (notes === null) return;
+    setBusy(button, true, statusValue === "validated" ? "Validando…" : "Rejeitando…");
+    try {
+      await api(`/api/v1/documents/${documentId}/validation`, { method: "POST", body: JSON.stringify({ status: statusValue, notes: notes || null }) });
+      await loadClientDetail(state.selectedClient.id);
+      toast(statusValue === "validated" ? "Documento validado." : "Documento rejeitado.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { if (document.body.contains(button)) setBusy(button, false); }
   }
 
   function clientName(id) {
     return state.clients.find((client) => String(client.id) === String(id))?.full_name || "Cliente não identificado";
+  }
+
+  function openPaymentPlanDialog() {
+    if (!state.selectedClient || !state.financial.debts.length) {
+      toast("Cadastre ao menos uma dívida antes de simular o plano.", "error");
+      return;
+    }
+    const form = $("#payment-plan-form");
+    form.reset();
+    state.paymentPlan = null;
+    $("#payment-plan-results").innerHTML = '<div class="empty-state">Preencha as condições e clique em Simular.</div>';
+    $("#payment-plan-dialog").showModal();
+  }
+
+  function numericList(value, integer = false) {
+    return String(value || "").split(/[,;\s]+/).map((item) => Number(item)).filter((item) => Number.isFinite(item) && item >= 0).map((item) => integer ? Math.trunc(item) : item);
+  }
+
+  function renderPaymentPlanResults(result) {
+    const scenarios = Array.isArray(result?.scenarios) ? result.scenarios.slice(0, 12) : [];
+    const warnings = Array.isArray(result?.warnings) ? result.warnings : [];
+    $("#payment-plan-results").innerHTML = `
+      <div class="financial-summary">
+        <article><span>Dívida considerada</span><strong>${formatCurrency(result.total_debt_amount)}</strong></article>
+        <article><span>Capacidade calculada</span><strong>${formatCurrency(result.calculated_payment_capacity)}</strong></article>
+        <article><span>Limite aplicado</span><strong>${formatCurrency(result.applied_payment_limit)}</strong></article>
+        <article><span>Qualidade dos dados</span><strong>${escapeHtml(result.data_quality_score)}%</strong></article>
+      </div>
+      ${warnings.length ? `<div class="diagnosis-conclusion"><strong>Atenção</strong><ul>${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
+      <table><thead><tr><th>#</th><th>Desconto</th><th>Prazo</th><th>Entrada</th><th>Parcela</th><th>Total</th><th>Resultado</th></tr></thead><tbody>${scenarios.length ? scenarios.map((item) => `<tr><td>${escapeHtml(item.rank)}</td><td>${Number(item.discount_percentage || 0).toLocaleString("pt-BR")}%</td><td>${escapeHtml(item.term_months)} meses</td><td>${formatCurrency(item.down_payment)}</td><td>${formatCurrency(item.installment_amount)}</td><td>${formatCurrency(item.total_payable)}</td><td><span class="badge ${item.sustainable ? "" : "danger"}">${escapeHtml(item.recommendation)}</span></td></tr>`).join("") : '<tr><td colspan="7" class="empty-cell">Nenhum cenário foi gerado.</td></tr>'}</tbody></table>`;
+  }
+
+  async function submitPaymentPlan(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = $('button[type="submit"]', form);
+    const raw = Object.fromEntries(new FormData(form));
+    const payload = {
+      debt_ids: state.financial.debts.map((item) => item.id),
+      discount_percentages: numericList(raw.discount_percentages),
+      installment_terms: numericList(raw.installment_terms, true),
+      annual_interest_rate: raw.annual_interest_rate || "0",
+      down_payment: raw.down_payment || "0",
+      maximum_installment: raw.maximum_installment || null,
+      first_due_date: raw.first_due_date || null
+    };
+    if (!payload.discount_percentages.length || !payload.installment_terms.length) {
+      toast("Informe ao menos um desconto e um prazo válidos.", "error");
+      return;
+    }
+    setBusy(button, true, "Simulando…");
+    try {
+      state.paymentPlan = await api(`/api/v1/payment-plans/${state.selectedClient.id}/simulate`, { method: "POST", body: JSON.stringify(payload) });
+      renderPaymentPlanResults(state.paymentPlan);
+      toast("Cenários calculados e ordenados por sustentabilidade.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  function openNegotiationDialog() {
+    const form = $("#negotiation-form");
+    form.reset();
+    $("#negotiation-case").innerHTML = '<option value="">Selecione o caso</option>' + state.financial.recoveryCases
+      .filter((item) => !["resolved", "cancelled", "archived"].includes(item.status))
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.case_number)} · ${escapeHtml(recoveryStatusLabels[item.status] || item.status)}</option>`).join("");
+    $("#negotiation-debt").innerHTML = '<option value="">Selecione a dívida</option>' + state.financial.debts
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(debtNatureLabel(item.nature))} · ${formatCurrency(item.current_balance)}</option>`).join("");
+    if (!state.financial.recoveryCases.length) {
+      toast("Abra primeiro um caso no CS Recupera para este cliente.", "error");
+      return;
+    }
+    if (!state.financial.debts.length) {
+      toast("Cadastre primeiro uma dívida para este cliente.", "error");
+      return;
+    }
+    $("#negotiation-dialog").showModal();
+  }
+
+  function openNegotiationOfferDialog(negotiationId) {
+    const negotiation = state.financial.negotiations.find((item) => String(item.id) === String(negotiationId));
+    const debt = negotiation && negotiationDebt(negotiation);
+    if (!negotiation || !debt) return toast("Negociação ou dívida não encontrada.", "error");
+    const form = $("#negotiation-offer-form");
+    form.reset();
+    $("#negotiation-offer-id").value = negotiation.id;
+    form.elements.offered_amount.value = Number(debt.current_balance || 0).toFixed(2);
+    form.elements.installment_count.value = 12;
+    form.elements.installment_amount.value = (Number(debt.current_balance || 0) / 12).toFixed(2);
+    form.elements.first_due_date.value = localDateValue(new Date(Date.now() + 30 * 86400000));
+    $("#negotiation-offer-dialog").showModal();
+  }
+
+  async function submitNegotiation(event) {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('[type="submit"]');
+    const raw = Object.fromEntries(new FormData(event.currentTarget));
+    if (raw.expires_at) raw.expires_at = new Date(raw.expires_at).toISOString();
+    setBusy(button, true, "Abrindo…");
+    try {
+      await api("/api/v1/negotiations", { method: "POST", body: JSON.stringify(compactObject(raw)) });
+      $("#negotiation-dialog").close();
+      await loadClientDetail(state.selectedClient.id);
+      toast("Negociação aberta com sucesso.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function submitNegotiationOffer(event) {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('[type="submit"]');
+    const raw = Object.fromEntries(new FormData(event.currentTarget));
+    const negotiationId = raw.negotiation_id;
+    delete raw.negotiation_id;
+    for (const key of ["offered_amount", "down_payment", "installment_amount", "annual_interest_rate"]) raw[key] = String(raw[key] || "0");
+    raw.installment_count = Number(raw.installment_count);
+    if (raw.valid_until) raw.valid_until = new Date(raw.valid_until).toISOString();
+    setBusy(button, true, "Avaliando…");
+    try {
+      const offer = await api(`/api/v1/negotiations/${negotiationId}/offers`, { method: "POST", body: JSON.stringify(compactObject(raw)) });
+      $("#negotiation-offer-dialog").close();
+      await loadClientDetail(state.selectedClient.id);
+      toast(engineDecisionLabels[offer.engine_decision] || "Proposta avaliada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function decideNegotiationOffer(button) {
+    const action = button.dataset.offerDecision;
+    const reason = window.prompt(action === "accepted" ? "Confirme o motivo da aprovação:" : "Informe o motivo da rejeição:", "") ?? null;
+    if (reason === null) return;
+    setBusy(button, true, action === "accepted" ? "Aceitando…" : "Rejeitando…");
+    try {
+      await api(`/api/v1/negotiations/${button.dataset.negotiationId}/offers/${button.dataset.offerId}/decision`, {
+        method: "POST", body: JSON.stringify({ status: action, reason: reason || null })
+      });
+      await loadClientDetail(state.selectedClient.id);
+      toast(action === "accepted" ? "Proposta aceita." : "Proposta rejeitada.");
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
+  }
+
+  async function generateAgreementFromOffer(button) {
+    if (!window.confirm("Gerar o acordo e todas as parcelas a partir desta proposta aceita?")) return;
+    setBusy(button, true, "Gerando…");
+    try {
+      const result = await api(`/api/v1/negotiations/${button.dataset.negotiationId}/offers/${button.dataset.generateAgreement}/agreement`, { method: "POST" });
+      await loadClientDetail(state.selectedClient.id);
+      toast(`Acordo gerado com ${result.installment_count} parcela(s).`);
+      document.querySelector(".agreement-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) { toast(error.message, "error"); }
+    finally { setBusy(button, false); }
   }
 
   function toLocalDateTimeValue(value) {
@@ -3356,6 +4083,8 @@
     setBusy(button, true, "Salvando…");
     try {
       if (data.state) data.state = data.state.toUpperCase();
+      data.good_faith_declared = data.good_faith_declared === "" ? null : data.good_faith_declared === "true";
+      data.can_pay_without_harming_basics = data.can_pay_without_harming_basics === "" ? null : data.can_pay_without_harming_basics === "true";
       let updatedClient = null;
       if (editingId) {
         const payload = {
@@ -3366,6 +4095,8 @@
           city: data.city || null,
           state: data.state || null,
           status: data.status || "lead",
+          good_faith_declared: data.good_faith_declared,
+          can_pay_without_harming_basics: data.can_pay_without_harming_basics,
           notes: data.notes || null
         };
         updatedClient = await api(`/api/v1/clients/${editingId}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -3392,26 +4123,36 @@
     const client = state.selectedClient;
     const button = event.currentTarget;
     if (!client || !canDeleteClients()) {
-      toast("Seu perfil não possui permissão para apagar clientes.", "error");
+      toast("Seu perfil não possui permissão para arquivar clientes.", "error");
       return;
     }
     const confirmed = window.confirm(
-      `Apagar o cliente "${client.full_name}"?\n\nEsta ação só será permitida se ele não possuir registros financeiros, diagnósticos ou vínculos no CRM.`
+      `Arquivar o cliente "${client.full_name}"?\n\nEle sairá da lista de ativos e poderá ser restaurado depois.`
     );
     if (!confirmed) return;
 
-    setBusy(button, true, "Apagando…");
+    setBusy(button, true, "Arquivando…");
     try {
       await api(`/api/v1/clients/${client.id}`, { method: "DELETE" });
       state.selectedClient = null;
       await Promise.all([loadClients(), loadDashboard()]);
       setView("clients");
-      toast(`Cliente "${client.full_name}" apagado com segurança.`);
+      toast(`Cliente "${client.full_name}" arquivado.`);
     } catch (error) {
       toast(error.message, "error");
     } finally {
       if (document.body.contains(button)) setBusy(button, false);
     }
+  }
+  async function restoreClient(clientId, button) {
+    if (!canRestoreClients()) return toast("Seu perfil não possui permissão para restaurar clientes.", "error");
+    setBusy(button, true, "Restaurando…");
+    try {
+      const restored = await api(`/api/v1/clients/${clientId}/restore`, { method: "POST" });
+      await Promise.all([loadClients(1), loadDashboard()]);
+      toast(`Cliente "${restored.full_name}" restaurado.`);
+    } catch (error) { toast(error.message, "error"); }
+    finally { if (document.body.contains(button)) setBusy(button, false); }
   }
 
   async function submitContact(event) {
@@ -3554,6 +4295,9 @@
     $("#client-status-filter").addEventListener("change", () => {
       loadClientPage(1).catch((error) => toast(error.message, "error"));
     });
+    $("#client-archive-filter").addEventListener("change", () => {
+      loadClientPage(1).catch((error) => toast(error.message, "error"));
+    });
     $("#client-page-size").addEventListener("change", (event) => {
       state.clientPage.pageSize = Number(event.currentTarget.value) || 25;
       loadClientPage(1).catch((error) => toast(error.message, "error"));
@@ -3669,6 +4413,43 @@
     $("#collection-assignment-form").addEventListener("submit", saveCollectionAssignment);
     $("#collection-bulk-assignment-form").addEventListener("submit", saveBulkCollectionAssignment);
     $("#collection-distribution-form").addEventListener("submit", saveCollectionDistribution);
+    $("#new-recovery-case").addEventListener("click", openRecoveryCaseDialog);
+    $("#recovery-case-form").addEventListener("submit", submitRecoveryCase);
+    $("#judicial-process-form").addEventListener("submit", submitJudicialProcess);
+    $("#judicial-event-form").addEventListener("submit", submitJudicialEvent);
+    $("#close-judicial-process").addEventListener("click", openJudicialClosureDialog);
+    $("#judicial-closure-form").addEventListener("submit", submitJudicialClosure);
+    $("#edit-judicial-closure").addEventListener("click", openJudicialClosureDialog);
+    $("#judicial-report-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const raw = Object.fromEntries(new FormData(event.currentTarget));
+      if (raw.date_from && raw.date_to && raw.date_from > raw.date_to) return toast("A data inicial não pode ser posterior à data final.", "error");
+      state.judicialReport.dateFrom = String(raw.date_from || "");
+      state.judicialReport.dateTo = String(raw.date_to || "");
+      loadJudicialReport().then(() => toast("Relatório judicial atualizado.")).catch((error) => toast(error.message, "error"));
+    });
+    $("#judicial-report-export").addEventListener("click", exportJudicialReport);
+    $("#negotiation-form").addEventListener("submit", submitNegotiation);
+    $("#negotiation-offer-form").addEventListener("submit", submitNegotiationOffer);
+    $("#payment-plan-form").addEventListener("submit", submitPaymentPlan);
+    $("#recovery-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      state.recovery.status = $("#recovery-status-filter").value || "all";
+      loadRecoveryCases(1).catch((error) => toast(error.message, "error"));
+    });
+    $("#recovery-search").addEventListener("input", renderRecoveryCases);
+    $("#recovery-prev-page").addEventListener("click", () => loadRecoveryCases(state.recovery.page - 1).catch((error) => toast(error.message, "error")));
+    $("#recovery-next-page").addEventListener("click", () => loadRecoveryCases(state.recovery.page + 1).catch((error) => toast(error.message, "error")));
+    $("#recovery-table").addEventListener("click", (event) => {
+      const clientButton = event.target.closest("[data-case-client]");
+      const transitionButton = event.target.closest("[data-case-transition]");
+      const stageButton = event.target.closest("[data-case-stage]");
+      const judicialButton = event.target.closest("[data-judicial-process]");
+      if (clientButton) openClientDetail(clientButton.dataset.caseClient);
+      else if (judicialButton) openJudicialProcessDialog(judicialButton.dataset.judicialProcess);
+      else if (transitionButton) transitionRecoveryCase(transitionButton.dataset.caseId, transitionButton.dataset.caseTransition, transitionButton);
+      else if (stageButton) advanceRecoveryStage(stageButton.dataset.caseId, stageButton.dataset.caseStage, stageButton);
+    });
     $("#export-clients-button").addEventListener("click", downloadClientsCsv);
     $("#client-import-form").addEventListener("submit", (event) => event.preventDefault());
     $("#client-import-template-button").addEventListener("click", downloadClientImportTemplate);
@@ -3725,13 +4506,15 @@
     });
     $("#agenda-list").addEventListener("click", (event) => {
       const complete = event.target.closest("[data-agenda-complete-task]");
+      const completeJudicial = event.target.closest("[data-complete-judicial]");
       const item = event.target.closest("[data-agenda-id]");
       if (complete) completeCrmTask(complete.dataset.agendaCompleteTask, complete);
+      else if (completeJudicial) completeJudicialDeadline(completeJudicial.dataset.completeJudicial, completeJudicial);
       else if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error"));
     });
     $("#agenda-week-grid").addEventListener("click", (event) => { const item = event.target.closest("[data-agenda-id]"); if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error")); });
     $("#alert-close-button").addEventListener("click", () => setAlertPopover(false));
-    $("#alert-refresh-button").addEventListener("click", () => loadOperationalAlerts(true).catch((error) => toast(error.message, "error")));
+    $("#alert-refresh-button")?.addEventListener("click", () => loadOperationalAlerts(true).catch((error) => toast(error.message, "error")));
     $("#alert-list").addEventListener("click", (event) => {
       const item = event.target.closest("[data-alert-view]");
       if (item) openOperationalAlert(item.dataset.alertView, item.dataset.alertFilter).catch((error) => toast(error.message, "error"));
@@ -3799,6 +4582,7 @@
       if (state.audit.page < state.audit.pages) loadAudit(state.audit.page + 1).catch((error) => toast(error.message, "error"));
     });
     $("#client-form").addEventListener("submit", submitClient);
+    $("#document-form").addEventListener("submit", submitDocument);
     $("#user-form").addEventListener("submit", submitUser);
     $("#organization-form").addEventListener("submit", submitOrganization);
     $("#password-form").addEventListener("submit", submitPasswordChange);
@@ -3827,7 +4611,9 @@
     });
     $("#clients-table").addEventListener("click", (event) => {
       const button = event.target.closest("[data-client-detail]");
+      const restoreButton = event.target.closest("[data-restore-client]");
       if (button) openClientDetail(button.dataset.clientDetail);
+      else if (restoreButton) restoreClient(restoreButton.dataset.restoreClient, restoreButton);
     });
     $("#new-user-button").addEventListener("click", () => openDialog("user-dialog"));
     $("#user-list").addEventListener("click", (event) => {
@@ -3874,6 +4660,7 @@
       if (button.dataset.view === "collections") loadCollections().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "management") loadManagement().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "performance") loadPerformance().catch((error) => toast(error.message, "error"));
+      if (button.dataset.view === "recovery") loadRecoveryCases(1).catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));
