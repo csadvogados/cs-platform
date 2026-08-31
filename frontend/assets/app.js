@@ -27,6 +27,7 @@
     editingFinancial: null,
     installmentPaymentTarget: null,
     editingUserId: null,
+    passwordResetUserId: null,
     users: [],
     organization: null,
     sessions: [],
@@ -140,6 +141,7 @@
     login: "Entrou",
     logout: "Saiu",
     change_password: "Alterou a senha",
+    reset_password: "Redefiniu a senha",
     create: "Criou",
     update: "Atualizou",
     delete: "Apagou",
@@ -723,6 +725,14 @@
     const submit = $('button[type="submit"]', form);
     submit.textContent = "Cadastrar membro";
     delete submit.dataset.originalLabel;
+  }
+
+  function resetUserPasswordDialog() {
+    const form = $("#user-password-reset-form");
+    if (!form) return;
+    form.reset();
+    state.passwordResetUserId = null;
+    $("#user-password-reset-description").textContent = "";
   }
 
   function resetFinancialDialog(dialogId) {
@@ -3574,7 +3584,7 @@
         <span class="team-actions">${currentAccount
           ? '<span class="current-account">Conta atual</span>'
           : administrator
-            ? `<button class="edit-button" type="button" data-edit-user="${escapeHtml(user.id)}">Editar</button><button class="${active ? "delete-button" : "complete-button"}" type="button" data-toggle-user="${escapeHtml(user.id)}" data-user-action="${active ? "block" : "unblock"}">${active ? "Desativar" : "Ativar"}</button>`
+            ? `<button class="edit-button" type="button" data-edit-user="${escapeHtml(user.id)}">Editar</button><button class="secondary-button" type="button" data-reset-user-password="${escapeHtml(user.id)}">Redefinir senha</button><button class="${active ? "delete-button" : "complete-button"}" type="button" data-toggle-user="${escapeHtml(user.id)}" data-user-action="${active ? "block" : "unblock"}">${active ? "Desativar" : "Ativar"}</button>`
             : ""}</span>
       </article>`;
     }).join("") : '<div class="empty-state">Nenhum usuário encontrado.</div>';
@@ -3758,6 +3768,48 @@
     submit.textContent = "Salvar alterações";
     delete submit.dataset.originalLabel;
     dialog.showModal();
+  }
+
+  function openUserPasswordReset(userId) {
+    if (!canManageUsers()) {
+      toast("Somente administradores podem redefinir senhas.", "error");
+      return;
+    }
+    const user = state.users.find((item) => String(item.id) === String(userId));
+    if (!user || String(user.id) === String(state.user?.id)) {
+      toast("Use as Configurações para alterar a senha da conta atual.", "error");
+      return;
+    }
+    resetUserPasswordDialog();
+    state.passwordResetUserId = user.id;
+    $("#user-password-reset-description").textContent = `Crie uma senha temporária para ${user.full_name}.`;
+    $("#user-password-reset-dialog").showModal();
+  }
+
+  async function submitUserPasswordReset(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !canManageUsers() || !state.passwordResetUserId) return;
+    const password = form.elements.new_password.value;
+    if (password !== form.elements.confirm_password.value) {
+      toast("A confirmação da senha não confere.", "error");
+      return;
+    }
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Redefinindo…");
+    try {
+      await api(`/api/v1/users/${state.passwordResetUserId}/reset-password`, {
+        method: "POST",
+        body: JSON.stringify({ new_password: password })
+      });
+      closeDialog(form.closest("dialog"));
+      await loadUsers();
+      toast("Senha temporária definida. As sessões foram encerradas e a troca será exigida no próximo acesso.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   async function submitUser(event) {
@@ -4597,6 +4649,7 @@
     $("#client-form").addEventListener("submit", submitClient);
     $("#document-form").addEventListener("submit", submitDocument);
     $("#user-form").addEventListener("submit", submitUser);
+    $("#user-password-reset-form").addEventListener("submit", submitUserPasswordReset);
     $("#organization-form").addEventListener("submit", submitOrganization);
     $("#password-form").addEventListener("submit", submitPasswordChange);
     $("#contact-form").addEventListener("submit", submitContact);
@@ -4631,8 +4684,10 @@
     $("#new-user-button").addEventListener("click", () => openDialog("user-dialog"));
     $("#user-list").addEventListener("click", (event) => {
       const editButton = event.target.closest("[data-edit-user]");
+      const resetPasswordButton = event.target.closest("[data-reset-user-password]");
       const toggleButton = event.target.closest("[data-toggle-user]");
       if (editButton) openUserEditor(editButton.dataset.editUser);
+      else if (resetPasswordButton) openUserPasswordReset(resetPasswordButton.dataset.resetUserPassword);
       else if (toggleButton) toggleUserStatus(toggleButton.dataset.toggleUser, toggleButton.dataset.userAction, toggleButton);
     });
     $("#session-list").addEventListener("click", (event) => {
@@ -4686,6 +4741,7 @@
     $("#client-dialog").addEventListener("close", resetClientDialog);
     $("#client-import-dialog").addEventListener("close", resetClientImportDialog);
     $("#user-dialog").addEventListener("close", resetUserDialog);
+    $("#user-password-reset-dialog").addEventListener("close", resetUserPasswordDialog);
     Object.values(financialDefinitions).forEach((definition) => {
       document.getElementById(definition.dialogId)?.addEventListener("close", () => resetFinancialDialog(definition.dialogId));
     });

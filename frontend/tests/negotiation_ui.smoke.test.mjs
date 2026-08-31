@@ -9,7 +9,7 @@ const styles = await readFile(new URL("../assets/styles.css", import.meta.url), 
 test("interface contém os formulários de negociação e proposta", () => {
   assert.match(index, /id="negotiation-form"/);
   assert.match(index, /id="negotiation-offer-form"/);
-  assert.match(index, /5\.39\.1-rbac-session/);
+  assert.match(index, /5\.39\.2-password-reset/);
 });
 
 test("interface usa todas as rotas do Negotiation Engine", () => {
@@ -31,4 +31,12 @@ test("interface não reaproveita a lista da equipe em sessão sem permissão", (
   assert.match(app, /\$\('\[data-view="users"\]'\)\.hidden = !canReadUsers\(\)/);
   assert.match(app, /if \(!canReadUsers\(\)\) \{\s*state\.users = \[\];/);
   assert.match(app, /\.\.\.\(canReadUsers\(\) \? \[loadUsers\(\)\] : \[\]\)/);
+});
+
+test("interface permite ao administrador redefinir senha temporária", () => {
+  assert.match(index, /id="user-password-reset-dialog"/);
+  assert.match(index, /5\.39\.2-password-reset/);
+  assert.match(app, /data-reset-user-password/);
+  assert.match(app, /\/reset-password`/);
+  assert.match(app, /As sessões foram encerradas/);
 });

@@ -636,6 +636,19 @@
       </form>
     </dialog>
 
+    <dialog id="user-password-reset-dialog" class="modal small-modal">
+      <form id="user-password-reset-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">SEGURANÇA DA CONTA</p><h2>Redefinir senha</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <p id="user-password-reset-description" class="form-help"></p>
+        <div class="form-grid single">
+          <label><span>Nova senha temporária *</span><input name="new_password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+          <label><span>Confirmar senha temporária *</span><input name="confirm_password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+        </div>
+        <p class="form-help">As sessões abertas serão encerradas e o usuário deverá trocar a senha no próximo acesso.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Redefinir senha</button></div>
+      </form>
+    </dialog>
+
     <dialog id="contact-dialog" class="modal small-modal">
       <form id="contact-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">CRM</p><h2>Novo contato</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
@@ -885,6 +898,6 @@
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="./config.js"></script>
     <!-- previous release: 5.34.0-judicial-closure -->
-    <script src="./assets/app.js?v=5.39.1-rbac-session"></script>
+    <script src="./assets/app.js?v=5.39.2-password-reset"></script>
   </body>
 </html>
