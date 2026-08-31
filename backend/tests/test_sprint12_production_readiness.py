@@ -34,4 +34,4 @@ def test_production_checklist_exists_and_frontend_is_versioned():
     index = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
     assert "Rollback" in checklist
     assert "0024" in checklist
-    assert "5.39.0-closure-edit" in index
+    assert "5.40.0-judicial-dossier" in index

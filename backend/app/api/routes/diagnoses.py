@@ -4,7 +4,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_user, require_permissions, require_roles
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.client import Client
@@ -14,6 +14,9 @@ from app.schemas.diagnosis import ClientDossier, DiagnosisPreview, DiagnosisRead
 from app.services.diagnosis_engine import calculate
 from app.services.audit import record_audit
 from app.services.report_service import economic_report, saved_economic_report
+from app.services.judicial_dossier import build_judicial_dossier, render_judicial_dossier
+from app.security.identity import IdentityContext
+from app.security.permissions import PermissionCode
 router=APIRouter()
 def loaded(db,client_id,org_id):
     c=db.scalar(select(Client).where(Client.id==client_id,Client.organization_id==org_id,Client.archived_at.is_(None)).options(selectinload(Client.incomes),selectinload(Client.expenses),selectinload(Client.debts).selectinload(Debt.creditor)))
@@ -96,6 +99,24 @@ def build_dossier(db: Session, client: Client, organization_id: uuid.UUID) -> di
 def dossier(client_id: uuid.UUID, db: Session = Depends(get_db), actor: User = Depends(get_current_user)):
     client = loaded(db, client_id, actor.organization_id)
     return build_dossier(db, client, actor.organization_id)
+
+@router.get('/{client_id}/judicial-dossier')
+def judicial_dossier(client_id: uuid.UUID, db: Session = Depends(get_db),
+                     identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_REPORT_READ.value))):
+    client = loaded(db, client_id, identity.organization_id)
+    return build_judicial_dossier(db, client)
+
+@router.get('/{client_id}/judicial-dossier/report', response_class=Response)
+def judicial_dossier_report(client_id: uuid.UUID, db: Session = Depends(get_db),
+                            identity: IdentityContext = Depends(require_permissions(PermissionCode.JUDICIAL_REPORT_READ.value))):
+    client = loaded(db, client_id, identity.organization_id)
+    data = build_judicial_dossier(db, client)
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id,
+                 entity_type="judicial_dossier", entity_id=client.id, action="export",
+                 new_values={"ready": data["checklist"]["ready"], "missing_items": len(data["missing_information"]) + len(data["checklist"]["missing"])})
+    db.commit()
+    return Response(render_judicial_dossier(data), media_type='text/html',
+                    headers={'Content-Disposition': f'inline; filename="dossie-judicial-{client_id}.html"', 'Cache-Control': 'no-store'})
 @router.get('/{client_id}/preview',response_model=DiagnosisPreview)
 def preview(client_id:uuid.UUID,db:Session=Depends(get_db),actor:User=Depends(get_current_user)):
     return calculate(loaded(db,client_id,actor.organization_id),Decimal(str(settings.minimum_existential_reference)))
