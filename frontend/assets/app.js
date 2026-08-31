@@ -344,6 +344,11 @@
     return String(state.user?.role || "").toLowerCase() === "admin";
   }
 
+  function canReadUsers() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("user.read");
+  }
+
   function canUpdateOrganization() {
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("organization.update");
@@ -576,6 +581,7 @@
     $("#import-clients-button").hidden = !canImportClients();
     $("#recovery-nav-item").hidden = !canReadRecovery();
     $("#new-recovery-case").hidden = !canCreateRecovery();
+    $('[data-view="users"]').hidden = !canReadUsers();
   }
 
   function setView(view) {
@@ -583,6 +589,7 @@
     if (view === "management" && !canViewManagement()) view = "dashboard";
     if (view === "performance" && !canViewPerformance()) view = "dashboard";
     if (view === "recovery" && !canReadRecovery()) view = "dashboard";
+    if (view === "users" && !canReadUsers()) view = "dashboard";
     if (!viewMeta[view]) return;
     state.currentView = view;
     $$(".page-view").forEach((section) => section.classList.toggle("active-view", section.id === `view-${view}`));
@@ -815,6 +822,12 @@
   async function refreshAll(showNotice = false) {
     const button = $("#refresh-button");
     setBusy(button, true, "Atualizando…");
+    if (!canReadUsers()) {
+      state.users = [];
+      renderUsers();
+      fillAuditUserFilter();
+      fillCollectionUserSelects();
+    }
     const loaders = [
       loadDashboard(),
       loadCollections(),
@@ -822,7 +835,7 @@
       loadOperationalAgenda(),
       loadClients(),
       loadCrm(),
-      loadUsers(),
+      ...(canReadUsers() ? [loadUsers()] : []),
       loadSettings(),
       checkHealth()
     ];
