@@ -27,6 +27,7 @@
     editingFinancial: null,
     installmentPaymentTarget: null,
     editingUserId: null,
+    passwordResetUserId: null,
     users: [],
     organization: null,
     sessions: [],
@@ -140,6 +141,7 @@
     login: "Entrou",
     logout: "Saiu",
     change_password: "Alterou a senha",
+    reset_password: "Redefiniu a senha",
     create: "Criou",
     update: "Atualizou",
     delete: "Apagou",
@@ -723,6 +725,14 @@
     const submit = $('button[type="submit"]', form);
     submit.textContent = "Cadastrar membro";
     delete submit.dataset.originalLabel;
+  }
+
+  function resetUserPasswordDialog() {
+    const form = $("#user-password-reset-form");
+    if (!form) return;
+    form.reset();
+    state.passwordResetUserId = null;
+    $("#user-password-reset-description").textContent = "";
   }
 
   function resetFinancialDialog(dialogId) {
@@ -3090,13 +3100,13 @@
       </section>
 
       <section class="panel detail-panel document-panel">
-        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ JUDICIAL</p><h3>Documentos do cliente</h3></div><div class="button-row"><span class="badge ${judicialChecklist?.ready ? "" : "danger"}">${judicialChecklist?.ready ? "Pronto para revisão" : "Documentação pendente"}</span><button class="primary-button" type="button" data-open-dialog="document-dialog">Adicionar documento</button></div></div>
+        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ JUDICIAL</p><h3>Documentos do cliente</h3></div><div class="button-row"><span class="badge ${judicialChecklist?.ready ? "" : "danger"}">${judicialChecklist?.ready ? "Pronto para revisão" : "Documentação pendente"}</span>${canReadJudicialReport() ? '<button id="open-judicial-dossier" class="secondary-button" type="button">Gerar dossiê judicial</button>' : ""}<button class="primary-button" type="button" data-open-dialog="document-dialog">Adicionar documento</button></div></div>
         ${judicialChecklist?.missing_categories?.length ? `<div class="diagnosis-conclusion"><strong>Itens pendentes</strong><ul>${judicialChecklist.missing_categories.map((item) => `<li>${escapeHtml({identification:"Identificação",income_proof:"Comprovante de renda",residence_proof:"Comprovante de residência",debt_statement:"Demonstrativo da dívida"}[item] || item)}</li>`).join("")}</ul></div>` : ""}
         <div class="detail-list">${documents.length ? documents.map((item) => `<article><span><strong>${escapeHtml(item.filename)}</strong><small>${escapeHtml(item.category)} · ${(Number(item.size_bytes || 0) / 1024).toLocaleString("pt-BR", {maximumFractionDigits:1})} KB</small></span><div class="detail-item-actions"><span class="badge ${item.status === "rejected" ? "danger" : ""}">${escapeHtml({pending:"Pendente",validated:"Validado",rejected:"Rejeitado"}[item.status] || item.status)}</span><span class="financial-actions"><button class="edit-button" type="button" data-download-document="${escapeHtml(item.id)}">Abrir</button>${item.status === "pending" ? `<button class="edit-button" type="button" data-validate-document="${escapeHtml(item.id)}" data-document-status="validated">Validar</button><button class="delete-button" type="button" data-validate-document="${escapeHtml(item.id)}" data-document-status="rejected">Rejeitar</button>` : ""}</span></div></article>`).join("") : '<div class="empty-state">Nenhum documento enviado.</div>'}</div>
       </section>
 
       <section class="panel diagnosis-panel">
-        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ CONSOLIDADO</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir dossiê</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
+        <div class="panel-header"><div><p class="eyebrow dark">DOSSIÊ CONSOLIDADO</p><h3>Diagnóstico financeiro</h3></div><div class="button-row"><button id="open-current-report" class="secondary-button" type="button">Abrir relatório econômico</button><button id="refresh-diagnosis" class="secondary-button" type="button">Atualizar prévia</button><button id="save-diagnosis" class="primary-button" type="button">Salvar diagnóstico</button></div></div>
         ${dossier ? `<div class="diagnosis-conclusion"><strong>Conferência do dossiê</strong>${dossier.missing_information?.length ? `<ul>${dossier.missing_information.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<p class="muted">Dossiê completo para revisão profissional.</p>'}<p class="muted">${dossier.creditors?.length || 0} credor(es) · ${dossier.debts?.length || 0} dívida(s) · ${dossier.latest_diagnosis ? `diagnóstico salvo v${escapeHtml(dossier.latest_diagnosis.version)}` : "sem diagnóstico salvo"}</p></div>` : ""}
         ${diagnosis ? `<div class="diagnosis-grid">
           <article class="diagnosis-score"><span>Pontuação</span><strong>${escapeHtml(diagnosis.eligibility_score)}</strong><small>${escapeHtml(diagnosis.eligibility_result)}</small></article>
@@ -3130,6 +3140,7 @@
     $$("[data-pay-installment]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openInstallmentPayment(button.dataset.agreementId, button.dataset.payInstallment)));
     $$("[data-reverse-installment]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => reverseInstallmentPayment(button.dataset.agreementId, button.dataset.reverseInstallment, button)));
     $("#open-current-report")?.addEventListener("click", (event) => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/report`, event.currentTarget));
+    $("#open-judicial-dossier")?.addEventListener("click", (event) => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/judicial-dossier/report`, event.currentTarget));
     $$("[data-open-saved-report]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDiagnosisReport(`/api/v1/diagnoses/${client.id}/history/${button.dataset.openSavedReport}/report`, button)));
     $("#refresh-diagnosis")?.addEventListener("click", refreshDiagnosis);
     $("#save-diagnosis")?.addEventListener("click", saveDiagnosis);
@@ -3574,7 +3585,7 @@
         <span class="team-actions">${currentAccount
           ? '<span class="current-account">Conta atual</span>'
           : administrator
-            ? `<button class="edit-button" type="button" data-edit-user="${escapeHtml(user.id)}">Editar</button><button class="${active ? "delete-button" : "complete-button"}" type="button" data-toggle-user="${escapeHtml(user.id)}" data-user-action="${active ? "block" : "unblock"}">${active ? "Desativar" : "Ativar"}</button>`
+            ? `<button class="edit-button" type="button" data-edit-user="${escapeHtml(user.id)}">Editar</button><button class="secondary-button" type="button" data-reset-user-password="${escapeHtml(user.id)}">Redefinir senha</button><button class="${active ? "delete-button" : "complete-button"}" type="button" data-toggle-user="${escapeHtml(user.id)}" data-user-action="${active ? "block" : "unblock"}">${active ? "Desativar" : "Ativar"}</button>`
             : ""}</span>
       </article>`;
     }).join("") : '<div class="empty-state">Nenhum usuário encontrado.</div>';
@@ -3758,6 +3769,48 @@
     submit.textContent = "Salvar alterações";
     delete submit.dataset.originalLabel;
     dialog.showModal();
+  }
+
+  function openUserPasswordReset(userId) {
+    if (!canManageUsers()) {
+      toast("Somente administradores podem redefinir senhas.", "error");
+      return;
+    }
+    const user = state.users.find((item) => String(item.id) === String(userId));
+    if (!user || String(user.id) === String(state.user?.id)) {
+      toast("Use as Configurações para alterar a senha da conta atual.", "error");
+      return;
+    }
+    resetUserPasswordDialog();
+    state.passwordResetUserId = user.id;
+    $("#user-password-reset-description").textContent = `Crie uma senha temporária para ${user.full_name}.`;
+    $("#user-password-reset-dialog").showModal();
+  }
+
+  async function submitUserPasswordReset(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !canManageUsers() || !state.passwordResetUserId) return;
+    const password = form.elements.new_password.value;
+    if (password !== form.elements.confirm_password.value) {
+      toast("A confirmação da senha não confere.", "error");
+      return;
+    }
+    const button = $('button[type="submit"]', form);
+    setBusy(button, true, "Redefinindo…");
+    try {
+      await api(`/api/v1/users/${state.passwordResetUserId}/reset-password`, {
+        method: "POST",
+        body: JSON.stringify({ new_password: password })
+      });
+      closeDialog(form.closest("dialog"));
+      await loadUsers();
+      toast("Senha temporária definida. As sessões foram encerradas e a troca será exigida no próximo acesso.");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   async function submitUser(event) {
@@ -4597,6 +4650,7 @@
     $("#client-form").addEventListener("submit", submitClient);
     $("#document-form").addEventListener("submit", submitDocument);
     $("#user-form").addEventListener("submit", submitUser);
+    $("#user-password-reset-form").addEventListener("submit", submitUserPasswordReset);
     $("#organization-form").addEventListener("submit", submitOrganization);
     $("#password-form").addEventListener("submit", submitPasswordChange);
     $("#contact-form").addEventListener("submit", submitContact);
@@ -4631,8 +4685,10 @@
     $("#new-user-button").addEventListener("click", () => openDialog("user-dialog"));
     $("#user-list").addEventListener("click", (event) => {
       const editButton = event.target.closest("[data-edit-user]");
+      const resetPasswordButton = event.target.closest("[data-reset-user-password]");
       const toggleButton = event.target.closest("[data-toggle-user]");
       if (editButton) openUserEditor(editButton.dataset.editUser);
+      else if (resetPasswordButton) openUserPasswordReset(resetPasswordButton.dataset.resetUserPassword);
       else if (toggleButton) toggleUserStatus(toggleButton.dataset.toggleUser, toggleButton.dataset.userAction, toggleButton);
     });
     $("#session-list").addEventListener("click", (event) => {
@@ -4686,6 +4742,7 @@
     $("#client-dialog").addEventListener("close", resetClientDialog);
     $("#client-import-dialog").addEventListener("close", resetClientImportDialog);
     $("#user-dialog").addEventListener("close", resetUserDialog);
+    $("#user-password-reset-dialog").addEventListener("close", resetUserPasswordDialog);
     Object.values(financialDefinitions).forEach((definition) => {
       document.getElementById(definition.dialogId)?.addEventListener("close", () => resetFinancialDialog(definition.dialogId));
     });

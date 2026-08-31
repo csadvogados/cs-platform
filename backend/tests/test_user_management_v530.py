@@ -24,3 +24,34 @@ def test_invitation_accept(client):
     assert r.status_code==201,r.text
     accepted=client.post("/api/v1/invitations/accept",json={"token":r.json()["token"],"password":"InviteStrong123!"})
     assert accepted.status_code==201,accepted.text
+
+def test_admin_resets_temporary_password_revokes_sessions_and_audits(client):
+    h=auth(client)
+    created=client.post("/api/v1/users",headers=h,json={"full_name":"Financeiro Teste","email":"financeiro@example.com","password":"OldStrongPass123!","role":"financeiro"})
+    assert created.status_code==201,created.text
+    uid=created.json()["id"]
+    login=client.post("/api/v1/auth/login",json={"email":"financeiro@example.com","password":"OldStrongPass123!"})
+    assert login.status_code==200,login.text
+    old_refresh=login.json()["refresh_token"]
+
+    reset=client.post(f"/api/v1/users/{uid}/reset-password",headers=h,json={"new_password":"TemporaryPass456!"})
+    assert reset.status_code==204,reset.text
+    assert client.post("/api/v1/auth/login",json={"email":"financeiro@example.com","password":"OldStrongPass123!"}).status_code==401
+    new_login=client.post("/api/v1/auth/login",json={"email":"financeiro@example.com","password":"TemporaryPass456!"})
+    assert new_login.status_code==200,new_login.text
+    assert new_login.json()["must_change_password"] is True
+    assert client.post("/api/v1/auth/refresh",json={"refresh_token":old_refresh}).status_code==401
+
+    audit=client.get("/api/v1/audit?action=reset_password",headers=h)
+    assert audit.status_code==200,audit.text
+    event=next(item for item in audit.json()["items"] if item["entity_id"]==uid)
+    assert event["details"]=={"sessions_revoked":True,"force_change_next_login":True}
+
+def test_non_admin_cannot_reset_password(client):
+    h=auth(client)
+    created=client.post("/api/v1/users",headers=h,json={"full_name":"Atendimento Teste","email":"atendimento-reset@example.com","password":"SupportPass123!","role":"atendimento"})
+    assert created.status_code==201,created.text
+    login=client.post("/api/v1/auth/login",json={"email":"atendimento-reset@example.com","password":"SupportPass123!"})
+    support_headers={"Authorization":f"Bearer {login.json()['access_token']}"}
+    response=client.post(f"/api/v1/users/{created.json()['id']}/reset-password",headers=support_headers,json={"new_password":"AnotherPass456!"})
+    assert response.status_code==403,response.text
