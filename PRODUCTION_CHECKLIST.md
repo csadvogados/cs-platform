@@ -4,7 +4,8 @@
 
 - Confirmar que o deploy usa a branch `staging-cs-recupera` e que API, web e PostgreSQL apontam para o mesmo ambiente.
 - Fazer backup do banco PostgreSQL e validar que ele pode ser restaurado.
-- Conferir as variáveis obrigatórias: `DATABASE_URL`, `SECRET_KEY`, origens CORS e credenciais administrativas iniciais.
+- Conferir as variáveis obrigatórias: `DATABASE_URL` PostgreSQL, `SECRET_KEY` exclusiva com 32+ caracteres, `INITIAL_ADMIN_PASSWORD` exclusiva com 12+ caracteres e origens CORS sem `*`.
+- Manter `RESET_ADMIN_ON_STARTUP=false`. Se métricas forem coletadas, configurar `METRICS_TOKEN` e enviar `Authorization: Bearer <token>`; sem token, `/metrics` permanece indisponível em produção.
 - Executar todos os testes automatizados e confirmar apenas uma cabeça Alembic: `0024`.
 
 ## Deploy
@@ -30,3 +31,17 @@
 - Em falha da API, restaurar o deploy anterior e o backup feito antes da publicação.
 - Não reverter migrations em produção sem backup confirmado e análise dos dados incluídos depois do deploy.
 - Registrar horário, serviço afetado, versão restaurada e resultado do teste de saúde.
+
+## Backup e restauração no Railway
+
+- Habilitar backups automáticos no serviço PostgreSQL do ambiente de produção e confirmar a política de retenção exibida pelo Railway.
+- Antes de cada deploy com migration, criar um backup manual e registrar data, responsável e migration atual.
+- Mensalmente, restaurar o backup mais recente em um banco temporário isolado; nunca sobre o banco de produção.
+- No banco restaurado, confirmar a revisão Alembic, a quantidade de organizações/clientes/processos e uma amostra de documentos e auditorias.
+- Registrar o resultado do teste, o tempo de restauração e apagar o banco temporário somente depois da validação.
+
+## Auditoria e resposta a incidentes
+
+- Semanalmente, revisar em **Histórico** tentativas de login, redefinições de senha, alterações de usuários, exportações e encerramentos judiciais.
+- Em suspeita de acesso indevido: bloquear o usuário, redefinir a senha, revogar sessões, preservar os logs e registrar o intervalo do incidente.
+- Nunca inserir senhas, tokens, chaves ou documentos integrais em tickets e capturas de tela.

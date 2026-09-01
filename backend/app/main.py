@@ -54,6 +54,7 @@ logger = logging.getLogger("cs_platform.startup")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_runtime_security()
     logger.info(
         "Iniciando %s versao %s no ambiente %s.",
         settings.app_name,

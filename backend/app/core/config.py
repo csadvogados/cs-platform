@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     login_rate_limit_requests: int = 10
     metrics_enabled: bool = True
+    metrics_token: str = ""
     trusted_proxy_headers: bool = True
 
     model_config = SettingsConfigDict(
@@ -111,6 +112,26 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    def validate_runtime_security(self) -> None:
+        """Fail fast instead of starting production with development secrets."""
+        if not self.is_production:
+            return
+
+        problems: list[str] = []
+        if self.secret_key == "CHANGE-ME-IN-PRODUCTION" or len(self.secret_key) < 32:
+            problems.append("SECRET_KEY deve ser exclusiva e possuir ao menos 32 caracteres")
+        if self.initial_admin_password == "ChangeMe123!" or len(self.initial_admin_password) < 12:
+            problems.append("INITIAL_ADMIN_PASSWORD deve ser exclusiva e possuir ao menos 12 caracteres")
+        if not self.database_url.lower().startswith(("postgresql://", "postgresql+psycopg://")):
+            problems.append("DATABASE_URL deve apontar para PostgreSQL")
+        if "*" in self.cors_origin_list:
+            problems.append("CORS_ORIGINS não pode conter curinga em produção")
+        if self.reset_admin_on_startup:
+            problems.append("RESET_ADMIN_ON_STARTUP deve permanecer desabilitado em produção")
+
+        if problems:
+            raise RuntimeError("Configuração insegura de produção: " + "; ".join(problems))
 
 
 @lru_cache
