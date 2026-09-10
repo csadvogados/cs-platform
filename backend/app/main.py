@@ -31,6 +31,7 @@ from app.api.routes import (
     access_control,
     documents,
     judicial_reports,
+    leads,
 )
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -177,6 +178,11 @@ app.include_router(
     crm.router,
     prefix=f"{settings.api_v1_prefix}/crm",
     tags=["CRM Enterprise"],
+)
+app.include_router(
+    leads.router,
+    prefix=f"{settings.api_v1_prefix}/leads",
+    tags=["CS Captação / Leads"],
 )
 app.include_router(
     clients.router,

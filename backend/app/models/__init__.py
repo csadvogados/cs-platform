@@ -4,7 +4,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.client import Client
 from app.models.audit import AuditEvent
 from app.models.financial import CollectionAction, Income, Expense, Creditor, Debt, Diagnosis, PaymentAgreement, PaymentInstallment
-from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask
+from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask, Lead, LeadInteraction, LeadTask, LeadProposal, LeadSource, ServiceType
 from app.models.performance import PerformanceGoal
 from app.models.notification import Notification, NotificationPreference
 from app.models.recovery import JudicialProcess, JudicialProcessEvent, RecoveryCase, RecoveryCaseSource, RecoveryCaseStage, RecoveryCaseStatus
@@ -21,6 +21,7 @@ __all__ = [
     "Permission", "Role", "UserInvitation", "UserSession", "PasswordHistory",
     "role_permissions", "user_roles",
     "CRMContact", "CRMInteraction", "CRMOpportunity", "CRMTask",
+    "Lead", "LeadInteraction", "LeadTask", "LeadProposal", "LeadSource", "ServiceType",
     "PerformanceGoal",
     "Notification", "NotificationPreference",
     "RecoveryCase", "RecoveryCaseSource", "RecoveryCaseStage", "RecoveryCaseStatus",
