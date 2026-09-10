@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     cors_origins: str = (
         "http://localhost:3000,"
         "http://localhost:5173,"
+        "https://cs-platform-web-production.up.railway.app,"
         "https://sistema.rdsconsultoria.com.br"
     )
 
