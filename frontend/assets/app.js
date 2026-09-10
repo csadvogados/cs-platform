@@ -17,6 +17,7 @@
     judicialProcess: null,
     judicialReport: { data: null, dateFrom: "", dateTo: "" },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
+    leads: { items: [], dashboard: null, reports: null, catalogs: { sources: [], services: [] } },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
@@ -57,7 +58,7 @@
     collections: ["AGENDA FINANCEIRA", "Cobranças", "Atualizar"],
     agenda: ["ROTINA UNIFICADA", "Agenda operacional", "Atualizar"],
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
-    crm: ["DESENVOLVIMENTO DE NEGÓCIOS", "CRM", "Nova oportunidade"],
+    crm: ["CORE COMERCIAL", "CS Captação", "Novo lead"],
     users: ["ORGANIZAÇÃO", "Equipe", "Atualizar"],
     audit: ["CONTROLE E SEGURANÇA", "Histórico de atividades", "Atualizar"],
     settings: ["SEGURANÇA E CONTA", "Configurações", "Atualizar"]
@@ -1890,12 +1891,17 @@
   }
 
   async function loadCrm() {
-    const [summary, contacts, opportunities, tasks, interactions] = await Promise.all([
+    const leadAccess = ["admin", "supervisor", "advogado", "atendimento"].includes(String(state.user?.role || "")) || state.user?.is_superuser;
+    const [summary, contacts, opportunities, tasks, interactions, leads, leadDashboard, leadReports, leadCatalogs] = await Promise.all([
       api("/api/v1/crm/summary"),
       api("/api/v1/crm/contacts?limit=100"),
       api("/api/v1/crm/opportunities?limit=100"),
       api("/api/v1/crm/tasks?limit=100"),
-      api("/api/v1/crm/interactions?limit=100")
+      api("/api/v1/crm/interactions?limit=100"),
+      leadAccess ? api("/api/v1/leads?limit=200") : Promise.resolve([]),
+      leadAccess ? api("/api/v1/leads/analytics/dashboard") : Promise.resolve({}),
+      leadAccess ? api("/api/v1/leads/analytics/reports") : Promise.resolve({}),
+      leadAccess ? api("/api/v1/leads/catalogs") : Promise.resolve({ sources: [], services: [] })
     ]);
     state.crm = {
       summary,
@@ -1904,8 +1910,88 @@
       tasks: Array.isArray(tasks) ? tasks : tasks.items || [],
       interactions: Array.isArray(interactions) ? interactions : interactions.items || []
     };
+    state.leads = { items: Array.isArray(leads) ? leads : [], dashboard: leadDashboard, reports: leadReports, catalogs: leadCatalogs };
+    renderLeads();
     renderCrm();
     renderDashboard();
+  }
+
+  const leadStatuses = ["NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA", "CONVERTIDO", "PERDIDO"];
+  const leadStatusLabels = { NOVO: "Novo", CONTATADO: "Contatado", QUALIFICADO: "Qualificado", PROPOSTA: "Proposta", CONVERTIDO: "Convertido", PERDIDO: "Perdido" };
+
+  function leadCatalogName(kind, id) {
+    return state.leads.catalogs[kind]?.find((item) => String(item.id) === String(id))?.name || "—";
+  }
+
+  function leadOwnerName(id) {
+    return state.users.find((item) => String(item.id) === String(id))?.full_name || "Sem responsável";
+  }
+
+  function renderLeadDashboard() {
+    const value = state.leads.dashboard || {};
+    $("#lead-dashboard").innerHTML = [
+      ["Novos", value.new_leads || 0], ["Em andamento", value.in_progress || 0], ["Propostas", value.open_proposals || 0],
+      ["Convertidos", value.converted || 0], ["Perdidos", value.lost || 0], ["Conversão", `${value.conversion_rate || 0}%`],
+      ["Receita estimada", formatCurrency(value.estimated_revenue)], ["Receita contratada", formatCurrency(value.contracted_revenue)]
+    ].map(([label, amount]) => `<article><span>${label}</span><strong>${amount}</strong></article>`).join("");
+  }
+
+  function leadCard(lead) {
+    const nextOptions = leadStatuses.map((status) => `<option value="${status}" ${status === lead.status ? "selected" : ""}>${leadStatusLabels[status]}</option>`).join("");
+    return `<article class="lead-card" draggable="true" data-lead-id="${lead.id}"><button class="lead-card-open" data-open-lead="${lead.id}" type="button"><strong>${escapeHtml(lead.full_name)}</strong><span>${escapeHtml(leadCatalogName("services", lead.service_type_id))}</span><small>${escapeHtml(leadCatalogName("sources", lead.source_id))} · ${escapeHtml(leadOwnerName(lead.owner_id))}</small></button><select data-lead-status="${lead.id}" aria-label="Alterar status">${nextOptions}</select></article>`;
+  }
+
+  function renderLeads() {
+    renderLeadDashboard();
+    $("#lead-kanban").innerHTML = leadStatuses.map((status) => {
+      const items = state.leads.items.filter((lead) => lead.status === status);
+      return `<section class="lead-column" data-drop-status="${status}"><header><strong>${leadStatusLabels[status]}</strong><span>${items.length}</span></header><div>${items.map(leadCard).join("") || '<p class="lead-empty">Nenhum lead</p>'}</div></section>`;
+    }).join("");
+    $("#lead-table-body").innerHTML = state.leads.items.map((lead) => `<tr><td><strong>${escapeHtml(lead.full_name)}</strong><small>${escapeHtml(lead.email || lead.whatsapp || lead.phone || "")}</small></td><td>${escapeHtml(leadCatalogName("services", lead.service_type_id))}</td><td>${escapeHtml(leadCatalogName("sources", lead.source_id))}</td><td><span class="badge">${leadStatusLabels[lead.status]}</span></td><td>${escapeHtml(leadOwnerName(lead.owner_id))}</td><td><button class="text-link" data-open-lead="${lead.id}">Abrir</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty-cell">Nenhum lead encontrado.</td></tr>';
+    const reports = state.leads.reports || {};
+    $("#lead-reports").innerHTML = [["Por origem", reports.by_source], ["Por serviço", reports.by_service], ["Por responsável", reports.by_owner]].map(([title, rows]) => `<section class="panel"><div class="panel-header"><h3>${title}</h3></div><div class="lead-report-list">${(rows || []).map((row) => `<p><strong>${escapeHtml(row.name)}</strong><span>${row.leads} leads · ${row.converted} conversões · ${row.conversion_rate}%</span></p>`).join("") || "Sem dados"}</div></section>`).join("");
+    fillLeadSelects();
+  }
+
+  function fillLeadSelects() {
+    const source = $("#lead-source"), service = $("#lead-service"), owner = $("#lead-owner");
+    if (source) source.innerHTML = '<option value="">Selecione</option>' + state.leads.catalogs.sources.map((x) => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join("");
+    if (service) service.innerHTML = '<option value="">Selecione</option>' + state.leads.catalogs.services.map((x) => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join("");
+    if (owner) owner.innerHTML = '<option value="">Sem responsável</option>' + state.users.filter((x) => x.status === "active").map((x) => `<option value="${x.id}">${escapeHtml(x.full_name)}</option>`).join("");
+  }
+
+  async function changeLeadStatus(id, target) {
+    const payload = { status: target };
+    if (target === "PERDIDO") {
+      const reason = window.prompt("Motivo da perda: SEM_INTERESSE, HONORARIOS, NAO_RESPONDEU, OUTRO_ADVOGADO, SEM_VIABILIDADE, DOCUMENTACAO_INSUFICIENTE, FORA_ATUACAO, ATENDIMENTO_INCOMPLETO ou OUTRO");
+      if (!reason) { renderLeads(); return; }
+      payload.lost_reason = reason.trim().toUpperCase(); payload.lost_notes = window.prompt("Observação complementar (opcional)") || null;
+    }
+    await api(`/api/v1/leads/${id}/status`, { method: "POST", body: JSON.stringify(payload) }); await loadCrm(); toast("Status do lead atualizado.");
+  }
+
+  async function openLeadDetail(id) {
+    const lead = state.leads.items.find((x) => String(x.id) === String(id)); if (!lead) return;
+    const timeline = await api(`/api/v1/leads/${id}/timeline`);
+    const dialog = $("#lead-detail-dialog");
+    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p><div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : ""}</div></section><section><h3>Timeline</h3><div class="lead-timeline">${(timeline.interactions || []).map((x) => `<article><strong>${escapeHtml(x.interaction_type)}</strong><span>${escapeHtml(x.description)}</span><small>${formatDateTime(x.occurred_at)}</small></article>`).join("") || "Sem interações"}</div></section></div>`;
+    dialog.showModal();
+  }
+
+  function editLead(id) {
+    const lead = state.leads.items.find((x) => String(x.id) === String(id)); if (!lead) return;
+    fillLeadSelects(); const form = $("#lead-form"); form.reset(); form.elements.lead_id.value = lead.id;
+    ["full_name","cpf","phone","whatsapp","email","city","state","source_id","service_type_id","owner_id","priority","initial_notes","has_legal_demand","urgent","has_lawyer","has_ongoing_case","interest_level","can_afford","approximate_debt","approximate_creditors","monthly_income","income_commitment_percent"].forEach((key) => { if (form.elements[key]) form.elements[key].value = lead[key] === true ? "true" : lead[key] === false ? "false" : (lead[key] || ""); });
+    $("#lead-dialog-title").textContent = "Editar lead"; $("#lead-detail-dialog").close(); $("#lead-dialog").showModal();
+  }
+
+  async function convertLead(id) {
+    const lead = state.leads.items.find((x) => String(x.id) === String(id));
+    const service = state.leads.catalogs.services.find((x) => String(x.id) === String(lead.service_type_id));
+    const createRecovery = service?.code === "CS_RECUPERA" && window.confirm("Deseja abrir também um caso CS Recupera?");
+    try { await api(`/api/v1/leads/${id}/convert`, { method: "POST", body: JSON.stringify({ create_recovery_case: createRecovery }) }); }
+    catch (error) { if (!String(error.message).includes("duplicado")) throw error; toast("Possível duplicidade. Verifique o cliente existente antes de confirmar.", "error"); return; }
+    $("#lead-detail-dialog").close(); await loadCrm(); toast("Lead convertido em cliente.");
   }
 
   async function loadUsers() {
@@ -4697,6 +4783,7 @@
     });
     $("#revoke-all-sessions").addEventListener("click", (event) => revokeAllSessions(event.currentTarget));
     $("#view-crm").addEventListener("click", (event) => {
+      const openLead = event.target.closest("[data-open-lead]");
       const editContact = event.target.closest("[data-edit-contact]");
       const editOpportunity = event.target.closest("[data-edit-opportunity]");
       const editTask = event.target.closest("[data-edit-task]");
@@ -4705,7 +4792,8 @@
       const deleteTask = event.target.closest("[data-delete-task]");
       const deleteInteraction = event.target.closest("[data-delete-interaction]");
       const completeTask = event.target.closest("[data-complete-task]");
-      if (editContact) openCrmEditor("contact", editContact.dataset.editContact);
+      if (openLead) openLeadDetail(openLead.dataset.openLead).catch((error) => toast(error.message, "error"));
+      else if (editContact) openCrmEditor("contact", editContact.dataset.editContact);
       else if (editOpportunity) openCrmEditor("opportunity", editOpportunity.dataset.editOpportunity);
       else if (editTask) openCrmEditor("task", editTask.dataset.editTask);
       else if (deleteContact) deleteCrmItem("contact", deleteContact.dataset.deleteContact, deleteContact);
@@ -4715,8 +4803,35 @@
       else if (completeTask) completeCrmTask(completeTask.dataset.completeTask, completeTask);
     });
     $("#view-crm").addEventListener("change", (event) => {
+      const leadStatus = event.target.closest("[data-lead-status]");
       const select = event.target.closest("[data-opportunity-stage]");
-      if (select) changeOpportunityStage(select.dataset.opportunityStage, select.value, select);
+      if (leadStatus) changeLeadStatus(leadStatus.dataset.leadStatus, leadStatus.value).catch((error) => toast(error.message, "error"));
+      else if (select) changeOpportunityStage(select.dataset.opportunityStage, select.value, select);
+    });
+    $("#lead-refresh").addEventListener("click", () => loadCrm().catch((error) => toast(error.message, "error")));
+    $("#lead-filter-button").addEventListener("click", async () => {
+      const params = new URLSearchParams({ limit: "200" });
+      if ($("#lead-search").value.trim()) params.set("search", $("#lead-search").value.trim());
+      if ($("#lead-status-filter").value) params.set("status", $("#lead-status-filter").value);
+      state.leads.items = await api(`/api/v1/leads?${params}`); renderLeads();
+    });
+    $$("[data-lead-tab]").forEach((button) => button.addEventListener("click", () => {
+      $$("[data-lead-tab]").forEach((item) => item.classList.toggle("active", item === button));
+      $$(".lead-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `lead-${button.dataset.leadTab}-panel`));
+    }));
+    $("#lead-form").addEventListener("submit", async (event) => {
+      event.preventDefault(); const form = event.currentTarget; const data = Object.fromEntries(new FormData(form)); const id = data.lead_id; delete data.lead_id;
+      Object.keys(data).forEach((key) => { if (data[key] === "") data[key] = null; else if (["has_legal_demand","urgent","has_lawyer","has_ongoing_case","can_afford"].includes(key)) data[key] = data[key] === "true"; else if (["approximate_debt","approximate_creditors","monthly_income","income_commitment_percent"].includes(key)) data[key] = Number(data[key]); });
+      try { await api(id ? `/api/v1/leads/${id}` : "/api/v1/leads", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) }); closeDialog($("#lead-dialog")); form.reset(); $("#lead-dialog-title").textContent = "Novo lead"; await loadCrm(); toast(id ? "Lead atualizado." : "Lead cadastrado."); }
+      catch (error) { toast(error.message, "error"); }
+    });
+    $("#lead-detail-dialog").addEventListener("click", async (event) => {
+      const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]");
+      if (edit) editLead(edit.dataset.editLead);
+      else if (interact) { const description = window.prompt("Descreva a interação realizada:"); if (description) { await api(`/api/v1/leads/${interact.dataset.interactLead}/interactions`, { method: "POST", body: JSON.stringify({ interaction_type: "NOTA", description, occurred_at: new Date().toISOString() }) }); await openLeadDetail(interact.dataset.interactLead); } }
+      else if (task) { const description = window.prompt("Qual é a próxima ação?"); const due = description && window.prompt("Vencimento (AAAA-MM-DD HH:MM):"); if (description && due) { await api(`/api/v1/leads/${task.dataset.taskLead}/tasks`, { method:"POST", body:JSON.stringify({ description, due_at:new Date(due).toISOString() }) }); toast("Próxima ação agendada."); } }
+      else if (proposal) { const value = window.prompt("Valor fixo da proposta:"); if (value !== null) { await api(`/api/v1/leads/${proposal.dataset.proposalLead}/proposals`, { method:"POST", body:JSON.stringify({ fixed_value:Number(value), status:"ENVIADA", sent_at:new Date().toISOString() }) }); await loadCrm(); await openLeadDetail(proposal.dataset.proposalLead); } }
+      else if (convert) convertLead(convert.dataset.convertLead).catch((error) => toast(error.message, "error"));
     });
     $("#toggle-password").addEventListener("click", () => {
       const input = $("#login-password");

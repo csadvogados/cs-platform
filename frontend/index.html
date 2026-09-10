@@ -371,7 +371,18 @@
           </section>
 
           <section id="view-crm" class="page-view" aria-labelledby="crm-heading">
-            <div class="section-intro"><div><p class="eyebrow dark">DESENVOLVIMENTO DE NEGÓCIOS</p><h1 id="crm-heading">CRM</h1><p>Acompanhe contatos, oportunidades e tarefas da equipe.</p></div><div class="button-row"><button class="secondary-button" data-open-dialog="task-dialog">Nova tarefa</button><button class="primary-button" data-open-dialog="opportunity-dialog">Nova oportunidade</button></div></div>
+            <div class="section-intro"><div><p class="eyebrow dark">CORE COMERCIAL</p><h1 id="crm-heading">CS Captação</h1><p>Do primeiro contato à conversão em cliente e caso.</p></div><div class="button-row"><button class="secondary-button" id="lead-refresh" type="button">Atualizar</button><button class="primary-button" data-open-dialog="lead-dialog">Novo lead</button></div></div>
+            <div id="lead-dashboard" class="lead-dashboard"></div>
+            <div class="crm-tabs lead-main-tabs" role="tablist" aria-label="CS Captação">
+              <button class="crm-tab active" data-lead-tab="kanban" role="tab">Funil</button>
+              <button class="crm-tab" data-lead-tab="list" role="tab">Lista</button>
+              <button class="crm-tab" data-lead-tab="reports" role="tab">Relatórios</button>
+              <button class="crm-tab" data-lead-tab="legacy" role="tab">CRM anterior</button>
+            </div>
+            <section id="lead-kanban-panel" class="lead-tab-panel active"><div id="lead-kanban" class="lead-kanban"></div></section>
+            <section id="lead-list-panel" class="lead-tab-panel"><div class="crm-filter-bar"><label><span>Buscar</span><input id="lead-search" placeholder="Nome, CPF, telefone ou e-mail" /></label><label><span>Status</span><select id="lead-status-filter"><option value="">Todos</option><option>NOVO</option><option>CONTATADO</option><option>QUALIFICADO</option><option>PROPOSTA</option><option>CONVERTIDO</option><option>PERDIDO</option></select></label><button id="lead-filter-button" class="primary-button" type="button">Filtrar</button></div><div class="table-wrap"><table><thead><tr><th>Lead</th><th>Serviço</th><th>Origem</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody id="lead-table-body"></tbody></table></div></section>
+            <section id="lead-reports-panel" class="lead-tab-panel"><div id="lead-reports" class="lead-report-grid"></div></section>
+            <section id="lead-legacy-panel" class="lead-tab-panel">
             <div class="crm-summary">
               <article><span>Contatos</span><strong id="crm-contacts-count">—</strong></article>
               <article><span>Oportunidades</span><strong id="crm-opportunities-count">—</strong></article>
@@ -396,6 +407,7 @@
             <div id="crm-tasks" class="crm-tab-panel"><div id="task-list" class="stack-list panel-list"></div></div>
             <div id="crm-contacts" class="crm-tab-panel"><div class="panel-list-header"><span id="contact-count">0 contatos</span><button class="secondary-button" data-open-dialog="contact-dialog">Novo contato</button></div><div id="contact-list" class="contact-grid"></div></div>
             <div id="crm-interactions" class="crm-tab-panel"><div class="panel-list-header"><span id="interaction-count">0 atendimentos</span><button class="primary-button" data-open-dialog="interaction-dialog">Novo atendimento</button></div><div id="interaction-list" class="interaction-list"></div></div>
+            </section>
           </section>
 
           <section id="view-users" class="page-view" aria-labelledby="users-heading">
@@ -662,6 +674,30 @@
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" value="default" type="submit">Salvar contato</button></div>
       </form>
     </dialog>
+
+    <dialog id="lead-dialog" class="modal">
+      <form id="lead-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">CS CAPTAÇÃO</p><h2 id="lead-dialog-title">Novo lead</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="lead_id" type="hidden" />
+        <div class="form-grid">
+          <label class="wide"><span>Nome completo *</span><input name="full_name" required minlength="3" /></label>
+          <label><span>CPF</span><input name="cpf" inputmode="numeric" /></label><label><span>WhatsApp</span><input name="whatsapp" /></label>
+          <label><span>Telefone</span><input name="phone" /></label><label><span>E-mail</span><input name="email" type="email" /></label>
+          <label><span>Cidade</span><input name="city" /></label><label><span>UF</span><input name="state" maxlength="2" /></label>
+          <label><span>Origem *</span><select id="lead-source" name="source_id" required></select></label><label><span>Serviço *</span><select id="lead-service" name="service_type_id" required></select></label>
+          <label><span>Responsável</span><select id="lead-owner" name="owner_id"><option value="">Sem responsável</option></select></label><label><span>Prioridade</span><select name="priority"><option>BAIXA</option><option selected>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></label>
+          <label class="wide"><span>Observação inicial</span><textarea name="initial_notes" rows="3"></textarea></label>
+          <label><span>Demanda jurídica?</span><select name="has_legal_demand"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label><label><span>Urgência?</span><select name="urgent"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label>
+          <label><span>Já possui advogado?</span><select name="has_lawyer"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label><label><span>Processo em andamento?</span><select name="has_ongoing_case"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label>
+          <label><span>Grau de interesse</span><select name="interest_level"><option value="">Não informado</option><option>BAIXO</option><option>MEDIO</option><option>ALTO</option></select></label><label><span>Condição de contratação?</span><select name="can_afford"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label>
+          <label><span>Dívida aproximada</span><input name="approximate_debt" type="number" min="0" step="0.01" /></label><label><span>Número de credores</span><input name="approximate_creditors" type="number" min="0" /></label>
+          <label><span>Renda mensal</span><input name="monthly_income" type="number" min="0" step="0.01" /></label><label><span>Comprometimento da renda (%)</span><input name="income_commitment_percent" type="number" min="0" max="100" step="0.01" /></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar lead</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="lead-detail-dialog" class="modal modal-wide"><div id="lead-detail-content"></div></dialog>
 
     <dialog id="opportunity-dialog" class="modal">
       <form id="opportunity-form" method="dialog">
