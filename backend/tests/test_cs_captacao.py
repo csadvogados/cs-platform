@@ -57,3 +57,15 @@ def test_search_filters_and_soft_delete(client, token):
     deleted = client.delete(f"/api/v1/leads/{lead['id']}", headers=auth(token))
     assert deleted.status_code == 204
     assert client.get("/api/v1/leads?search=Maria", headers=auth(token)).json() == []
+
+
+def test_converted_lead_can_create_recovery_case_later(client, token):
+    lead = new_lead(client, token)
+    converted = client.post(f"/api/v1/leads/{lead['id']}/convert", headers=auth(token), json={"create_recovery_case": False})
+    assert converted.status_code == 200, converted.text
+    assert converted.json()["recovery_case_id"] is None
+
+    recovered = client.post(f"/api/v1/leads/{lead['id']}/convert", headers=auth(token), json={"create_recovery_case": True})
+    assert recovered.status_code == 200, recovered.text
+    assert recovered.json()["lead"]["status"] == "CONVERTIDO"
+    assert recovered.json()["recovery_case_id"]

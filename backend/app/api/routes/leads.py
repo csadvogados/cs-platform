@@ -175,12 +175,21 @@ def add_proposal(lead_id: UUID, payload: ProposalCreate, db: Session = Depends(g
 def convert(lead_id: UUID, payload: ConvertLead, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
     lead = get_lead(db, ident, lead_id)
     if lead.client_id:
+        if payload.create_recovery_case and not lead.recovery_case_id:
+            service = db.get(ServiceType, lead.service_type_id)
+            if not service or service.code != "CS_RECUPERA":
+                raise HTTPException(422, "RecoveryCase só pode ser aberto para o serviço CS Recupera")
+            case = create_case(db, ident.organization_id, RecoveryCaseCreate(client_id=lead.client_id, source=RecoveryCaseSource.API, assigned_user_id=lead.owner_id, notes=f"Originado posteriormente do lead {lead.id}"))
+            lead.recovery_case_id = case.id
+            db.add(LeadInteraction(organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id, interaction_type="STATUS", description="Caso CS Recupera aberto após a conversão", occurred_at=datetime.now(timezone.utc)))
+            record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead", entity_id=lead.id, action="create_recovery_case_after_conversion", new_values={"recovery_case_id": str(case.id)})
         if lead.status != "CONVERTIDO":
             lead.status = "CONVERTIDO"
             lead.converted_at = lead.converted_at or datetime.now(timezone.utc)
             lead.converted_by_id = lead.converted_by_id or ident.user_id
             db.add(LeadInteraction(organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id, interaction_type="STATUS", description="Status de conversão sincronizado", occurred_at=datetime.now(timezone.utc)))
             record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead", entity_id=lead.id, action="conversion_status_sync", new_values={"status": "CONVERTIDO"})
+        if db.is_modified(lead):
             save(db); db.refresh(lead)
         return ConversionResult(lead=lead, client_id=lead.client_id, recovery_case_id=lead.recovery_case_id)
     conditions = []

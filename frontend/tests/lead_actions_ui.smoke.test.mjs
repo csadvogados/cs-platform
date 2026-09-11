@@ -33,3 +33,9 @@ test("conversão atualiza imediatamente o cartão do lead", () => {
   assert.match(app, /current\.status = "CONVERTIDO"/);
   assert.match(app, /movido para Convertido/);
 });
+
+test("lead convertido pode abrir o caso CS Recupera posteriormente", () => {
+  assert.match(app, /data-recovery-lead/);
+  assert.match(app, /createRecoveryCaseFromLead/);
+  assert.match(app, /Caso CS Recupera criado e vinculado ao cliente/);
+});
