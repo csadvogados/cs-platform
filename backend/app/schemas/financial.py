@@ -194,10 +194,11 @@ class OperationalAlertsRead(BaseModel):
 
 class OperationalAgendaItemRead(BaseModel):
     id: str
-    kind: Literal["task", "follow_up", "promise", "judicial_deadline"]
+    kind: Literal["task", "lead_task", "follow_up", "promise", "judicial_deadline"]
     title: str
     client_id: uuid.UUID | None = None
     client_name: str | None = None
+    lead_id: uuid.UUID | None = None
     due_at: datetime
     status: Literal["overdue", "today", "upcoming"]
     priority: Literal["low", "normal", "high", "urgent"] = "normal"

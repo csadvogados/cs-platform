@@ -23,6 +23,8 @@ Os catálogos padronizados são criados por organização no primeiro acesso a `
 - `POST /api/v1/leads/{id}/convert`
 - `GET /api/v1/leads/catalogs`
 - `GET /api/v1/leads/analytics/dashboard`
+- `GET /api/v1/leads/analytics/team`
+- `POST /api/v1/leads/distribution`
 - `GET /api/v1/leads/analytics/reports`
 
 Todos aparecem no Swagger na tag **CS Captação / Leads** e são isolados por organização. Administrador, supervisor, advogado e atendimento têm acesso; os demais perfis recebem 403.
@@ -48,6 +50,9 @@ Todos aparecem no Swagger na tag **CS Captação / Leads** e são isolados por o
 - A preferência **somente itens atribuídos a mim** também restringe os alertas comerciais ao responsável pelo lead ou pela tarefa.
 - Cada alerta abre diretamente o lead correspondente no funil. A timeline permite concluir a próxima ação sem sair do detalhe.
 - O dashboard comercial exibe ações atrasadas, propostas vencendo e leads sem próxima ação.
+- As próximas ações abertas dos leads aparecem na **Agenda 360**, podem ser filtradas por responsável e concluídas na própria agenda.
+- Administradores e supervisores podem distribuir os leads sem responsável entre membros ativos selecionados. A divisão considera a carga comercial atual e registra cada atribuição na timeline e na auditoria.
+- A área de relatórios apresenta supervisão por responsável: leads em andamento, convertidos, perdidos, ações atrasadas, leads sem próxima ação e taxa de conversão.
 - As mudanças automáticas de status e as conclusões de tarefas são auditadas. A sincronização usa chaves de deduplicação para não repetir o mesmo alerta.
 
 As automações são sincronizadas quando a central de notificações é consultada, inclusive pelo sino de alertas da interface. Não há envio externo de mensagens nem execução de marketing.

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_user, require_permissions, require_roles
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.crm import CRMInteraction, CRMOpportunity, CRMTask
+from app.models.crm import CRMInteraction, CRMOpportunity, CRMTask, Lead, LeadTask
 from app.models.financial import CollectionAction, Creditor, Debt, Expense, Income, PaymentAgreement, PaymentInstallment
 from app.models.recovery import JudicialProcess, RecoveryCase
 from app.models.user import User
@@ -964,6 +964,25 @@ def list_operational_agenda(
                 assigned_user_id=task.assigned_to_id, assigned_user_name=user_names.get(task.assigned_to_id),
                 target_filter="task:overdue" if due_at.date() < today else "task:all",
             ))
+    lead_rows = db.execute(select(LeadTask, Lead).join(Lead, Lead.id == LeadTask.lead_id).where(
+        LeadTask.organization_id == actor.organization_id,
+        LeadTask.status == "PENDENTE",
+        Lead.deleted_at.is_(None),
+        Lead.status.in_({"NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA"}),
+    )).all()
+    for task, lead in lead_rows:
+        due_at = task.due_at
+        if due_at and due_at.tzinfo is None:
+            due_at = due_at.replace(tzinfo=timezone.utc)
+        if due_at and date_from <= due_at.date() <= date_to:
+            assigned_user_id = task.assigned_to_id or lead.owner_id
+            items.append(OperationalAgendaItemRead(
+                id=f"lead-task:{task.id}", kind="lead_task", title=task.description,
+                lead_id=lead.id, client_name=lead.full_name, due_at=due_at,
+                status=agenda_status(due_at.date()), priority=str(task.priority or "NORMAL").lower(),
+                assigned_user_id=assigned_user_id, assigned_user_name=user_names.get(assigned_user_id),
+                target_filter=f"lead:{lead.id}",
+            ))
     judicial_rows = db.execute(select(JudicialProcess, RecoveryCase).join(
         RecoveryCase, RecoveryCase.id == JudicialProcess.recovery_case_id
     ).where(
@@ -1025,7 +1044,7 @@ def export_operational_agenda_csv(
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
 ):
-    if kind not in {"all", "task", "follow_up", "promise", "judicial_deadline"}:
+    if kind not in {"all", "task", "lead_task", "follow_up", "promise", "judicial_deadline"}:
         raise HTTPException(status_code=422, detail="Tipo de compromisso inválido")
     if agenda_status not in {"all", "overdue", "today", "upcoming"}:
         raise HTTPException(status_code=422, detail="Situação da agenda inválida")
@@ -1047,7 +1066,7 @@ def export_operational_agenda_csv(
         items = [item for item in items if item.assigned_user_id == responsible_id]
 
     labels = {
-        "task": "Tarefa do CRM", "follow_up": "Acompanhamento", "promise": "Promessa", "judicial_deadline": "Prazo judicial",
+        "task": "Tarefa do CRM", "lead_task": "Próxima ação do lead", "follow_up": "Acompanhamento", "promise": "Promessa", "judicial_deadline": "Prazo judicial",
         "overdue": "Atrasado", "today": "Para hoje", "upcoming": "Próximo",
         "low": "Baixa", "normal": "Normal", "high": "Alta", "urgent": "Urgente",
     }

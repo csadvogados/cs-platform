@@ -134,3 +134,31 @@ def test_conversion_duplicate_preview_and_existing_client_link(client, token):
     })
     assert converted.status_code == 200, converted.text
     assert converted.json()["client_id"] == existing.json()["id"]
+
+
+def test_distribute_leads_and_include_next_action_in_operational_agenda(client, token):
+    lead = create_lead(client, token, "Lead para distribuição")
+    current_user = client.get("/api/v1/auth/me", headers=auth(token))
+    assert current_user.status_code == 200, current_user.text
+    user_id = current_user.json()["id"]
+
+    distributed = client.post("/api/v1/leads/distribution", headers=auth(token), json={"user_ids": [user_id]})
+    assert distributed.status_code == 200, distributed.text
+    assert distributed.json()["assigned"] == 1
+    assert client.get(f"/api/v1/leads/{lead['id']}", headers=auth(token)).json()["owner_id"] == user_id
+
+    task = client.post(f"/api/v1/leads/{lead['id']}/tasks", headers=auth(token), json={
+        "description": "Retornar proposta comercial",
+        "due_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    })
+    assert task.status_code == 201, task.text
+    agenda = client.get("/api/v1/financial/operational-agenda", headers=auth(token))
+    assert agenda.status_code == 200, agenda.text
+    item = next(row for row in agenda.json()["items"] if row["kind"] == "lead_task")
+    assert item["lead_id"] == lead["id"]
+    assert item["assigned_user_id"] == user_id
+
+    team = client.get("/api/v1/leads/analytics/team", headers=auth(token))
+    assert team.status_code == 200, team.text
+    row = next(item for item in team.json() if item["user_id"] == user_id)
+    assert row["active_leads"] == 1

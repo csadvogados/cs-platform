@@ -202,3 +202,31 @@ class DashboardRead(BaseModel):
 
 class ReportRow(BaseModel):
     key: str; name: str; leads: int; converted: int; lost: int; proposals: int = 0; conversion_rate: float
+
+
+class LeadDistributionCreate(BaseModel):
+    user_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class LeadDistributionOwnerRead(BaseModel):
+    user_id: UUID
+    user_name: str
+    assigned: int = 0
+
+
+class LeadDistributionRead(BaseModel):
+    assigned: int = 0
+    remaining_unassigned: int = 0
+    owners: list[LeadDistributionOwnerRead] = Field(default_factory=list)
+
+
+class LeadTeamPerformanceRead(BaseModel):
+    user_id: UUID | None = None
+    user_name: str
+    assigned_leads: int = 0
+    active_leads: int = 0
+    converted: int = 0
+    lost: int = 0
+    overdue_tasks: int = 0
+    leads_without_next_action: int = 0
+    conversion_rate: float = 0
