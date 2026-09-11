@@ -27,3 +27,9 @@ test("proposta comercial identifica o lead e aparece na timeline", () => {
   assert.match(app, /timeline\.proposals/);
   assert.match(app, /Proposta salva e vinculada ao lead/);
 });
+
+test("conversão atualiza imediatamente o cartão do lead", () => {
+  assert.match(app, /Object\.assign\(current, result\.lead\)/);
+  assert.match(app, /current\.status = "CONVERTIDO"/);
+  assert.match(app, /movido para Convertido/);
+});
