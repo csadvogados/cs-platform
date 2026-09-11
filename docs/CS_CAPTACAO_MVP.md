@@ -12,6 +12,7 @@ Os catálogos padronizados são criados por organização no primeiro acesso a `
 
 - `GET/POST /api/v1/leads`
 - `GET/PATCH/DELETE /api/v1/leads/{id}`
+- `GET /api/v1/leads/{id}/duplicates`
 - `POST /api/v1/leads/{id}/status`
 - `GET /api/v1/leads/{id}/timeline`
 - `POST /api/v1/leads/{id}/interactions`
@@ -31,6 +32,8 @@ Todos aparecem no Swagger na tag **CS Captação / Leads** e são isolados por o
 - Ao menos um meio de contato é obrigatório.
 - Mover para `PERDIDO` exige motivo.
 - A conversão pesquisa duplicidade por CPF, telefone e e-mail.
+- Antes da conversão, a interface mostra cadastros coincidentes por CPF, telefone, WhatsApp ou e-mail e permite vincular o histórico ao cliente existente.
+- O registro de perda usa motivos padronizados e legíveis; motivo e observações permanecem visíveis no detalhe do lead.
 - Como `Client.cpf` é obrigatório no core atual, um lead sem CPF pode avançar no funil, mas precisa de CPF para criar um novo Cliente. Pode, porém, ser vinculado a um Cliente existente após a confirmação de duplicidade.
 - `RecoveryCase` só é aberto para o serviço `CS_RECUPERA`.
 - Exclusão de lead é lógica e auditada.

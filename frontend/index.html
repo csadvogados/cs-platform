@@ -733,6 +733,31 @@
       </form>
     </dialog>
 
+    <dialog id="lead-conversion-dialog" class="modal">
+      <form id="lead-conversion-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">CS CAPTAÇÃO</p><h2>Converter lead em cliente</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="lead_id" type="hidden" />
+        <div class="conversion-summary" id="lead-conversion-summary"></div>
+        <fieldset class="conversion-duplicates"><legend>Cliente que receberá o histórico</legend><div id="lead-duplicate-options"></div></fieldset>
+        <label id="lead-recovery-option" class="conversion-check"><input name="create_recovery_case" type="checkbox" /> Abrir também um caso no CS Recupera</label>
+        <p class="form-help">A conversão preserva o histórico do lead e evita clientes duplicados.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Confirmar conversão</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="lead-lost-dialog" class="modal">
+      <form id="lead-lost-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">CS CAPTAÇÃO</p><h2>Registrar lead perdido</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="lead_id" type="hidden" />
+        <div class="form-grid">
+          <label class="wide"><span>Motivo da perda *</span><select name="lost_reason" required><option value="">Selecione</option><option value="SEM_INTERESSE">Sem interesse</option><option value="HONORARIOS">Honorários</option><option value="NAO_RESPONDEU">Não respondeu</option><option value="OUTRO_ADVOGADO">Contratou outro advogado</option><option value="SEM_VIABILIDADE">Sem viabilidade</option><option value="DOCUMENTACAO_INSUFICIENTE">Documentação insuficiente</option><option value="FORA_ATUACAO">Fora da área de atuação</option><option value="ATENDIMENTO_INCOMPLETO">Atendimento incompleto</option><option value="OUTRO">Outro</option></select></label>
+          <label class="wide"><span>Observações</span><textarea name="lost_notes" rows="4" maxlength="5000" placeholder="Registre informações úteis para análise comercial."></textarea></label>
+        </div>
+        <p class="form-help">O motivo ficará salvo para os relatórios e para a auditoria.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Confirmar perda</button></div>
+      </form>
+    </dialog>
+
     <dialog id="opportunity-dialog" class="modal">
       <form id="opportunity-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">CRM</p><h2>Nova oportunidade</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>

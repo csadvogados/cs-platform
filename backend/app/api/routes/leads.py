@@ -99,6 +99,19 @@ def create_lead(payload: LeadCreate, db: Session = Depends(get_db), ident: Ident
     save(db); db.refresh(obj); return obj
 
 
+@router.get("/{lead_id}/duplicates")
+def duplicate_clients(lead_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
+    lead = get_lead(db, ident, lead_id)
+    conditions = []
+    if lead.cpf: conditions.append(Client.cpf == lead.cpf)
+    if lead.phone: conditions.append(Client.phone == lead.phone)
+    if lead.whatsapp: conditions.append(Client.phone == lead.whatsapp)
+    if lead.email: conditions.append(func.lower(Client.email) == lead.email.lower())
+    if not conditions: return []
+    matches = db.scalars(select(Client).where(Client.organization_id == ident.organization_id, Client.archived_at.is_(None), or_(*conditions))).all()
+    return [{"id": item.id, "full_name": item.full_name, "cpf": item.cpf, "phone": item.phone, "email": item.email} for item in matches]
+
+
 @router.get("/{lead_id}", response_model=LeadRead)
 def read_lead(lead_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)): return get_lead(db, ident, lead_id)
 
@@ -215,6 +228,7 @@ def convert(lead_id: UUID, payload: ConvertLead, db: Session = Depends(get_db), 
     conditions = []
     if lead.cpf: conditions.append(Client.cpf == lead.cpf)
     if lead.phone: conditions.append(Client.phone == lead.phone)
+    if lead.whatsapp: conditions.append(Client.phone == lead.whatsapp)
     if lead.email: conditions.append(func.lower(Client.email) == lead.email.lower())
     duplicates = list(db.scalars(select(Client).where(Client.organization_id == ident.organization_id, Client.archived_at.is_(None), or_(*conditions)))) if conditions else []
     if duplicates and not payload.confirm_duplicate_client_id:
