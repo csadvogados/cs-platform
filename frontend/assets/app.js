@@ -308,6 +308,15 @@
       : { dateStyle: "short" }).format(date);
   }
 
+  function parseBrazilianDateTime(value) {
+    const match = String(value || "").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+    if (!match) return null;
+    const [, day, month, year, hour = "09", minute = "00"] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+    if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day) || date.getHours() !== Number(hour) || date.getMinutes() !== Number(minute)) return null;
+    return date;
+  }
+
   function sessionDevice(userAgent) {
     const value = String(userAgent || "");
     if (!value) return "Dispositivo não identificado";
@@ -1974,7 +1983,9 @@
     const lead = state.leads.items.find((x) => String(x.id) === String(id)); if (!lead) return;
     const timeline = await api(`/api/v1/leads/${id}/timeline`);
     const dialog = $("#lead-detail-dialog");
-    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p><div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : ""}</div></section><section><h3>Timeline</h3><div class="lead-timeline">${(timeline.interactions || []).map((x) => `<article><strong>${escapeHtml(x.interaction_type)}</strong><span>${escapeHtml(x.description)}</span><small>${escapeHtml(formatDate(x.occurred_at, true))}</small></article>`).join("") || "Sem interações"}</div></section></div>`;
+    const interactions = (timeline.interactions || []).map((x) => `<article><strong>${escapeHtml(x.interaction_type)}</strong><span>${escapeHtml(x.description)}</span><small>${escapeHtml(formatDate(x.occurred_at, true))}</small></article>`);
+    const tasks = (timeline.tasks || []).map((x) => `<article class="lead-task-event"><strong>PRÓXIMA AÇÃO · ${escapeHtml(x.status)}</strong><span>${escapeHtml(x.description)}</span><small>Prazo: ${escapeHtml(formatDate(x.due_at, true))}</small></article>`);
+    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p><div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : ""}</div></section><section><h3>Timeline e próximas ações</h3><div class="lead-timeline">${[...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
     dialog.showModal();
   }
 
@@ -4829,7 +4840,17 @@
       const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]");
       if (edit) editLead(edit.dataset.editLead);
       else if (interact) { const description = window.prompt("Descreva a interação realizada:"); if (description) { await api(`/api/v1/leads/${interact.dataset.interactLead}/interactions`, { method: "POST", body: JSON.stringify({ interaction_type: "NOTA", description, occurred_at: new Date().toISOString() }) }); await openLeadDetail(interact.dataset.interactLead); } }
-      else if (task) { const description = window.prompt("Qual é a próxima ação?"); const due = description && window.prompt("Vencimento (AAAA-MM-DD HH:MM):"); if (description && due) { await api(`/api/v1/leads/${task.dataset.taskLead}/tasks`, { method:"POST", body:JSON.stringify({ description, due_at:new Date(due).toISOString() }) }); toast("Próxima ação agendada."); } }
+      else if (task) {
+        const description = window.prompt("Qual é a próxima ação?");
+        const due = description && window.prompt("Vencimento (DD/MM/AAAA HH:MM). Exemplo: 15/09/2026 14:30");
+        if (description && due) {
+          const dueDate = parseBrazilianDateTime(due);
+          if (!dueDate) { toast("Data inválida. Use o formato DD/MM/AAAA HH:MM.", "error"); return; }
+          await api(`/api/v1/leads/${task.dataset.taskLead}/tasks`, { method:"POST", body:JSON.stringify({ description, due_at:dueDate.toISOString() }) });
+          toast("Próxima ação agendada e salva no lead.");
+          await openLeadDetail(task.dataset.taskLead);
+        }
+      }
       else if (proposal) { const value = window.prompt("Valor fixo da proposta:"); if (value !== null) { await api(`/api/v1/leads/${proposal.dataset.proposalLead}/proposals`, { method:"POST", body:JSON.stringify({ fixed_value:Number(value), status:"ENVIADA", sent_at:new Date().toISOString() }) }); await loadCrm(); await openLeadDetail(proposal.dataset.proposalLead); } }
       else if (convert) convertLead(convert.dataset.convertLead).catch((error) => toast(error.message, "error"));
     });
