@@ -18,6 +18,7 @@ Os catálogos padronizados são criados por organização no primeiro acesso a `
 - `POST /api/v1/leads/{id}/tasks`
 - `PATCH /api/v1/leads/{id}/tasks/{task_id}/complete`
 - `POST /api/v1/leads/{id}/proposals`
+- `PATCH /api/v1/leads/{id}/proposals/{proposal_id}`
 - `POST /api/v1/leads/{id}/convert`
 - `GET /api/v1/leads/catalogs`
 - `GET /api/v1/leads/analytics/dashboard`
@@ -34,6 +35,20 @@ Todos aparecem no Swagger na tag **CS Captação / Leads** e são isolados por o
 - `RecoveryCase` só é aberto para o serviço `CS_RECUPERA`.
 - Exclusão de lead é lógica e auditada.
 
+## Automação operacional
+
+- A primeira interação real avança automaticamente o lead de `NOVO` para `CONTATADO`.
+- A criação da primeira proposta avança o lead para `PROPOSTA`; propostas em aberto podem ser marcadas como aceitas ou recusadas pela timeline.
+- Próximas ações com vencimento em até dois dias geram notificações internas; ações vencidas recebem prioridade crítica.
+- Propostas enviadas ou em rascunho geram aviso quando faltam até três dias para a validade e mudam automaticamente para `EXPIRADA` após o vencimento.
+- Leads ativos sem tarefa futura, parados há pelo menos três dias, geram aviso diário de acompanhamento.
+- A preferência **somente itens atribuídos a mim** também restringe os alertas comerciais ao responsável pelo lead ou pela tarefa.
+- Cada alerta abre diretamente o lead correspondente no funil. A timeline permite concluir a próxima ação sem sair do detalhe.
+- O dashboard comercial exibe ações atrasadas, propostas vencendo e leads sem próxima ação.
+- As mudanças automáticas de status e as conclusões de tarefas são auditadas. A sincronização usa chaves de deduplicação para não repetir o mesmo alerta.
+
+As automações são sincronizadas quando a central de notificações é consultada, inclusive pelo sino de alertas da interface. Não há envio externo de mensagens nem execução de marketing.
+
 ## Teste local
 
 1. No backend, aplique `alembic upgrade head`.
@@ -41,6 +56,7 @@ Todos aparecem no Swagger na tag **CS Captação / Leads** e são isolados por o
 3. Inicie API e frontend como descrito no README principal.
 4. Entre com um usuário permitido e abra **CS Captação** no menu CRM.
 5. Cadastre um lead, mova-o no funil, registre interação/proposta e converta-o.
+6. Para validar automações, crie uma próxima ação com vencimento próximo e uma proposta com validade próxima; atualize o sino de notificações e confirme que **Abrir** leva ao detalhe do lead.
 
 ## Fora do escopo
 

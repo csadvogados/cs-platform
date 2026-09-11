@@ -163,11 +163,11 @@ class TaskRead(TaskCreate, ORMModel):
 
 
 class ProposalCreate(BaseModel):
-    fixed_value: Decimal = Field(default=0, ge=0)
-    down_payment: Decimal = Field(default=0, ge=0)
+    fixed_value: Decimal = Field(default=Decimal("0"), ge=0)
+    down_payment: Decimal = Field(default=Decimal("0"), ge=0)
     installments: int = Field(default=1, ge=1, le=120)
-    installment_value: Decimal = Field(default=0, ge=0)
-    success_percentage: Decimal = Field(default=0, ge=0, le=100)
+    installment_value: Decimal = Field(default=Decimal("0"), ge=0)
+    success_percentage: Decimal = Field(default=Decimal("0"), ge=0, le=100)
     valid_until: date | None = None
     sent_at: datetime | None = None
     status: Literal["RASCUNHO", "ENVIADA", "ACEITA", "RECUSADA", "EXPIRADA"] = "RASCUNHO"
@@ -176,6 +176,10 @@ class ProposalCreate(BaseModel):
 
 class ProposalRead(ProposalCreate, ORMModel):
     id: UUID; lead_id: UUID; created_at: datetime
+
+
+class ProposalUpdate(BaseModel):
+    status: Literal["RASCUNHO", "ENVIADA", "ACEITA", "RECUSADA", "EXPIRADA"]
 
 
 class ConvertLead(BaseModel):
@@ -193,6 +197,7 @@ class ConversionResult(BaseModel):
 class DashboardRead(BaseModel):
     new_leads: int; in_progress: int; qualified: int; open_proposals: int; converted: int; lost: int
     conversion_rate: float; average_conversion_days: float; estimated_revenue: float; contracted_revenue: float
+    overdue_tasks: int = 0; proposals_expiring: int = 0; leads_without_next_action: int = 0
 
 
 class ReportRow(BaseModel):

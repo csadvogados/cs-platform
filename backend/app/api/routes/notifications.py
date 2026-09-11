@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.api.routes.performance import build_overview
 from app.db.session import get_db
-from app.models.crm import CRMTask
+from app.models.crm import CRMTask, Lead, LeadProposal, LeadTask
 from app.models.financial import CollectionAction, PaymentInstallment
 from app.models.notification import Notification, NotificationPreference
 from app.models.recovery import JudicialProcess, RecoveryCase
@@ -60,6 +60,8 @@ def synchronize_notifications(db: Session, actor: User) -> None:
     now = datetime.now(timezone.utc)
     today = now.date()
     soon = now + timedelta(days=2)
+    commercial_access = actor.is_superuser or actor.role in {"admin", "supervisor", "advogado", "atendimento"}
+    commercial_access_filter = Lead.id.is_not(None) if commercial_access else Lead.id.is_(None)
 
     if preferences.tasks_enabled:
         query = select(CRMTask).where(
@@ -79,6 +81,54 @@ def synchronize_notifications(db: Session, actor: User) -> None:
                 title="Tarefa atrasada" if overdue else "Tarefa próxima",
                 message=f"{task.title} · prazo em {due.astimezone().strftime('%d/%m/%Y %H:%M') if due else 'breve'}",
                 event_at=due or now, target_view="crm", target_filter="task:overdue" if overdue else "task:all",
+            )
+
+        lead_tasks = select(LeadTask, Lead).join(Lead, Lead.id == LeadTask.lead_id).where(
+            LeadTask.organization_id == actor.organization_id, LeadTask.status == "PENDENTE",
+            LeadTask.due_at <= soon, Lead.deleted_at.is_(None), commercial_access_filter,
+        )
+        if preferences.only_assigned_items:
+            lead_tasks = lead_tasks.where((LeadTask.assigned_to_id == actor.id) | ((LeadTask.assigned_to_id.is_(None)) & (Lead.owner_id == actor.id)))
+        for task, lead in db.execute(lead_tasks):
+            due = utc_value(task.due_at); overdue = bool(due and due < now)
+            add_notification(
+                db, actor, key=f"lead-task:{task.id}:{'overdue' if overdue else 'soon'}", kind="lead",
+                priority="critical" if overdue else "high", title="Próxima ação do lead atrasada" if overdue else "Próxima ação do lead se aproxima",
+                message=f"{lead.full_name} · {task.description} · {due.astimezone().strftime('%d/%m/%Y %H:%M')}",
+                event_at=due, target_view="crm", target_filter=f"lead:{lead.id}",
+            )
+
+        proposals = select(LeadProposal, Lead).join(Lead, Lead.id == LeadProposal.lead_id).where(
+            LeadProposal.organization_id == actor.organization_id, LeadProposal.status.in_(("RASCUNHO", "ENVIADA", "EXPIRADA")),
+            LeadProposal.valid_until.is_not(None), Lead.deleted_at.is_(None), commercial_access_filter,
+        )
+        if preferences.only_assigned_items: proposals = proposals.where(Lead.owner_id == actor.id)
+        for proposal, lead in db.execute(proposals):
+            if proposal.valid_until < today:
+                if proposal.status != "EXPIRADA":
+                    proposal.status = "EXPIRADA"
+                    record_audit(db, organization_id=actor.organization_id, user_id=actor.id, entity_type="lead_proposal", entity_id=proposal.id, action="auto_expired", new_values={"status": "EXPIRADA"})
+                title, priority, suffix = "Proposta expirada", "critical", "expired"
+            elif proposal.status != "EXPIRADA" and proposal.valid_until <= today + timedelta(days=3):
+                title, priority, suffix = "Proposta próxima do vencimento", "high", "soon"
+            else: continue
+            add_notification(
+                db, actor, key=f"lead-proposal:{proposal.id}:{suffix}", kind="lead", priority=priority, title=title,
+                message=f"{lead.full_name} · validade {proposal.valid_until.strftime('%d/%m/%Y')}",
+                event_at=datetime.combine(proposal.valid_until, time.min, tzinfo=timezone.utc), target_view="crm", target_filter=f"lead:{lead.id}",
+            )
+
+        future_task = select(LeadTask.id).where(LeadTask.lead_id == Lead.id, LeadTask.status == "PENDENTE", LeadTask.due_at >= now).exists()
+        unattended = select(Lead).where(
+            Lead.organization_id == actor.organization_id, Lead.status.in_(("NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA")),
+            Lead.deleted_at.is_(None), Lead.updated_at <= now - timedelta(days=3), ~future_task, commercial_access_filter,
+        )
+        if preferences.only_assigned_items: unattended = unattended.where(Lead.owner_id == actor.id)
+        for lead in db.scalars(unattended):
+            add_notification(
+                db, actor, key=f"lead:{lead.id}:unattended:{today:%Y-%m-%d}", kind="lead", priority="high",
+                title="Lead sem próxima ação", message=f"{lead.full_name} está em {lead.status.lower()} e precisa de acompanhamento.",
+                event_at=now, target_view="crm", target_filter=f"lead:{lead.id}",
             )
 
     if preferences.collections_enabled:

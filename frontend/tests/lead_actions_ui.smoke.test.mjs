@@ -39,3 +39,23 @@ test("lead convertido pode abrir o caso CS Recupera posteriormente", () => {
   assert.match(app, /createRecoveryCaseFromLead/);
   assert.match(app, /Caso CS Recupera criado e vinculado ao cliente/);
 });
+
+test("notificação de lead abre diretamente o detalhe no funil", () => {
+  assert.match(app, /startsWith\("lead:"\)/);
+  assert.match(app, /await openLeadDetail\(leadId\)/);
+  assert.match(app, /lead: "◆"/);
+});
+
+test("acompanhamento operacional exibe pendências e conclui próximas ações", () => {
+  assert.match(app, /Ações atrasadas/);
+  assert.match(app, /Propostas vencendo/);
+  assert.match(app, /Sem próxima ação/);
+  assert.match(app, /data-complete-lead-task/);
+  assert.match(app, /Próxima ação concluída/);
+});
+
+test("timeline permite decidir proposta com transição auditada pela API", () => {
+  assert.match(app, /data-proposal-status="ACEITA"/);
+  assert.match(app, /data-proposal-status="RECUSADA"/);
+  assert.match(app, /updateLeadProposalStatus/);
+});
