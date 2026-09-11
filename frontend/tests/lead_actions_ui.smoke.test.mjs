@@ -18,3 +18,12 @@ test("funil mantém margem e alinhamento ao rolar", () => {
   assert.match(styles, /\.lead-kanban[^}]+scroll-padding-inline:12px/);
   assert.match(styles, /\.lead-column[^}]+scroll-snap-align:start/);
 });
+
+test("proposta comercial identifica o lead e aparece na timeline", () => {
+  assert.match(index, /id="lead-proposal-dialog"/);
+  assert.match(index, /name="success_percentage"/);
+  assert.match(index, /name="valid_until" type="date"/);
+  assert.match(app, /openLeadProposalDialog/);
+  assert.match(app, /timeline\.proposals/);
+  assert.match(app, /Proposta salva e vinculada ao lead/);
+});
