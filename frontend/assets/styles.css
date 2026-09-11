@@ -526,6 +526,7 @@ tr:last-child td { border-bottom: 0; }
 .lead-timeline .lead-proposal-event { border-left-color:var(--gold); }
 .lead-timeline small { color:#718079; }
 .form-help { margin:0; padding:0 22px 8px; color:#67726c; font-size:12px; }
+.success-note { padding:9px 11px; border-left:3px solid var(--forest-2); background:#e8f1eb; color:var(--forest); font-size:12px; }
 .crm-summary article { display: grid; gap: 10px; padding: 21px; border-right: 1px solid var(--line); }
 .crm-summary article:last-child { border-right: 0; }
 .crm-summary span { color: #67726c; font-size: 11px; }
