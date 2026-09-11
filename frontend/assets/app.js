@@ -1898,7 +1898,7 @@
       api("/api/v1/crm/opportunities?limit=100"),
       api("/api/v1/crm/tasks?limit=100"),
       api("/api/v1/crm/interactions?limit=100"),
-      leadAccess ? api("/api/v1/leads?limit=200") : Promise.resolve([]),
+      leadAccess ? api(`/api/v1/leads?limit=200&_=${Date.now()}`) : Promise.resolve([]),
       leadAccess ? api("/api/v1/leads/analytics/dashboard") : Promise.resolve({}),
       leadAccess ? api("/api/v1/leads/analytics/reports") : Promise.resolve({}),
       leadAccess ? api("/api/v1/leads/catalogs") : Promise.resolve({ sources: [], services: [] })
@@ -2015,9 +2015,16 @@
     const lead = state.leads.items.find((x) => String(x.id) === String(id));
     const service = state.leads.catalogs.services.find((x) => String(x.id) === String(lead.service_type_id));
     const createRecovery = service?.code === "CS_RECUPERA" && window.confirm("Deseja abrir também um caso CS Recupera?");
-    try { await api(`/api/v1/leads/${id}/convert`, { method: "POST", body: JSON.stringify({ create_recovery_case: createRecovery }) }); }
+    let result;
+    try { result = await api(`/api/v1/leads/${id}/convert`, { method: "POST", body: JSON.stringify({ create_recovery_case: createRecovery }) }); }
     catch (error) { if (!String(error.message).includes("duplicado")) throw error; toast("Possível duplicidade. Verifique o cliente existente antes de confirmar.", "error"); return; }
-    $("#lead-detail-dialog").close(); await loadCrm(); toast("Lead convertido em cliente.");
+    const current = state.leads.items.find((item) => String(item.id) === String(id));
+    if (current && result?.lead) Object.assign(current, result.lead);
+    else if (current) current.status = "CONVERTIDO";
+    $("#lead-detail-dialog").close();
+    renderLeads();
+    await loadCrm();
+    toast("Lead convertido em cliente e movido para Convertido.");
   }
 
   async function loadUsers() {
