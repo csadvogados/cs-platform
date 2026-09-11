@@ -1976,7 +1976,8 @@
     const dialog = $("#lead-detail-dialog");
     const interactions = (timeline.interactions || []).map((x) => `<article><strong>${escapeHtml(x.interaction_type)}</strong><span>${escapeHtml(x.description)}</span><small>${escapeHtml(formatDate(x.occurred_at, true))}</small></article>`);
     const tasks = (timeline.tasks || []).map((x) => `<article class="lead-task-event"><strong>PRÓXIMA AÇÃO · ${escapeHtml(x.status)}</strong><span>${escapeHtml(x.description)}</span><small>Prazo: ${escapeHtml(formatDate(x.due_at, true))}</small></article>`);
-    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p><div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : ""}</div></section><section><h3>Timeline e próximas ações</h3><div class="lead-timeline">${[...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
+    const proposals = (timeline.proposals || []).map((x) => `<article class="lead-proposal-event"><strong>PROPOSTA · ${escapeHtml(x.status)}</strong><span>${escapeHtml(formatCurrency(x.fixed_value))}${Number(x.success_percentage || 0) ? ` + ${escapeHtml(x.success_percentage)}% de êxito` : ""}</span>${x.notes ? `<span>${escapeHtml(x.notes)}</span>` : ""}<small>${x.valid_until ? `Válida até ${escapeHtml(formatDate(x.valid_until))}` : `Criada em ${escapeHtml(formatDate(x.created_at, true))}`}</small></article>`);
+    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p><div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : ""}</div></section><section><h3>Timeline, propostas e próximas ações</h3><div class="lead-timeline">${[...proposals, ...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
     if (!dialog.open) dialog.showModal();
   }
 
@@ -1989,6 +1990,18 @@
     form.elements.due_time.value = "09:00";
     $("#lead-task-dialog").showModal();
     form.elements.description.focus();
+  }
+
+  function openLeadProposalDialog(id) {
+    const lead = state.leads.items.find((item) => String(item.id) === String(id));
+    if (!lead) return;
+    const form = $("#lead-proposal-form");
+    form.reset();
+    form.elements.lead_id.value = id;
+    form.elements.reference.value = `${lead.full_name} · ${leadCatalogName("services", lead.service_type_id)}`;
+    form.elements.valid_until.min = localDateValue(new Date());
+    $("#lead-proposal-dialog").showModal();
+    form.elements.fixed_value.focus();
   }
 
   function editLead(id) {
@@ -4843,7 +4856,7 @@
       if (edit) editLead(edit.dataset.editLead);
       else if (interact) { const description = window.prompt("Descreva a interação realizada:"); if (description) { await api(`/api/v1/leads/${interact.dataset.interactLead}/interactions`, { method: "POST", body: JSON.stringify({ interaction_type: "NOTA", description, occurred_at: new Date().toISOString() }) }); await openLeadDetail(interact.dataset.interactLead); } }
       else if (task) openLeadTaskDialog(task.dataset.taskLead);
-      else if (proposal) { const value = window.prompt("Valor fixo da proposta:"); if (value !== null) { await api(`/api/v1/leads/${proposal.dataset.proposalLead}/proposals`, { method:"POST", body:JSON.stringify({ fixed_value:Number(value), status:"ENVIADA", sent_at:new Date().toISOString() }) }); await loadCrm(); await openLeadDetail(proposal.dataset.proposalLead); } }
+      else if (proposal) openLeadProposalDialog(proposal.dataset.proposalLead);
       else if (convert) convertLead(convert.dataset.convertLead).catch((error) => toast(error.message, "error"));
     });
     $("#lead-task-form").addEventListener("submit", async (event) => {
@@ -4857,6 +4870,26 @@
         await api(`/api/v1/leads/${id}/tasks`, { method:"POST", body:JSON.stringify({ description, due_at:dueDate.toISOString() }) });
         closeDialog($("#lead-task-dialog"));
         toast("Próxima ação agendada e salva no lead.");
+        await openLeadDetail(id);
+      } catch (error) { toast(error.message, "error"); }
+    });
+    $("#lead-proposal-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const raw = Object.fromEntries(new FormData(form));
+      const id = raw.lead_id;
+      const payload = {
+        fixed_value: Number(raw.fixed_value || 0), down_payment: Number(raw.down_payment || 0),
+        installments: Number(raw.installments || 1), installment_value: Number(raw.installment_value || 0),
+        success_percentage: Number(raw.success_percentage || 0), valid_until: raw.valid_until || null,
+        status: raw.status, sent_at: raw.status === "ENVIADA" ? new Date().toISOString() : null,
+        notes: raw.notes.trim() || null
+      };
+      try {
+        await api(`/api/v1/leads/${id}/proposals`, { method:"POST", body:JSON.stringify(payload) });
+        closeDialog($("#lead-proposal-dialog"));
+        await loadCrm();
+        toast("Proposta salva e vinculada ao lead.");
         await openLeadDetail(id);
       } catch (error) { toast(error.message, "error"); }
     });
