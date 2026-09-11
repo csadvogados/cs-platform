@@ -308,15 +308,6 @@
       : { dateStyle: "short" }).format(date);
   }
 
-  function parseBrazilianDateTime(value) {
-    const match = String(value || "").trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
-    if (!match) return null;
-    const [, day, month, year, hour = "09", minute = "00"] = match;
-    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
-    if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day) || date.getHours() !== Number(hour) || date.getMinutes() !== Number(minute)) return null;
-    return date;
-  }
-
   function sessionDevice(userAgent) {
     const value = String(userAgent || "");
     if (!value) return "Dispositivo não identificado";
@@ -1993,6 +1984,8 @@
     const form = $("#lead-task-form");
     form.reset();
     form.elements.lead_id.value = id;
+    form.elements.due_date.min = localDateValue(new Date());
+    form.elements.due_date.value = localDateValue(new Date());
     form.elements.due_time.value = "09:00";
     $("#lead-task-dialog").showModal();
     form.elements.description.focus();
@@ -4858,8 +4851,8 @@
       const form = event.currentTarget;
       const id = form.elements.lead_id.value;
       const description = form.elements.description.value.trim();
-      const dueDate = parseBrazilianDateTime(`${form.elements.due_date.value} ${form.elements.due_time.value}`);
-      if (!dueDate) { toast("Data inválida. Informe no formato DD/MM/AAAA.", "error"); return; }
+      const dueDate = new Date(`${form.elements.due_date.value}T${form.elements.due_time.value}:00`);
+      if (Number.isNaN(dueDate.getTime())) { toast("Selecione uma data e um horário válidos.", "error"); return; }
       try {
         await api(`/api/v1/leads/${id}/tasks`, { method:"POST", body:JSON.stringify({ description, due_at:dueDate.toISOString() }) });
         closeDialog($("#lead-task-dialog"));
