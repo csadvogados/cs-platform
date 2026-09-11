@@ -65,6 +65,8 @@ test("conversão mostra duplicidades antes de criar o cliente", () => {
   assert.match(app, /\/duplicates`/);
   assert.match(app, /confirm_duplicate_client_id/);
   assert.match(app, /Criar novo cliente/);
+  assert.match(styles, /\.conversion-summary > \*[^}]+overflow-wrap:anywhere/);
+  assert.match(styles, /\.duplicate-option strong,\.duplicate-option small[^}]+overflow-wrap:anywhere/);
 });
 
 test("perda do lead usa formulário com motivos legíveis", () => {
