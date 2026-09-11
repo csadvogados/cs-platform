@@ -59,3 +59,17 @@ test("timeline permite decidir proposta com transição auditada pela API", () =
   assert.match(app, /data-proposal-status="RECUSADA"/);
   assert.match(app, /updateLeadProposalStatus/);
 });
+
+test("conversão mostra duplicidades antes de criar o cliente", () => {
+  assert.match(index, /id="lead-conversion-dialog"/);
+  assert.match(app, /\/duplicates`/);
+  assert.match(app, /confirm_duplicate_client_id/);
+  assert.match(app, /Criar novo cliente/);
+});
+
+test("perda do lead usa formulário com motivos legíveis", () => {
+  assert.match(index, /id="lead-lost-dialog"/);
+  assert.match(index, /Contratou outro advogado/);
+  assert.match(app, /Lead movido para Perdido com o motivo registrado/);
+  assert.doesNotMatch(app, /Motivo da perda: SEM_INTERESSE/);
+});

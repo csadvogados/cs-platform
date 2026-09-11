@@ -1929,6 +1929,7 @@
 
   const leadStatuses = ["NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA", "CONVERTIDO", "PERDIDO"];
   const leadStatusLabels = { NOVO: "Novo", CONTATADO: "Contatado", QUALIFICADO: "Qualificado", PROPOSTA: "Proposta", CONVERTIDO: "Convertido", PERDIDO: "Perdido" };
+  const lostReasonLabels = { SEM_INTERESSE:"Sem interesse", HONORARIOS:"Honorários", NAO_RESPONDEU:"Não respondeu", OUTRO_ADVOGADO:"Contratou outro advogado", SEM_VIABILIDADE:"Sem viabilidade", DOCUMENTACAO_INSUFICIENTE:"Documentação insuficiente", FORA_ATUACAO:"Fora da área de atuação", ATENDIMENTO_INCOMPLETO:"Atendimento incompleto", OUTRO:"Outro" };
 
   function leadCatalogName(kind, id) {
     return state.leads.catalogs[kind]?.find((item) => String(item.id) === String(id))?.name || "—";
@@ -1973,13 +1974,11 @@
   }
 
   async function changeLeadStatus(id, target) {
-    const payload = { status: target };
     if (target === "PERDIDO") {
-      const reason = window.prompt("Motivo da perda: SEM_INTERESSE, HONORARIOS, NAO_RESPONDEU, OUTRO_ADVOGADO, SEM_VIABILIDADE, DOCUMENTACAO_INSUFICIENTE, FORA_ATUACAO, ATENDIMENTO_INCOMPLETO ou OUTRO");
-      if (!reason) { renderLeads(); return; }
-      payload.lost_reason = reason.trim().toUpperCase(); payload.lost_notes = window.prompt("Observação complementar (opcional)") || null;
+      const form = $("#lead-lost-form"); form.reset(); form.elements.lead_id.value = id;
+      renderLeads(); $("#lead-lost-dialog").showModal(); return;
     }
-    await api(`/api/v1/leads/${id}/status`, { method: "POST", body: JSON.stringify(payload) }); await loadCrm(); toast("Status do lead atualizado.");
+    await api(`/api/v1/leads/${id}/status`, { method: "POST", body: JSON.stringify({ status:target }) }); await loadCrm(); toast("Status do lead atualizado.");
   }
 
   async function openLeadDetail(id) {
@@ -1992,7 +1991,8 @@
     const service = state.leads.catalogs.services.find((item) => String(item.id) === String(lead.service_type_id));
     const recoveryButton = lead.status === "CONVERTIDO" && service?.code === "CS_RECUPERA" && !lead.recovery_case_id ? `<button class="primary-button" data-recovery-lead="${id}">Abrir caso CS Recupera</button>` : "";
     const recoveryStatus = lead.recovery_case_id ? `<p class="success-note">Caso CS Recupera vinculado.</p>` : "";
-    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p>${recoveryStatus}<div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : recoveryButton}</div></section><section><h3>Timeline, propostas e próximas ações</h3><div class="lead-timeline">${[...proposals, ...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
+    const lostStatus = lead.status === "PERDIDO" ? `<p class="warning-note"><strong>Motivo da perda:</strong> ${escapeHtml(lostReasonLabels[lead.lost_reason] || lead.lost_reason || "Não informado")}${lead.lost_notes ? `<br>${escapeHtml(lead.lost_notes)}` : ""}</p>` : "";
+    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p>${recoveryStatus}${lostStatus}<div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : recoveryButton}</div></section><section><h3>Timeline, propostas e próximas ações</h3><div class="lead-timeline">${[...proposals, ...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
     if (!dialog.open) dialog.showModal();
   }
 
@@ -2026,17 +2026,27 @@
     $("#lead-dialog-title").textContent = "Editar lead"; $("#lead-detail-dialog").close(); $("#lead-dialog").showModal();
   }
 
-  async function convertLead(id) {
+  async function openLeadConversion(id) {
     const lead = state.leads.items.find((x) => String(x.id) === String(id));
+    if (!lead) return;
     const service = state.leads.catalogs.services.find((x) => String(x.id) === String(lead.service_type_id));
-    const createRecovery = service?.code === "CS_RECUPERA" && window.confirm("Deseja abrir também um caso CS Recupera?");
+    const duplicates = await api(`/api/v1/leads/${id}/duplicates`);
+    const form = $("#lead-conversion-form"); form.reset(); form.elements.lead_id.value = id;
+    $("#lead-conversion-summary").innerHTML = `<strong>${escapeHtml(lead.full_name)}</strong><span>${escapeHtml(leadCatalogName("services", lead.service_type_id))}</span><small>${escapeHtml(lead.cpf || "CPF não informado")} · ${escapeHtml(lead.email || lead.whatsapp || lead.phone || "Sem contato")}</small>`;
+    $("#lead-duplicate-options").innerHTML = duplicates.length
+      ? `<p class="warning-note">Encontramos cliente(s) com os mesmos dados. Selecione o cadastro existente:</p>${duplicates.map((item, index) => `<label class="duplicate-option"><input type="radio" name="client_id" value="${item.id}" ${index === 0 ? "required" : ""} /><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.cpf || "CPF não informado")} · ${escapeHtml(item.email || item.phone || "Sem contato")}</small></span></label>`).join("")}`
+      : '<label class="duplicate-option"><input type="radio" name="client_id" value="" checked /><span><strong>Criar novo cliente</strong><small>Nenhum cadastro duplicado foi encontrado.</small></span></label>';
+    $("#lead-recovery-option").hidden = service?.code !== "CS_RECUPERA";
+    $("#lead-detail-dialog").close(); $("#lead-conversion-dialog").showModal();
+  }
+
+  async function convertLead(id, payload) {
     let result;
-    try { result = await api(`/api/v1/leads/${id}/convert`, { method: "POST", body: JSON.stringify({ create_recovery_case: createRecovery }) }); }
-    catch (error) { if (!String(error.message).includes("duplicado")) throw error; toast("Possível duplicidade. Verifique o cliente existente antes de confirmar.", "error"); return; }
+    result = await api(`/api/v1/leads/${id}/convert`, { method: "POST", body: JSON.stringify(payload) });
     const current = state.leads.items.find((item) => String(item.id) === String(id));
     if (current && result?.lead) Object.assign(current, result.lead);
     else if (current) current.status = "CONVERTIDO";
-    $("#lead-detail-dialog").close();
+    closeDialog($("#lead-conversion-dialog"));
     renderLeads();
     await loadCrm();
     toast("Lead convertido em cliente e movido para Convertido.");
@@ -4895,7 +4905,7 @@
       else if (interact) { const description = window.prompt("Descreva a interação realizada:"); if (description) { await api(`/api/v1/leads/${interact.dataset.interactLead}/interactions`, { method: "POST", body: JSON.stringify({ interaction_type: "NOTA", description, occurred_at: new Date().toISOString() }) }); await openLeadDetail(interact.dataset.interactLead); } }
       else if (task) openLeadTaskDialog(task.dataset.taskLead);
       else if (proposal) openLeadProposalDialog(proposal.dataset.proposalLead);
-      else if (convert) convertLead(convert.dataset.convertLead).catch((error) => toast(error.message, "error"));
+      else if (convert) openLeadConversion(convert.dataset.convertLead).catch((error) => toast(error.message, "error"));
       else if (recovery && window.confirm("Abrir agora o caso deste cliente no CS Recupera?")) createRecoveryCaseFromLead(recovery.dataset.recoveryLead).catch((error) => toast(error.message, "error"));
       else if (completeLeadTask) {
         await api(`/api/v1/leads/${completeLeadTask.dataset.taskLeadId}/tasks/${completeLeadTask.dataset.completeLeadTask}/complete`, { method:"PATCH" });
@@ -4937,6 +4947,19 @@
         await loadCrm();
         toast("Proposta salva e vinculada ao lead.");
         await openLeadDetail(id);
+      } catch (error) { toast(error.message, "error"); }
+    });
+    $("#lead-conversion-form").addEventListener("submit", async (event) => {
+      event.preventDefault(); const form = event.currentTarget; const raw = Object.fromEntries(new FormData(form));
+      const payload = { confirm_duplicate_client_id: raw.client_id || null, create_recovery_case: raw.create_recovery_case === "on" };
+      try { await convertLead(raw.lead_id, payload); }
+      catch (error) { toast(error.message, "error"); }
+    });
+    $("#lead-lost-form").addEventListener("submit", async (event) => {
+      event.preventDefault(); const form = event.currentTarget; const raw = Object.fromEntries(new FormData(form));
+      try {
+        await api(`/api/v1/leads/${raw.lead_id}/status`, { method:"POST", body:JSON.stringify({ status:"PERDIDO", lost_reason:raw.lost_reason, lost_notes:raw.lost_notes.trim() || null }) });
+        closeDialog($("#lead-lost-dialog")); await loadCrm(); toast("Lead movido para Perdido com o motivo registrado.");
       } catch (error) { toast(error.message, "error"); }
     });
     $("#toggle-password").addEventListener("click", () => {

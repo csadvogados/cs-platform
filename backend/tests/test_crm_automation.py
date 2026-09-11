@@ -114,3 +114,23 @@ def test_user_without_commercial_access_does_not_receive_lead_details(client, to
     page = client.get("/api/v1/notifications?notification_type=lead", headers=auth(login.json()["access_token"]))
     assert page.status_code == 200, page.text
     assert page.json()["items"] == []
+
+
+def test_conversion_duplicate_preview_and_existing_client_link(client, token):
+    existing = client.post("/api/v1/clients", headers=auth(token), json={
+        "full_name": "Cliente Existente", "cpf": "52998224725", "email": "duplicado@example.com",
+    })
+    assert existing.status_code == 201, existing.text
+    catalog = client.get("/api/v1/leads/catalogs", headers=auth(token)).json()
+    lead = client.post("/api/v1/leads", headers=auth(token), json={
+        "full_name": "Mesmo Cliente", "cpf": "52998224725", "email": "duplicado@example.com",
+        "source_id": catalog["sources"][0]["id"], "service_type_id": catalog["services"][0]["id"],
+    }).json()
+    preview = client.get(f"/api/v1/leads/{lead['id']}/duplicates", headers=auth(token))
+    assert preview.status_code == 200, preview.text
+    assert preview.json()[0]["id"] == existing.json()["id"]
+    converted = client.post(f"/api/v1/leads/{lead['id']}/convert", headers=auth(token), json={
+        "confirm_duplicate_client_id": existing.json()["id"], "create_recovery_case": False,
+    })
+    assert converted.status_code == 200, converted.text
+    assert converted.json()["client_id"] == existing.json()["id"]
