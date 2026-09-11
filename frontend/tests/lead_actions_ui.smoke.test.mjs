@@ -6,11 +6,11 @@ const index = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const app = await readFile(new URL("../assets/app.js", import.meta.url), "utf8");
 const styles = await readFile(new URL("../assets/styles.css", import.meta.url), "utf8");
 
-test("próxima ação usa formulário próprio com data brasileira", () => {
+test("próxima ação usa formulário próprio com calendário", () => {
   assert.match(index, /id="lead-task-dialog"/);
-  assert.match(index, /name="due_date"[^>]+placeholder="DD\/MM\/AAAA"/);
+  assert.match(index, /name="due_date" type="date"/);
   assert.match(app, /openLeadTaskDialog/);
-  assert.match(app, /parseBrazilianDateTime/);
+  assert.match(app, /due_date\.min = localDateValue/);
   assert.match(app, /\/tasks`/);
 });
 
