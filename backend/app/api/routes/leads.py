@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -145,6 +145,10 @@ def timeline(lead_id: UUID, db: Session = Depends(get_db), ident: IdentityContex
 def add_interaction(lead_id: UUID, payload: InteractionCreate, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
     lead = get_lead(db, ident, lead_id)
     obj = LeadInteraction(organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id, interaction_type=payload.interaction_type, description=payload.description, occurred_at=payload.occurred_at); db.add(obj)
+    if lead.status == "NOVO" and payload.interaction_type != "STATUS":
+        lead.status = "CONTATADO"
+        db.add(LeadInteraction(organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id, interaction_type="STATUS", description="Lead avançado automaticamente para CONTATADO após a primeira interação", occurred_at=payload.occurred_at))
+        record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead", entity_id=lead.id, action="auto_status_change", new_values={"from": "NOVO", "to": "CONTATADO"})
     if payload.next_action and payload.next_action_at:
         validate_fk(db, ident, User, payload.assigned_to_id, "Responsável")
         db.add(LeadTask(organization_id=ident.organization_id, lead_id=lead.id, assigned_to_id=payload.assigned_to_id, description=payload.next_action, due_at=payload.next_action_at))
@@ -161,14 +165,30 @@ def add_task(lead_id: UUID, payload: TaskCreate, db: Session = Depends(get_db), 
 def complete_task(lead_id: UUID, task_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
     get_lead(db, ident, lead_id); obj = db.scalar(select(LeadTask).where(LeadTask.id == task_id, LeadTask.lead_id == lead_id, LeadTask.organization_id == ident.organization_id))
     if not obj: raise HTTPException(404, "Tarefa não encontrada")
-    obj.status = "CONCLUIDA"; obj.completed_at = datetime.now(timezone.utc); save(db); db.refresh(obj); return obj
+    obj.status = "CONCLUIDA"; obj.completed_at = datetime.now(timezone.utc)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead_task", entity_id=obj.id, action="complete", new_values={"status": "CONCLUIDA"})
+    save(db); db.refresh(obj); return obj
 
 
 @router.post("/{lead_id}/proposals", response_model=ProposalRead, status_code=201)
 def add_proposal(lead_id: UUID, payload: ProposalCreate, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
     lead = get_lead(db, ident, lead_id); obj = LeadProposal(organization_id=ident.organization_id, lead_id=lead.id, **payload.model_dump()); db.add(obj)
-    if lead.status not in {"CONVERTIDO", "PERDIDO"}: lead.status = "PROPOSTA"
+    if lead.status not in {"CONVERTIDO", "PERDIDO", "PROPOSTA"}:
+        previous = lead.status; lead.status = "PROPOSTA"
+        db.add(LeadInteraction(organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id, interaction_type="STATUS", description="Lead avançado automaticamente para PROPOSTA", occurred_at=datetime.now(timezone.utc)))
+        record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead", entity_id=lead.id, action="auto_status_change", new_values={"from": previous, "to": "PROPOSTA"})
     db.flush(); record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead_proposal", entity_id=obj.id, action="create", new_values={"lead_id": str(lead.id), "value": str(obj.fixed_value)}); save(db); db.refresh(obj); return obj
+
+
+@router.patch("/{lead_id}/proposals/{proposal_id}", response_model=ProposalRead)
+def update_proposal(lead_id: UUID, proposal_id: UUID, payload: ProposalUpdate, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
+    get_lead(db, ident, lead_id)
+    obj = db.scalar(select(LeadProposal).where(LeadProposal.id == proposal_id, LeadProposal.lead_id == lead_id, LeadProposal.organization_id == ident.organization_id))
+    if not obj: raise HTTPException(404, "Proposta não encontrada")
+    previous = obj.status; obj.status = payload.status
+    if payload.status == "ENVIADA" and not obj.sent_at: obj.sent_at = datetime.now(timezone.utc)
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead_proposal", entity_id=obj.id, action="status_change", new_values={"from": previous, "to": obj.status})
+    save(db); db.refresh(obj); return obj
 
 
 @router.post("/{lead_id}/convert", response_model=ConversionResult)
@@ -234,7 +254,12 @@ def dashboard(date_from: datetime | None = None, date_to: datetime | None = None
     avg = db.scalar(select(func.avg(func.extract("epoch", Lead.converted_at - Lead.created_at) / 86400)).where(*filters, Lead.converted_at.is_not(None))) or 0
     estimated = db.scalar(select(func.coalesce(func.sum(LeadProposal.fixed_value), 0)).join(Lead, Lead.id == LeadProposal.lead_id).where(*filters, LeadProposal.status.in_(["RASCUNHO", "ENVIADA"]))) or 0
     contracted = db.scalar(select(func.coalesce(func.sum(LeadProposal.fixed_value), 0)).join(Lead, Lead.id == LeadProposal.lead_id).where(*filters, LeadProposal.status == "ACEITA")) or 0
-    return DashboardRead(new_leads=counts.get("NOVO",0), in_progress=sum(counts.get(x,0) for x in ["NOVO","CONTATADO","QUALIFICADO","PROPOSTA"]), qualified=counts.get("QUALIFICADO",0), open_proposals=counts.get("PROPOSTA",0), converted=converted, lost=counts.get("PERDIDO",0), conversion_rate=round(converted*100/total,2) if total else 0, average_conversion_days=round(float(avg),2), estimated_revenue=float(estimated), contracted_revenue=float(contracted))
+    now = datetime.now(timezone.utc); today = now.date()
+    overdue_tasks = db.scalar(select(func.count(LeadTask.id)).join(Lead, Lead.id == LeadTask.lead_id).where(*filters, LeadTask.status == "PENDENTE", LeadTask.due_at < now)) or 0
+    proposals_expiring = db.scalar(select(func.count(LeadProposal.id)).join(Lead, Lead.id == LeadProposal.lead_id).where(*filters, LeadProposal.status.in_(["RASCUNHO", "ENVIADA"]), LeadProposal.valid_until >= today, LeadProposal.valid_until <= today + timedelta(days=3))) or 0
+    future_task = select(LeadTask.id).where(LeadTask.lead_id == Lead.id, LeadTask.status == "PENDENTE", LeadTask.due_at >= now).exists()
+    leads_without_next_action = db.scalar(select(func.count(Lead.id)).where(*filters, Lead.status.in_(["NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA"]), ~future_task)) or 0
+    return DashboardRead(new_leads=counts.get("NOVO",0), in_progress=sum(counts.get(x,0) for x in ["NOVO","CONTATADO","QUALIFICADO","PROPOSTA"]), qualified=counts.get("QUALIFICADO",0), open_proposals=counts.get("PROPOSTA",0), converted=converted, lost=counts.get("PERDIDO",0), conversion_rate=round(converted*100/total,2) if total else 0, average_conversion_days=round(float(avg),2), estimated_revenue=float(estimated), contracted_revenue=float(contracted), overdue_tasks=overdue_tasks, proposals_expiring=proposals_expiring, leads_without_next_action=leads_without_next_action)
 
 
 @router.get("/analytics/reports")
