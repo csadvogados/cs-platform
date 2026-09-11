@@ -54,6 +54,15 @@ test("acompanhamento operacional exibe pendências e conclui próximas ações",
   assert.match(app, /Próxima ação concluída/);
 });
 
+test("agenda e supervisão incluem a operação diária dos leads", () => {
+  assert.match(index, /value="lead_task">Próximas ações de leads/);
+  assert.match(index, /id="lead-distribute"/);
+  assert.match(index, /id="lead-team-body"/);
+  assert.match(app, /\/api\/v1\/leads\/analytics\/team/);
+  assert.match(app, /\/api\/v1\/leads\/distribution/);
+  assert.match(app, /data-agenda-complete-lead-task/);
+});
+
 test("timeline permite decidir proposta com transição auditada pela API", () => {
   assert.match(app, /data-proposal-status="ACEITA"/);
   assert.match(app, /data-proposal-status="RECUSADA"/);

@@ -355,7 +355,7 @@
             <div class="agenda-period-toolbar" aria-label="Períodos rápidos"><span>Exibir:</span><button type="button" data-agenda-period="today">Hoje</button><button type="button" data-agenda-period="7">Próximos 7 dias</button><button type="button" data-agenda-period="30">Próximos 30 dias</button><button type="button" data-agenda-period="all" class="active">Período completo</button></div>
             <form id="agenda-filter-form" class="agenda-filter-bar">
               <label class="agenda-search-field"><span>Pesquisar</span><input name="search" type="search" placeholder="Título, cliente ou responsável" /></label>
-              <label><span>Tipo</span><select name="kind"><option value="all">Todos</option><option value="task">Tarefas do CRM</option><option value="follow_up">Acompanhamentos</option><option value="promise">Promessas</option><option value="judicial_deadline">Prazos judiciais</option></select></label>
+              <label><span>Tipo</span><select name="kind"><option value="all">Todos</option><option value="lead_task">Próximas ações de leads</option><option value="task">Tarefas do CRM</option><option value="follow_up">Acompanhamentos</option><option value="promise">Promessas</option><option value="judicial_deadline">Prazos judiciais</option></select></label>
               <label><span>Situação</span><select name="status"><option value="all">Todas</option><option value="overdue">Atrasados</option><option value="today">Para hoje</option><option value="upcoming">Próximos</option></select></label>
               <label><span>Responsável</span><select id="agenda-responsible-filter" name="responsible"><option value="all">Todos</option><option value="mine">Minha agenda</option><option value="unassigned">Sem responsável</option></select></label>
               <label><span>De</span><input name="date_from" type="date" /></label>
@@ -364,14 +364,14 @@
               <button id="agenda-clear-filters" class="secondary-button" type="button">Limpar</button>
             </form>
             <details class="panel agenda-workload-panel" open><summary><span><small>CARGA DA EQUIPE</small><strong>Distribuição dos compromissos</strong></span><span id="agenda-workload-summary">0 responsáveis</span></summary><div id="agenda-workload-list" class="agenda-workload-list"></div></details>
-            <div class="agenda-type-summary"><article><span>Tarefas do CRM</span><strong id="agenda-task-count">0</strong></article><article><span>Acompanhamentos</span><strong id="agenda-follow-up-count">0</strong></article><article><span>Promessas</span><strong id="agenda-promise-count">0</strong></article><article><span>Prazos judiciais</span><strong id="agenda-judicial-count">0</strong></article></div>
+            <div class="agenda-type-summary"><article><span>Ações comerciais</span><strong id="agenda-task-count">0</strong></article><article><span>Acompanhamentos</span><strong id="agenda-follow-up-count">0</strong></article><article><span>Promessas</span><strong id="agenda-promise-count">0</strong></article><article><span>Prazos judiciais</span><strong id="agenda-judicial-count">0</strong></article></div>
             <div class="agenda-view-toolbar"><div><button id="agenda-timeline-view" class="active" type="button">Linha do tempo</button><button id="agenda-calendar-view" type="button">Calendário semanal</button></div><div id="agenda-week-navigation" hidden><button id="agenda-previous-week" type="button">←</button><button id="agenda-current-week" type="button">Semana atual</button><button id="agenda-next-week" type="button">→</button></div></div>
             <section id="agenda-timeline-panel" class="panel agenda-panel"><div class="panel-header"><div><p class="eyebrow dark">COMPROMISSOS</p><h3>Linha do tempo</h3></div><span id="agenda-result-count">0 registros</span></div><div id="agenda-list" class="agenda-list"><div class="loading-row">Carregando agenda…</div></div></section>
             <section id="agenda-calendar-panel" class="panel agenda-calendar-panel" hidden><div class="panel-header"><div><p class="eyebrow dark">SEMANA</p><h3 id="agenda-week-title">Calendário semanal</h3></div><span id="agenda-calendar-count">0 compromissos</span></div><div id="agenda-week-grid" class="agenda-week-grid"></div></section>
           </section>
 
           <section id="view-crm" class="page-view" aria-labelledby="crm-heading">
-            <div class="section-intro"><div><p class="eyebrow dark">CORE COMERCIAL</p><h1 id="crm-heading">CS Captação</h1><p>Do primeiro contato à conversão em cliente e caso.</p></div><div class="button-row"><button class="secondary-button" id="lead-refresh" type="button">Atualizar</button><button class="primary-button" data-open-dialog="lead-dialog">Novo lead</button></div></div>
+            <div class="section-intro"><div><p class="eyebrow dark">CORE COMERCIAL</p><h1 id="crm-heading">CS Captação</h1><p>Do primeiro contato à conversão em cliente e caso.</p></div><div class="button-row"><button class="secondary-button" id="lead-distribute" type="button" hidden>Distribuir leads</button><button class="secondary-button" id="lead-refresh" type="button">Atualizar</button><button class="primary-button" data-open-dialog="lead-dialog">Novo lead</button></div></div>
             <div id="lead-dashboard" class="lead-dashboard"></div>
             <div class="crm-tabs lead-main-tabs" role="tablist" aria-label="CS Captação">
               <button class="crm-tab active" data-lead-tab="kanban" role="tab">Funil</button>
@@ -381,7 +381,7 @@
             </div>
             <section id="lead-kanban-panel" class="lead-tab-panel active"><div id="lead-kanban" class="lead-kanban"></div></section>
             <section id="lead-list-panel" class="lead-tab-panel"><div class="crm-filter-bar"><label><span>Buscar</span><input id="lead-search" placeholder="Nome, CPF, telefone ou e-mail" /></label><label><span>Status</span><select id="lead-status-filter"><option value="">Todos</option><option>NOVO</option><option>CONTATADO</option><option>QUALIFICADO</option><option>PROPOSTA</option><option>CONVERTIDO</option><option>PERDIDO</option></select></label><button id="lead-filter-button" class="primary-button" type="button">Filtrar</button></div><div class="table-wrap"><table><thead><tr><th>Lead</th><th>Serviço</th><th>Origem</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody id="lead-table-body"></tbody></table></div></section>
-            <section id="lead-reports-panel" class="lead-tab-panel"><div id="lead-reports" class="lead-report-grid"></div></section>
+            <section id="lead-reports-panel" class="lead-tab-panel"><div id="lead-reports" class="lead-report-grid"></div><section class="panel lead-team-panel"><div class="panel-header"><div><p class="eyebrow dark">SUPERVISÃO COMERCIAL</p><h3>Desempenho por responsável</h3></div></div><div class="table-wrap"><table><thead><tr><th>Responsável</th><th>Em andamento</th><th>Convertidos</th><th>Perdidos</th><th>Ações atrasadas</th><th>Sem próxima ação</th><th>Conversão</th></tr></thead><tbody id="lead-team-body"></tbody></table></div></section></section>
             <section id="lead-legacy-panel" class="lead-tab-panel">
             <div class="crm-summary">
               <article><span>Contatos</span><strong id="crm-contacts-count">—</strong></article>
@@ -742,6 +742,15 @@
         <label id="lead-recovery-option" class="conversion-check"><input name="create_recovery_case" type="checkbox" /> Abrir também um caso no CS Recupera</label>
         <p class="form-help">A conversão preserva o histórico do lead e evita clientes duplicados.</p>
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Confirmar conversão</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="lead-distribution-dialog" class="modal">
+      <form id="lead-distribution-form" method="dialog">
+        <div class="modal-header"><div><p class="eyebrow dark">CS CAPTAÇÃO</p><h2>Distribuir leads sem responsável</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <p class="form-help distribution-help">Selecione quem participará da distribuição. Os leads serão divididos de forma equilibrada, começando por quem possui menor carga ativa.</p>
+        <fieldset class="conversion-duplicates"><legend>Responsáveis participantes</legend><div id="lead-distribution-users"></div></fieldset>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Distribuir agora</button></div>
       </form>
     </dialog>
 

@@ -99,6 +99,88 @@ def create_lead(payload: LeadCreate, db: Session = Depends(get_db), ident: Ident
     save(db); db.refresh(obj); return obj
 
 
+@router.post("/distribution", response_model=LeadDistributionRead)
+def distribute_unassigned_leads(payload: LeadDistributionCreate, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
+    authorize(ident)
+    if not ident.is_superuser and str(ident.role).lower() not in {"admin", "supervisor"}:
+        raise HTTPException(403, "Somente administradores e supervisores podem distribuir leads")
+    requested_ids = list(dict.fromkeys(payload.user_ids))
+    users = list(db.scalars(select(User).where(
+        User.id.in_(requested_ids), User.organization_id == ident.organization_id,
+        User.deleted_at.is_(None), User.status == "active",
+    )))
+    if len(users) != len(requested_ids):
+        raise HTTPException(422, "Selecione apenas responsáveis ativos desta organização")
+    open_statuses = {"NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA"}
+    workloads = dict(db.execute(select(Lead.owner_id, func.count(Lead.id)).where(
+        Lead.organization_id == ident.organization_id, Lead.deleted_at.is_(None),
+        Lead.status.in_(open_statuses), Lead.owner_id.in_(requested_ids),
+    ).group_by(Lead.owner_id)).all())
+    users.sort(key=lambda user: (workloads.get(user.id, 0), user.full_name.casefold(), str(user.id)))
+    leads = list(db.scalars(select(Lead).where(
+        Lead.organization_id == ident.organization_id, Lead.deleted_at.is_(None),
+        Lead.status.in_(open_statuses), Lead.owner_id.is_(None),
+    ).order_by(Lead.created_at, Lead.id)))
+    assigned_by_user = {user.id: 0 for user in users}
+    for index, lead in enumerate(leads):
+        owner = users[index % len(users)]
+        lead.owner_id = owner.id
+        assigned_by_user[owner.id] += 1
+        db.add(LeadInteraction(
+            organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id,
+            interaction_type="STATUS", description=f"Lead distribuído para {owner.full_name}",
+            occurred_at=datetime.now(timezone.utc),
+        ))
+        record_audit(
+            db, organization_id=ident.organization_id, user_id=ident.user_id,
+            entity_type="lead", entity_id=lead.id, action="assign",
+            new_values={"owner_id": str(owner.id), "owner_name": owner.full_name, "method": "round_robin"},
+        )
+    save(db)
+    remaining = db.scalar(select(func.count(Lead.id)).where(
+        Lead.organization_id == ident.organization_id, Lead.deleted_at.is_(None),
+        Lead.status.in_(open_statuses), Lead.owner_id.is_(None),
+    )) or 0
+    return LeadDistributionRead(
+        assigned=len(leads), remaining_unassigned=remaining,
+        owners=[LeadDistributionOwnerRead(user_id=user.id, user_name=user.full_name, assigned=assigned_by_user[user.id]) for user in users],
+    )
+
+
+@router.get("/analytics/team", response_model=list[LeadTeamPerformanceRead])
+def team_performance(db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
+    authorize(ident)
+    org = ident.organization_id
+    now = datetime.now(timezone.utc)
+    open_statuses = {"NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA"}
+    users = list(db.scalars(select(User).where(
+        User.organization_id == org, User.deleted_at.is_(None), User.status == "active",
+    ).order_by(User.full_name, User.id)))
+    result = []
+    for user in users:
+        base = [Lead.organization_id == org, Lead.deleted_at.is_(None), Lead.owner_id == user.id]
+        assigned = db.scalar(select(func.count(Lead.id)).where(*base)) or 0
+        active = db.scalar(select(func.count(Lead.id)).where(*base, Lead.status.in_(open_statuses))) or 0
+        converted = db.scalar(select(func.count(Lead.id)).where(*base, Lead.status == "CONVERTIDO")) or 0
+        lost = db.scalar(select(func.count(Lead.id)).where(*base, Lead.status == "PERDIDO")) or 0
+        overdue = db.scalar(select(func.count(LeadTask.id)).join(Lead, Lead.id == LeadTask.lead_id).where(
+            *base, LeadTask.status == "PENDENTE", LeadTask.due_at < now,
+        )) or 0
+        future_task = select(LeadTask.id).where(
+            LeadTask.lead_id == Lead.id, LeadTask.status == "PENDENTE", LeadTask.due_at >= now,
+        ).exists()
+        without_action = db.scalar(select(func.count(Lead.id)).where(
+            *base, Lead.status.in_(open_statuses), ~future_task,
+        )) or 0
+        result.append(LeadTeamPerformanceRead(
+            user_id=user.id, user_name=user.full_name, assigned_leads=assigned, active_leads=active,
+            converted=converted, lost=lost, overdue_tasks=overdue,
+            leads_without_next_action=without_action,
+            conversion_rate=round(converted * 100 / assigned, 2) if assigned else 0,
+        ))
+    return result
+
+
 @router.get("/{lead_id}/duplicates")
 def duplicate_clients(lead_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
     lead = get_lead(db, ident, lead_id)

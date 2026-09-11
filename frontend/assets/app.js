@@ -17,7 +17,7 @@
     judicialProcess: null,
     judicialReport: { data: null, dateFrom: "", dateTo: "" },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
-    leads: { items: [], dashboard: null, reports: null, catalogs: { sources: [], services: [] } },
+    leads: { items: [], dashboard: null, reports: null, team: [], catalogs: { sources: [], services: [] } },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
@@ -446,6 +446,10 @@
 
   function canManageCollectionQueue() {
     return Boolean(state.user?.is_superuser) || ["admin", "supervisor"].includes(String(state.user?.role || ""));
+  }
+
+  function canManageLeadQueue() {
+    return Boolean(state.user?.is_superuser) || ["admin", "supervisor"].includes(String(state.user?.role || "").toLowerCase());
   }
 
   function calculateWeightedPipeline(opportunities) {
@@ -1156,11 +1160,11 @@
         || String(item.assigned_user_id || "") === String(filters.responsible))
     );
     $("#agenda-result-count").textContent = items.length === 1 ? "1 registro" : `${items.length} registros`;
-    $("#agenda-task-count").textContent = items.filter((item) => item.kind === "task").length;
+    $("#agenda-task-count").textContent = items.filter((item) => ["task", "lead_task"].includes(item.kind)).length;
     $("#agenda-follow-up-count").textContent = items.filter((item) => item.kind === "follow_up").length;
     $("#agenda-promise-count").textContent = items.filter((item) => item.kind === "promise").length;
     $("#agenda-judicial-count").textContent = items.filter((item) => item.kind === "judicial_deadline").length;
-    const kindLabels = { task: "Tarefa do CRM", follow_up: "Acompanhamento", promise: "Promessa", judicial_deadline: "Prazo judicial" };
+    const kindLabels = { task: "Tarefa do CRM", lead_task: "Próxima ação do lead", follow_up: "Acompanhamento", promise: "Promessa", judicial_deadline: "Prazo judicial" };
     const statusLabels = { overdue: "Atrasado", today: "Hoje", upcoming: "Próximo" };
     $("#agenda-list").innerHTML = items.length ? items.map((item) => `<article class="agenda-item ${escapeHtml(item.status)}"><button class="agenda-open" type="button" data-agenda-id="${escapeHtml(item.id)}">
       <span class="agenda-date"><strong>${escapeHtml(formatDate(item.due_at, true))}</strong><small>${escapeHtml(statusLabels[item.status] || item.status)}</small></span>
@@ -1168,7 +1172,7 @@
       <span class="agenda-copy"><small>${escapeHtml(kindLabels[item.kind] || item.kind)}</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.client_name || "Sem cliente vinculado")} · ${escapeHtml(item.assigned_user_name || "Sem responsável")}</span></span>
       <span class="badge ${item.priority === "urgent" ? "priority-urgent" : `priority-${escapeHtml(item.priority || "normal")}`} ">${escapeHtml(priorityLabels[item.priority] || "Normal")}</span>
       <span class="agenda-arrow" aria-hidden="true">→</span>
-    </button>${item.kind === "task" ? `<button class="complete-button agenda-complete-task" type="button" data-agenda-complete-task="${escapeHtml(String(item.id).replace(/^task:/, ""))}">Concluir</button>` : item.kind === "judicial_deadline" ? `<button class="complete-button agenda-complete-judicial" type="button" data-complete-judicial="${escapeHtml(String(item.target_filter || "").replace(/^judicial:/, ""))}">Concluir prazo</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
+    </button>${item.kind === "task" ? `<button class="complete-button agenda-complete-task" type="button" data-agenda-complete-task="${escapeHtml(String(item.id).replace(/^task:/, ""))}">Concluir</button>` : item.kind === "lead_task" ? `<button class="complete-button agenda-complete-lead-task" type="button" data-agenda-lead-id="${escapeHtml(item.lead_id || "")}" data-agenda-complete-lead-task="${escapeHtml(String(item.id).replace(/^lead-task:/, ""))}">Concluir</button>` : item.kind === "judicial_deadline" ? `<button class="complete-button agenda-complete-judicial" type="button" data-complete-judicial="${escapeHtml(String(item.target_filter || "").replace(/^judicial:/, ""))}">Concluir prazo</button>` : ""}</article>`).join("") : '<div class="empty-state">Nenhum compromisso encontrado com estes filtros.</div>';
     const workload = state.agenda.workload;
     $("#agenda-workload-summary").textContent = `${workload.length} ${workload.length === 1 ? "responsável" : "responsáveis"}`;
     $("#agenda-workload-list").innerHTML = workload.length ? workload.map((row) => `<button type="button" class="agenda-workload-card ${String(filters.responsible) === String(row.user_id || "unassigned") ? "active" : ""}" data-agenda-responsible="${escapeHtml(row.user_id || "unassigned")}">
@@ -1231,6 +1235,12 @@
       $$(".crm-tab").forEach((entry) => entry.classList.toggle("active", entry === tab));
       $$(".crm-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === "crm-tasks"));
       renderCrm();
+      return;
+    }
+    if (item.kind === "lead_task") {
+      setView("crm");
+      if (state.leads.items.length === 0) await loadCrm();
+      await openLeadDetail(item.lead_id);
       return;
     }
     if (item.kind === "judicial_deadline") {
@@ -1903,7 +1913,7 @@
 
   async function loadCrm() {
     const leadAccess = ["admin", "supervisor", "advogado", "atendimento"].includes(String(state.user?.role || "")) || state.user?.is_superuser;
-    const [summary, contacts, opportunities, tasks, interactions, leads, leadDashboard, leadReports, leadCatalogs] = await Promise.all([
+    const [summary, contacts, opportunities, tasks, interactions, leads, leadDashboard, leadReports, leadTeam, leadCatalogs] = await Promise.all([
       api("/api/v1/crm/summary"),
       api("/api/v1/crm/contacts?limit=100"),
       api("/api/v1/crm/opportunities?limit=100"),
@@ -1912,6 +1922,7 @@
       leadAccess ? api(`/api/v1/leads?limit=200&_=${Date.now()}`) : Promise.resolve([]),
       leadAccess ? api("/api/v1/leads/analytics/dashboard") : Promise.resolve({}),
       leadAccess ? api("/api/v1/leads/analytics/reports") : Promise.resolve({}),
+      leadAccess ? api("/api/v1/leads/analytics/team") : Promise.resolve([]),
       leadAccess ? api("/api/v1/leads/catalogs") : Promise.resolve({ sources: [], services: [] })
     ]);
     state.crm = {
@@ -1921,7 +1932,7 @@
       tasks: Array.isArray(tasks) ? tasks : tasks.items || [],
       interactions: Array.isArray(interactions) ? interactions : interactions.items || []
     };
-    state.leads = { items: Array.isArray(leads) ? leads : [], dashboard: leadDashboard, reports: leadReports, catalogs: leadCatalogs };
+    state.leads = { items: Array.isArray(leads) ? leads : [], dashboard: leadDashboard, reports: leadReports, team: Array.isArray(leadTeam) ? leadTeam : [], catalogs: leadCatalogs };
     renderLeads();
     renderCrm();
     renderDashboard();
@@ -1963,7 +1974,16 @@
     $("#lead-table-body").innerHTML = state.leads.items.map((lead) => `<tr><td><strong>${escapeHtml(lead.full_name)}</strong><small>${escapeHtml(lead.email || lead.whatsapp || lead.phone || "")}</small></td><td>${escapeHtml(leadCatalogName("services", lead.service_type_id))}</td><td>${escapeHtml(leadCatalogName("sources", lead.source_id))}</td><td><span class="badge">${leadStatusLabels[lead.status]}</span></td><td>${escapeHtml(leadOwnerName(lead.owner_id))}</td><td><button class="text-link" data-open-lead="${lead.id}">Abrir</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty-cell">Nenhum lead encontrado.</td></tr>';
     const reports = state.leads.reports || {};
     $("#lead-reports").innerHTML = [["Por origem", reports.by_source], ["Por serviço", reports.by_service], ["Por responsável", reports.by_owner]].map(([title, rows]) => `<section class="panel"><div class="panel-header"><h3>${title}</h3></div><div class="lead-report-list">${(rows || []).map((row) => `<p><strong>${escapeHtml(row.name)}</strong><span>${row.leads} leads · ${row.converted} conversões · ${row.conversion_rate}%</span></p>`).join("") || "Sem dados"}</div></section>`).join("");
+    $("#lead-team-body").innerHTML = (state.leads.team || []).map((row) => `<tr><td><strong>${escapeHtml(row.user_name)}</strong></td><td>${row.active_leads || 0}</td><td>${row.converted || 0}</td><td>${row.lost || 0}</td><td>${row.overdue_tasks || 0}</td><td>${row.leads_without_next_action || 0}</td><td>${row.conversion_rate || 0}%</td></tr>`).join("") || '<tr><td colspan="7" class="empty-cell">Nenhum responsável ativo encontrado.</td></tr>';
+    $("#lead-distribute").hidden = !canManageLeadQueue();
     fillLeadSelects();
+  }
+
+  function openLeadDistribution() {
+    const users = state.users.filter((user) => user.status === "active");
+    if (!users.length) { toast("Nenhum responsável ativo está disponível.", "error"); return; }
+    $("#lead-distribution-users").innerHTML = users.map((user) => `<label class="duplicate-option"><input type="checkbox" name="user_ids" value="${escapeHtml(user.id)}" checked /><span><strong>${escapeHtml(user.full_name)}</strong><small>${escapeHtml(userRoleLabels[user.role] || user.role || "Equipe")}</small></span></label>`).join("");
+    $("#lead-distribution-dialog").showModal();
   }
 
   function fillLeadSelects() {
@@ -4732,9 +4752,11 @@
     });
     $("#agenda-list").addEventListener("click", (event) => {
       const complete = event.target.closest("[data-agenda-complete-task]");
+      const completeLead = event.target.closest("[data-agenda-complete-lead-task]");
       const completeJudicial = event.target.closest("[data-complete-judicial]");
       const item = event.target.closest("[data-agenda-id]");
       if (complete) completeCrmTask(complete.dataset.agendaCompleteTask, complete);
+      else if (completeLead) api(`/api/v1/leads/${completeLead.dataset.agendaLeadId}/tasks/${completeLead.dataset.agendaCompleteLeadTask}/complete`, { method:"PATCH" }).then(() => loadOperationalAgenda()).then(() => toast("Próxima ação do lead concluída.")).catch((error) => toast(error.message, "error"));
       else if (completeJudicial) completeJudicialDeadline(completeJudicial.dataset.completeJudicial, completeJudicial);
       else if (item) openAgendaItem(item.dataset.agendaId).catch((error) => toast(error.message, "error"));
     });
@@ -4883,6 +4905,22 @@
       else if (select) changeOpportunityStage(select.dataset.opportunityStage, select.value, select);
     });
     $("#lead-refresh").addEventListener("click", () => loadCrm().catch((error) => toast(error.message, "error")));
+    $("#lead-distribute").addEventListener("click", openLeadDistribution);
+    $("#lead-distribution-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const userIds = Array.from(new FormData(form).getAll("user_ids")).filter(Boolean);
+      if (!userIds.length) { toast("Selecione pelo menos um responsável.", "error"); return; }
+      const button = $('button[type="submit"]', form);
+      setBusy(button, true, "Distribuindo…");
+      try {
+        const result = await api("/api/v1/leads/distribution", { method:"POST", body:JSON.stringify({ user_ids:userIds }) });
+        closeDialog($("#lead-distribution-dialog"));
+        await loadCrm();
+        toast(result.assigned ? `${result.assigned} lead(s) distribuído(s).` : "Não há leads sem responsável para distribuir.");
+      } catch (error) { toast(error.message, "error"); }
+      finally { setBusy(button, false); }
+    });
     $("#lead-filter-button").addEventListener("click", async () => {
       const params = new URLSearchParams({ limit: "200" });
       if ($("#lead-search").value.trim()) params.set("search", $("#lead-search").value.trim());
