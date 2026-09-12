@@ -4932,10 +4932,34 @@
       $$(".lead-tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `lead-${button.dataset.leadTab}-panel`));
     }));
     $("#lead-form").addEventListener("submit", async (event) => {
-      event.preventDefault(); const form = event.currentTarget; const data = Object.fromEntries(new FormData(form)); const id = data.lead_id; delete data.lead_id;
-      Object.keys(data).forEach((key) => { if (data[key] === "") data[key] = null; else if (["has_legal_demand","urgent","has_lawyer","has_ongoing_case","can_afford"].includes(key)) data[key] = data[key] === "true"; else if (["approximate_debt","approximate_creditors","monthly_income","income_commitment_percent"].includes(key)) data[key] = Number(data[key]); });
-      try { await api(id ? `/api/v1/leads/${id}` : "/api/v1/leads", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) }); closeDialog($("#lead-dialog")); form.reset(); $("#lead-dialog-title").textContent = "Novo lead"; await loadCrm(); toast(id ? "Lead atualizado." : "Lead cadastrado."); }
-      catch (error) { toast(error.message, "error"); }
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = $('button[type="submit"]', form);
+      setBusy(button, true, "Salvando…");
+      try {
+        const data = Object.fromEntries(new FormData(form));
+        const id = data.lead_id;
+        delete data.lead_id;
+        Object.keys(data).forEach((key) => {
+          if (data[key] === "") data[key] = null;
+          else if (["has_legal_demand","urgent","has_lawyer","has_ongoing_case","can_afford"].includes(key)) data[key] = data[key] === "true";
+          else if (["approximate_debt","approximate_creditors","monthly_income","income_commitment_percent"].includes(key)) data[key] = Number(data[key]);
+        });
+        await api(id ? `/api/v1/leads/${id}` : "/api/v1/leads", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+        closeDialog($("#lead-dialog"));
+        form.reset();
+        $("#lead-dialog-title").textContent = "Novo lead";
+        toast(id ? "Lead atualizado." : "Lead cadastrado.");
+        try {
+          await loadCrm();
+        } catch (refreshError) {
+          toast(`Lead salvo, mas a tela não foi atualizada: ${refreshError.message}`, "error");
+        }
+      } catch (error) {
+        toast(error.message || "Não foi possível salvar o lead.", "error");
+      } finally {
+        setBusy(button, false);
+      }
     });
     $("#lead-detail-dialog").addEventListener("click", async (event) => {
       const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]"), recovery = event.target.closest("[data-recovery-lead]"), completeLeadTask = event.target.closest("[data-complete-lead-task]"), proposalStatus = event.target.closest("[data-proposal-status]");
