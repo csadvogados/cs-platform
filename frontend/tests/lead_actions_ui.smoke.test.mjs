@@ -63,6 +63,12 @@ test("agenda e supervisão incluem a operação diária dos leads", () => {
   assert.match(app, /data-agenda-complete-lead-task/);
 });
 
+test("cadastro de lead usa envio assíncrono com retorno visível", () => {
+  assert.match(index, /<form id="lead-form">/);
+  assert.match(app, /setBusy\(button, true, "Salvando…"\)/);
+  assert.match(app, /Lead salvo, mas a tela não foi atualizada/);
+});
+
 test("timeline permite decidir proposta com transição auditada pela API", () => {
   assert.match(app, /data-proposal-status="ACEITA"/);
   assert.match(app, /data-proposal-status="RECUSADA"/);
