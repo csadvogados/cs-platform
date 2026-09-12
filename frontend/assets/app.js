@@ -124,6 +124,7 @@
     crm_opportunity: "Oportunidade",
     crm_task: "Tarefa",
     recovery_case: "Caso de recuperação"
+    ,commercial_contract: "Contrato comercial"
     ,negotiation: "Negociação"
     ,negotiation_offer: "Proposta de negociação"
   };
@@ -2007,13 +2008,51 @@
     const dialog = $("#lead-detail-dialog");
     const interactions = (timeline.interactions || []).map((x) => `<article><strong>${escapeHtml(x.interaction_type)}</strong><span>${escapeHtml(x.description)}</span><small>${escapeHtml(formatDate(x.occurred_at, true))}</small></article>`);
     const tasks = (timeline.tasks || []).map((x) => `<article class="lead-task-event"><strong>PRÓXIMA AÇÃO · ${escapeHtml(x.status)}</strong><span>${escapeHtml(x.description)}</span><small>Prazo: ${escapeHtml(formatDate(x.due_at, true))}</small>${x.status === "PENDENTE" ? `<button class="text-link lead-task-complete" type="button" data-complete-lead-task="${x.id}" data-task-lead-id="${id}">Marcar como concluída</button>` : ""}</article>`);
-    const proposals = (timeline.proposals || []).map((x) => `<article class="lead-proposal-event"><strong>PROPOSTA · ${escapeHtml(x.status)}</strong><span>${escapeHtml(formatCurrency(x.fixed_value))}${Number(x.success_percentage || 0) ? ` + ${escapeHtml(x.success_percentage)}% de êxito` : ""}</span>${x.notes ? `<span>${escapeHtml(x.notes)}</span>` : ""}<small>${x.valid_until ? `Válida até ${escapeHtml(formatDate(x.valid_until))}` : `Criada em ${escapeHtml(formatDate(x.created_at, true))}`}</small>${["RASCUNHO", "ENVIADA"].includes(x.status) ? `<span class="proposal-status-actions"><button class="text-link" type="button" data-proposal-status="ACEITA" data-proposal-id="${x.id}" data-proposal-lead-id="${id}">Marcar aceita</button><button class="text-link danger-text" type="button" data-proposal-status="RECUSADA" data-proposal-id="${x.id}" data-proposal-lead-id="${id}">Marcar recusada</button></span>` : ""}</article>`);
+    const contracts = timeline.contracts || [];
+    const proposals = (timeline.proposals || []).map((x) => {
+      const contract = contracts.find((item) => String(item.proposal_id) === String(x.id));
+      const contractButton = x.status === "ACEITA" && lead.client_id && !contract ? `<button class="text-link" type="button" data-create-contract="${x.id}" data-contract-lead-id="${id}">Gerar contrato</button>` : "";
+      return `<article class="lead-proposal-event"><strong>PROPOSTA · ${escapeHtml(x.status)}</strong><span>${escapeHtml(formatCurrency(x.fixed_value))}${Number(x.success_percentage || 0) ? ` + ${escapeHtml(x.success_percentage)}% de êxito` : ""}</span>${x.notes ? `<span>${escapeHtml(x.notes)}</span>` : ""}<small>${x.valid_until ? `Válida até ${escapeHtml(formatDate(x.valid_until))}` : `Criada em ${escapeHtml(formatDate(x.created_at, true))}`}</small>${["RASCUNHO", "ENVIADA"].includes(x.status) ? `<span class="proposal-status-actions"><button class="text-link" type="button" data-proposal-status="ACEITA" data-proposal-id="${x.id}" data-proposal-lead-id="${id}">Marcar aceita</button><button class="text-link danger-text" type="button" data-proposal-status="RECUSADA" data-proposal-id="${x.id}" data-proposal-lead-id="${id}">Marcar recusada</button></span>` : contractButton}</article>`;
+    });
+    const contractActions = { RASCUNHO:["EM_REVISAO","Enviar para revisão"], EM_REVISAO:["APROVADO","Aprovar"], APROVADO:["ENVIADO","Registrar envio"], ENVIADO:["ASSINADO","Registrar assinatura"] };
+    const contractEvents = contracts.map((x) => {
+      const next = contractActions[x.status];
+      return `<article class="lead-contract-event"><strong>CONTRATO ${escapeHtml(x.contract_number)} · ${escapeHtml(x.status.replaceAll("_", " "))}</strong><span>${escapeHtml(x.title)}</span><small>Versão ${x.version} · criado em ${escapeHtml(formatDate(x.created_at, true))}</small><span class="proposal-status-actions"><button class="text-link" type="button" data-open-contract="${x.id}" data-contract-lead-id="${id}">Abrir documento</button>${next ? `<button class="text-link" type="button" data-contract-status="${next[0]}" data-contract-id="${x.id}" data-contract-lead-id="${id}">${next[1]}</button>` : ""}</span></article>`;
+    });
     const service = state.leads.catalogs.services.find((item) => String(item.id) === String(lead.service_type_id));
     const recoveryButton = lead.status === "CONVERTIDO" && service?.code === "CS_RECUPERA" && !lead.recovery_case_id ? `<button class="primary-button" data-recovery-lead="${id}">Abrir caso CS Recupera</button>` : "";
     const recoveryStatus = lead.recovery_case_id ? `<p class="success-note">Caso CS Recupera vinculado.</p>` : "";
     const lostStatus = lead.status === "PERDIDO" ? `<p class="warning-note"><strong>Motivo da perda:</strong> ${escapeHtml(lostReasonLabels[lead.lost_reason] || lead.lost_reason || "Não informado")}${lead.lost_notes ? `<br>${escapeHtml(lead.lost_notes)}` : ""}</p>` : "";
-    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p>${recoveryStatus}${lostStatus}<div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : recoveryButton}</div></section><section><h3>Timeline, propostas e próximas ações</h3><div class="lead-timeline">${[...proposals, ...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
+    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p>${recoveryStatus}${lostStatus}<div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : recoveryButton}</div></section><section><h3>Timeline, propostas, contratos e próximas ações</h3><div class="lead-timeline">${[...contractEvents, ...proposals, ...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
     if (!dialog.open) dialog.showModal();
+  }
+
+  async function createLeadContract(leadId, proposalId) {
+    await api(`/api/v1/leads/${leadId}/proposals/${proposalId}/contract`, { method:"POST", body:JSON.stringify({}) });
+    toast("Contrato gerado em rascunho.");
+    await openLeadDetail(leadId);
+  }
+
+  async function updateLeadContractStatus(leadId, contractId, status) {
+    let signatureReference = null;
+    if (status === "ASSINADO") {
+      signatureReference = window.prompt("Informe a referência da assinatura (ex.: assinatura física em 12/09/2026):");
+      if (!signatureReference) return;
+    }
+    await api(`/api/v1/leads/${leadId}/contracts/${contractId}/status`, { method:"PATCH", body:JSON.stringify({ status, signature_reference:signatureReference }) });
+    toast("Situação do contrato atualizada.");
+    await openLeadDetail(leadId);
+  }
+
+  async function openLeadContractDocument(leadId, contractId) {
+    const headers = new Headers();
+    const access = getTokens().access;
+    if (access) headers.set("Authorization", `Bearer ${access}`);
+    const response = await fetch(`${API_BASE}/api/v1/leads/${leadId}/contracts/${contractId}/document`, { headers });
+    if (!response.ok) throw new Error(await readError(response));
+    const url = URL.createObjectURL(await response.blob());
+    window.open(url, "_blank", "noopener");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   function openLeadTaskDialog(id) {
@@ -4962,7 +5001,7 @@
       }
     });
     $("#lead-detail-dialog").addEventListener("click", async (event) => {
-      const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]"), recovery = event.target.closest("[data-recovery-lead]"), completeLeadTask = event.target.closest("[data-complete-lead-task]"), proposalStatus = event.target.closest("[data-proposal-status]");
+      const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]"), recovery = event.target.closest("[data-recovery-lead]"), completeLeadTask = event.target.closest("[data-complete-lead-task]"), proposalStatus = event.target.closest("[data-proposal-status]"), createContract = event.target.closest("[data-create-contract]"), contractStatus = event.target.closest("[data-contract-status]"), openContract = event.target.closest("[data-open-contract]");
       if (edit) editLead(edit.dataset.editLead);
       else if (interact) { const description = window.prompt("Descreva a interação realizada:"); if (description) { await api(`/api/v1/leads/${interact.dataset.interactLead}/interactions`, { method: "POST", body: JSON.stringify({ interaction_type: "NOTA", description, occurred_at: new Date().toISOString() }) }); await openLeadDetail(interact.dataset.interactLead); } }
       else if (task) openLeadTaskDialog(task.dataset.taskLead);
@@ -4976,6 +5015,9 @@
         await loadCrm();
       }
       else if (proposalStatus) await updateLeadProposalStatus(proposalStatus.dataset.proposalLeadId, proposalStatus.dataset.proposalId, proposalStatus.dataset.proposalStatus);
+      else if (createContract) await createLeadContract(createContract.dataset.contractLeadId, createContract.dataset.createContract).catch((error) => toast(error.message, "error"));
+      else if (contractStatus) await updateLeadContractStatus(contractStatus.dataset.contractLeadId, contractStatus.dataset.contractId, contractStatus.dataset.contractStatus).catch((error) => toast(error.message, "error"));
+      else if (openContract) await openLeadContractDocument(openContract.dataset.contractLeadId, openContract.dataset.openContract).catch((error) => toast(error.message, "error"));
     });
     $("#lead-task-form").addEventListener("submit", async (event) => {
       event.preventDefault();

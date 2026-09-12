@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from html import escape
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -9,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_identity_context
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.crm import Lead, LeadInteraction, LeadProposal, LeadSource, LeadTask, ServiceType
+from app.models.crm import CommercialContract, Lead, LeadInteraction, LeadProposal, LeadSource, LeadTask, ServiceType
+from app.models.organization import Organization
 from app.models.recovery import RecoveryCaseSource
 from app.models.user import User
 from app.schemas.leads import *
@@ -46,6 +48,21 @@ def save(db):
     try: db.commit()
     except IntegrityError as exc:
         db.rollback(); raise HTTPException(409, "Conflito ao salvar lead") from exc
+
+
+def default_contract_content(organization, client, lead, proposal):
+    office = organization.trade_name or organization.legal_name
+    service = "serviços jurídicos contratados"
+    return (
+        f"CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS\n\n"
+        f"CONTRATADA: {office}.\n"
+        f"CONTRATANTE: {client.full_name}, CPF {client.cpf}.\n\n"
+        f"OBJETO: prestação de {service}, conforme a proposta comercial vinculada.\n\n"
+        f"HONORÁRIOS: valor fixo de R$ {float(proposal.fixed_value):,.2f}; entrada de R$ {float(proposal.down_payment):,.2f}; "
+        f"{proposal.installments} parcela(s) de R$ {float(proposal.installment_value):,.2f}; êxito de {float(proposal.success_percentage):g}%.\n\n"
+        "As condições específicas, obrigações das partes, vigência e hipóteses de rescisão deverão ser revisadas antes da aprovação.\n\n"
+        "Ao aprovar este documento, a equipe confirma que o conteúdo foi revisado. O registro de assinatura nesta plataforma é manual."
+    )
 
 
 def ensure_catalogs(db: Session, organization_id: UUID):
@@ -233,7 +250,8 @@ def timeline(lead_id: UUID, db: Session = Depends(get_db), ident: IdentityContex
     interactions = list(db.scalars(select(LeadInteraction).where(LeadInteraction.lead_id == lead_id, LeadInteraction.organization_id == ident.organization_id).order_by(LeadInteraction.occurred_at.desc())))
     tasks = list(db.scalars(select(LeadTask).where(LeadTask.lead_id == lead_id, LeadTask.organization_id == ident.organization_id).order_by(LeadTask.due_at.desc())))
     proposals = list(db.scalars(select(LeadProposal).where(LeadProposal.lead_id == lead_id, LeadProposal.organization_id == ident.organization_id).order_by(LeadProposal.created_at.desc())))
-    return {"interactions": interactions, "tasks": tasks, "proposals": proposals}
+    contracts = list(db.scalars(select(CommercialContract).where(CommercialContract.lead_id == lead_id, CommercialContract.organization_id == ident.organization_id, CommercialContract.deleted_at.is_(None)).order_by(CommercialContract.created_at.desc())))
+    return {"interactions": interactions, "tasks": tasks, "proposals": proposals, "contracts": contracts}
 
 
 @router.post("/{lead_id}/interactions", response_model=InteractionRead, status_code=201)
@@ -284,6 +302,58 @@ def update_proposal(lead_id: UUID, proposal_id: UUID, payload: ProposalUpdate, d
     if payload.status == "ENVIADA" and not obj.sent_at: obj.sent_at = datetime.now(timezone.utc)
     record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="lead_proposal", entity_id=obj.id, action="status_change", new_values={"from": previous, "to": obj.status})
     save(db); db.refresh(obj); return obj
+
+
+@router.post("/{lead_id}/proposals/{proposal_id}/contract", response_model=ContractRead, status_code=201)
+def create_contract(lead_id: UUID, proposal_id: UUID, payload: ContractCreate, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
+    lead = get_lead(db, ident, lead_id)
+    proposal = db.scalar(select(LeadProposal).where(LeadProposal.id == proposal_id, LeadProposal.lead_id == lead_id, LeadProposal.organization_id == ident.organization_id))
+    if not proposal: raise HTTPException(404, "Proposta não encontrada")
+    if proposal.status != "ACEITA": raise HTTPException(422, "A proposta deve estar aceita antes de gerar o contrato")
+    if not lead.client_id: raise HTTPException(422, "Converta o lead em cliente antes de gerar o contrato")
+    existing = db.scalar(select(CommercialContract).where(CommercialContract.proposal_id == proposal_id, CommercialContract.deleted_at.is_(None)))
+    if existing: return existing
+    organization = db.get(Organization, ident.organization_id)
+    client = db.get(Client, lead.client_id)
+    sequence = (db.scalar(select(func.count(CommercialContract.id)).where(CommercialContract.organization_id == ident.organization_id)) or 0) + 1
+    number = f"CTR-{datetime.now(timezone.utc).year}-{sequence:05d}"
+    obj = CommercialContract(
+        organization_id=ident.organization_id, lead_id=lead.id, proposal_id=proposal.id, client_id=client.id,
+        contract_number=number, title=payload.title,
+        content=payload.content or default_contract_content(organization, client, lead, proposal), notes=payload.notes,
+    )
+    db.add(obj); db.flush()
+    db.add(LeadInteraction(organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id, interaction_type="DOCUMENTO", description=f"Contrato {number} gerado", occurred_at=datetime.now(timezone.utc)))
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="commercial_contract", entity_id=obj.id, action="create", new_values={"number": number, "proposal_id": str(proposal.id)})
+    save(db); db.refresh(obj); return obj
+
+
+@router.patch("/{lead_id}/contracts/{contract_id}/status", response_model=ContractRead)
+def update_contract_status(lead_id: UUID, contract_id: UUID, payload: ContractStatusUpdate, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
+    get_lead(db, ident, lead_id)
+    obj = db.scalar(select(CommercialContract).where(CommercialContract.id == contract_id, CommercialContract.lead_id == lead_id, CommercialContract.organization_id == ident.organization_id, CommercialContract.deleted_at.is_(None)))
+    if not obj: raise HTTPException(404, "Contrato não encontrado")
+    if payload.status == "APROVADO" and not (ident.is_superuser or str(ident.role).lower() in {"admin", "advogado"}):
+        raise HTTPException(403, "Somente administrador ou advogado pode aprovar contratos")
+    transitions = {"RASCUNHO": {"EM_REVISAO", "CANCELADO"}, "EM_REVISAO": {"APROVADO", "CANCELADO"}, "APROVADO": {"ENVIADO", "CANCELADO"}, "ENVIADO": {"ASSINADO", "CANCELADO"}, "ASSINADO": set(), "CANCELADO": set()}
+    if payload.status not in transitions.get(obj.status, set()): raise HTTPException(409, f"Transição inválida de {obj.status} para {payload.status}")
+    previous = obj.status; now = datetime.now(timezone.utc); obj.status = payload.status
+    if payload.status == "APROVADO": obj.approved_by_id = ident.user_id; obj.approved_at = now
+    if payload.status == "ENVIADO": obj.sent_at = now
+    if payload.status == "ASSINADO": obj.signed_at = now; obj.signature_reference = payload.signature_reference
+    db.add(LeadInteraction(organization_id=ident.organization_id, lead_id=lead_id, user_id=ident.user_id, interaction_type="DOCUMENTO", description=f"Contrato {obj.contract_number}: {previous} → {obj.status}", occurred_at=now))
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="commercial_contract", entity_id=obj.id, action="status_change", new_values={"from": previous, "to": obj.status, "signature_reference": obj.signature_reference})
+    save(db); db.refresh(obj); return obj
+
+
+@router.get("/{lead_id}/contracts/{contract_id}/document", response_class=Response)
+def contract_document(lead_id: UUID, contract_id: UUID, db: Session = Depends(get_db), ident: IdentityContext = Depends(get_identity_context)):
+    get_lead(db, ident, lead_id)
+    obj = db.scalar(select(CommercialContract).where(CommercialContract.id == contract_id, CommercialContract.lead_id == lead_id, CommercialContract.organization_id == ident.organization_id, CommercialContract.deleted_at.is_(None)))
+    if not obj: raise HTTPException(404, "Contrato não encontrado")
+    content = "<br>".join(escape(obj.content).splitlines())
+    html = f"<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>{escape(obj.contract_number)}</title><style>body{{font:16px Georgia,serif;line-height:1.6;max-width:800px;margin:48px auto;padding:0 24px;color:#17231d}}h1{{font-size:24px}}.meta{{color:#657269}}@media print{{button{{display:none}}body{{margin:0}}}}</style></head><body><button onclick='print()'>Imprimir / salvar em PDF</button><p class='meta'>{escape(obj.contract_number)} · versão {obj.version} · {escape(obj.status)}</p><h1>{escape(obj.title)}</h1><div>{content}</div></body></html>"
+    return Response(html, media_type="text/html")
 
 
 @router.post("/{lead_id}/convert", response_model=ConversionResult)

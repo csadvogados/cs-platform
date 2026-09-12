@@ -50,6 +50,34 @@ def test_proposal_and_conversion_create_recovery_case(client, token):
     assert reports.json()["by_service"][0]["converted"] == 1
 
 
+def test_accepted_proposal_generates_and_tracks_contract(client, token):
+    lead = new_lead(client, token, cpf="11144477735")
+    proposal = client.post(f"/api/v1/leads/{lead['id']}/proposals", headers=auth(token), json={"fixed_value": 1800, "installments": 3, "installment_value": 600, "status": "ACEITA"})
+    assert proposal.status_code == 201, proposal.text
+    converted = client.post(f"/api/v1/leads/{lead['id']}/convert", headers=auth(token), json={"create_recovery_case": False})
+    assert converted.status_code == 200, converted.text
+
+    created = client.post(f"/api/v1/leads/{lead['id']}/proposals/{proposal.json()['id']}/contract", headers=auth(token), json={})
+    assert created.status_code == 201, created.text
+    contract = created.json()
+    assert contract["status"] == "RASCUNHO"
+    assert contract["contract_number"].startswith("CTR-")
+    assert "CONTRATO DE PRESTAÇÃO" in contract["content"]
+
+    for target in ["EM_REVISAO", "APROVADO", "ENVIADO"]:
+        changed = client.patch(f"/api/v1/leads/{lead['id']}/contracts/{contract['id']}/status", headers=auth(token), json={"status": target})
+        assert changed.status_code == 200, changed.text
+    signed = client.patch(f"/api/v1/leads/{lead['id']}/contracts/{contract['id']}/status", headers=auth(token), json={"status": "ASSINADO", "signature_reference": "Documento físico arquivado"})
+    assert signed.status_code == 200, signed.text
+    assert signed.json()["signed_at"]
+
+    document = client.get(f"/api/v1/leads/{lead['id']}/contracts/{contract['id']}/document", headers=auth(token))
+    assert document.status_code == 200
+    assert "Imprimir / salvar em PDF" in document.text
+    timeline = client.get(f"/api/v1/leads/{lead['id']}/timeline", headers=auth(token)).json()
+    assert timeline["contracts"][0]["status"] == "ASSINADO"
+
+
 def test_search_filters_and_soft_delete(client, token):
     lead = new_lead(client, token)
     found = client.get("/api/v1/leads?search=Maria&status=NOVO", headers=auth(token))
