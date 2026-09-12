@@ -69,6 +69,14 @@ test("cadastro de lead usa envio assíncrono com retorno visível", () => {
   assert.match(app, /Lead salvo, mas a tela não foi atualizada/);
 });
 
+test("proposta aceita gera contrato com aprovação e assinatura manual", () => {
+  assert.match(app, /data-create-contract/);
+  assert.match(app, /data-contract-status/);
+  assert.match(app, /Gerar contrato/);
+  assert.match(app, /Registrar assinatura/);
+  assert.match(app, /openLeadContractDocument/);
+});
+
 test("timeline permite decidir proposta com transição auditada pela API", () => {
   assert.match(app, /data-proposal-status="ACEITA"/);
   assert.match(app, /data-proposal-status="RECUSADA"/);

@@ -182,6 +182,31 @@ class ProposalUpdate(BaseModel):
     status: Literal["RASCUNHO", "ENVIADA", "ACEITA", "RECUSADA", "EXPIRADA"]
 
 
+class ContractCreate(BaseModel):
+    title: str = Field(default="Contrato de prestação de serviços advocatícios", min_length=3, max_length=200)
+    content: str | None = Field(default=None, max_length=50000)
+    notes: str | None = Field(default=None, max_length=5000)
+
+
+class ContractStatusUpdate(BaseModel):
+    status: Literal["EM_REVISAO", "APROVADO", "ENVIADO", "ASSINADO", "CANCELADO"]
+    signature_reference: str | None = Field(default=None, max_length=300)
+
+    @model_validator(mode="after")
+    def signed_requires_reference(self):
+        if self.status == "ASSINADO" and not self.signature_reference:
+            raise ValueError("Informe a referência da assinatura")
+        return self
+
+
+class ContractRead(ORMModel):
+    id: UUID; organization_id: UUID; lead_id: UUID; proposal_id: UUID; client_id: UUID
+    contract_number: str; title: str; content: str; status: str; version: int
+    approved_by_id: UUID | None; approved_at: datetime | None; sent_at: datetime | None
+    signed_at: datetime | None; signature_reference: str | None; notes: str | None
+    created_at: datetime; updated_at: datetime
+
+
 class ConvertLead(BaseModel):
     confirm_duplicate_client_id: UUID | None = None
     create_recovery_case: bool = False
