@@ -2034,12 +2034,16 @@
   }
 
   async function updateLeadContractStatus(leadId, contractId, status) {
-    let signatureReference = null;
     if (status === "ASSINADO") {
-      signatureReference = window.prompt("Informe a referência da assinatura (ex.: assinatura física em 12/09/2026):");
-      if (!signatureReference) return;
+      const form = $("#contract-signature-form");
+      form.reset();
+      form.elements.lead_id.value = leadId;
+      form.elements.contract_id.value = contractId;
+      $("#contract-signature-dialog").showModal();
+      form.elements.signature_reference.focus();
+      return;
     }
-    await api(`/api/v1/leads/${leadId}/contracts/${contractId}/status`, { method:"PATCH", body:JSON.stringify({ status, signature_reference:signatureReference }) });
+    await api(`/api/v1/leads/${leadId}/contracts/${contractId}/status`, { method:"PATCH", body:JSON.stringify({ status, signature_reference:null }) });
     toast("Situação do contrato atualizada.");
     await openLeadDetail(leadId);
   }
@@ -5018,6 +5022,20 @@
       else if (createContract) await createLeadContract(createContract.dataset.contractLeadId, createContract.dataset.createContract).catch((error) => toast(error.message, "error"));
       else if (contractStatus) await updateLeadContractStatus(contractStatus.dataset.contractLeadId, contractStatus.dataset.contractId, contractStatus.dataset.contractStatus).catch((error) => toast(error.message, "error"));
       else if (openContract) await openLeadContractDocument(openContract.dataset.contractLeadId, openContract.dataset.openContract).catch((error) => toast(error.message, "error"));
+    });
+    $("#contract-signature-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = Object.fromEntries(new FormData(form));
+      const button = $('button[type="submit"]', form);
+      setBusy(button, true, "Registrando…");
+      try {
+        await api(`/api/v1/leads/${data.lead_id}/contracts/${data.contract_id}/status`, { method:"PATCH", body:JSON.stringify({ status:"ASSINADO", signature_reference:data.signature_reference.trim() }) });
+        closeDialog($("#contract-signature-dialog"));
+        toast("Assinatura registrada no contrato.");
+        await openLeadDetail(data.lead_id);
+      } catch (error) { toast(error.message, "error"); }
+      finally { setBusy(button, false); }
     });
     $("#lead-task-form").addEventListener("submit", async (event) => {
       event.preventDefault();
