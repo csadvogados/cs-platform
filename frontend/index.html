@@ -757,6 +757,15 @@
       </form>
     </dialog>
 
+    <dialog id="contract-template-delete-dialog" class="modal">
+      <form id="contract-template-delete-form">
+        <div class="modal-header"><div><p class="eyebrow dark">MODELO DE CONTRATO</p><h2>Excluir modelo?</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="template_id" type="hidden" />
+        <div class="form-grid single"><p id="contract-template-delete-message">Os contratos já gerados serão preservados.</p></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="danger-button" type="submit">Sim, excluir modelo</button></div>
+      </form>
+    </dialog>
+
     <dialog id="lead-task-dialog" class="modal">
       <form id="lead-task-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">CS CAPTAÇÃO</p><h2>Agendar próxima ação</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>

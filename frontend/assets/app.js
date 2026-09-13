@@ -5047,13 +5047,26 @@
       const edit = event.target.closest("[data-edit-contract-template]");
       const remove = event.target.closest("[data-delete-contract-template]");
       if (edit) openContractTemplateDialog(edit.dataset.editContractTemplate);
-      else if (remove && window.confirm("Excluir este modelo de contrato? Os contratos já gerados serão preservados.")) {
-        try {
-          await api(`/api/v1/contracts/templates/${remove.dataset.deleteContractTemplate}`, { method:"DELETE" });
-          await loadContracts();
-          toast("Modelo excluído. Os contratos existentes foram preservados.");
-        } catch (error) { toast(error.message, "error"); }
+      else if (remove) {
+        const template = state.contracts.templates.find((item) => String(item.id) === String(remove.dataset.deleteContractTemplate));
+        const form = $("#contract-template-delete-form");
+        form.elements.template_id.value = remove.dataset.deleteContractTemplate;
+        $("#contract-template-delete-message").textContent = `O modelo “${template?.name || "selecionado"}” será excluído. Os contratos já gerados serão preservados.`;
+        $("#contract-template-delete-dialog").showModal();
       }
+    });
+    $("#contract-template-delete-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = $('button[type="submit"]', form);
+      setBusy(button, true, "Excluindo…");
+      try {
+        await api(`/api/v1/contracts/templates/${form.elements.template_id.value}`, { method:"DELETE" });
+        closeDialog($("#contract-template-delete-dialog"));
+        await loadContracts();
+        toast("Modelo excluído. Os contratos existentes foram preservados.");
+      } catch (error) { toast(error.message, "error"); }
+      finally { setBusy(button, false); }
     });
     $("#contract-template-form").addEventListener("submit", async (event) => {
       event.preventDefault();
