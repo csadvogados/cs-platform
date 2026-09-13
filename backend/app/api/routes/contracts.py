@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_identity_context
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.crm import CommercialContract, ContractTemplate, Lead, ServiceType
-from app.schemas.leads import ContractListItem, ContractRead, ContractSummary, ContractTemplateCreate, ContractTemplateRead, ContractTemplateUpdate
+from app.models.crm import CommercialContract, ContractDelivery, ContractTemplate, Lead, LeadInteraction, ServiceType
+from app.schemas.leads import ContractDeliveryCreate, ContractDeliveryRead, ContractListItem, ContractRead, ContractSummary, ContractTemplateCreate, ContractTemplateRead, ContractTemplateUpdate
 from app.security.identity import IdentityContext
 from app.services.audit import record_audit
 
@@ -116,6 +116,40 @@ def delete_template(template_id: UUID, db: Session = Depends(get_db), identity: 
     save(db)
 
 
+@router.get("/{contract_id}/deliveries", response_model=list[ContractDeliveryRead])
+def list_deliveries(contract_id: UUID, db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
+    authorize(identity)
+    contract = db.scalar(select(CommercialContract.id).where(CommercialContract.id == contract_id, CommercialContract.organization_id == identity.organization_id, CommercialContract.deleted_at.is_(None)))
+    if not contract:
+        raise HTTPException(404, "Contrato não encontrado")
+    return list(db.scalars(select(ContractDelivery).where(ContractDelivery.contract_id == contract_id, ContractDelivery.organization_id == identity.organization_id).order_by(ContractDelivery.sent_at.desc())))
+
+
+@router.post("/{contract_id}/deliveries", response_model=ContractDeliveryRead, status_code=201)
+def register_delivery(contract_id: UUID, payload: ContractDeliveryCreate, db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
+    authorize(identity)
+    contract = db.scalar(select(CommercialContract).where(CommercialContract.id == contract_id, CommercialContract.organization_id == identity.organization_id, CommercialContract.deleted_at.is_(None)))
+    if not contract:
+        raise HTTPException(404, "Contrato não encontrado")
+    if contract.status not in {"APROVADO", "ENVIADO"}:
+        raise HTTPException(409, "O contrato deve estar aprovado antes do envio")
+    if payload.signature_due_at < date.today():
+        raise HTTPException(422, "O prazo para assinatura não pode estar no passado")
+    now = datetime.now(timezone.utc)
+    delivery = ContractDelivery(id=uuid4(), organization_id=identity.organization_id, contract_id=contract.id, sent_by_id=identity.user_id, sent_at=now, **payload.model_dump())
+    contract.status = "ENVIADO"
+    contract.sent_at = now
+    contract.signature_due_at = payload.signature_due_at
+    contract.delivery_channel = payload.channel
+    contract.delivery_recipient = payload.recipient
+    db.add(delivery)
+    db.add(LeadInteraction(organization_id=identity.organization_id, lead_id=contract.lead_id, user_id=identity.user_id, interaction_type="DOCUMENTO", description=f"Contrato {contract.contract_number} enviado por {payload.channel} para {payload.recipient}", occurred_at=now))
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id, entity_type="commercial_contract", entity_id=contract.id, action="send", new_values={"channel": payload.channel, "recipient": payload.recipient, "signature_due_at": str(payload.signature_due_at)})
+    save(db)
+    db.refresh(delivery)
+    return delivery
+
+
 @router.get("/summary", response_model=ContractSummary)
 def summary(db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
     authorize(identity)
@@ -123,10 +157,11 @@ def summary(db: Session = Depends(get_db), identity: IdentityContext = Depends(g
         CommercialContract.organization_id == identity.organization_id,
         CommercialContract.deleted_at.is_(None),
     ).group_by(CommercialContract.status)).all())
+    overdue = db.scalar(select(func.count(CommercialContract.id)).where(CommercialContract.organization_id == identity.organization_id, CommercialContract.deleted_at.is_(None), CommercialContract.status == "ENVIADO", CommercialContract.signature_due_at < date.today())) or 0
     return ContractSummary(
         total=sum(rows.values()), draft=rows.get("RASCUNHO", 0),
         awaiting_approval=rows.get("EM_REVISAO", 0), awaiting_signature=rows.get("ENVIADO", 0),
-        signed=rows.get("ASSINADO", 0), cancelled=rows.get("CANCELADO", 0),
+        signed=rows.get("ASSINADO", 0), cancelled=rows.get("CANCELADO", 0), overdue_signatures=overdue,
     )
 
 

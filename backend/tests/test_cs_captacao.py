@@ -1,3 +1,6 @@
+from datetime import date, timedelta
+
+
 def auth(token): return {"Authorization": f"Bearer {token}"}
 
 
@@ -70,9 +73,16 @@ def test_accepted_proposal_generates_and_tracks_contract(client, token):
     assert "Maria da Silva" in contract["content"]
     assert "{{cliente_nome}}" not in contract["content"]
 
-    for target in ["EM_REVISAO", "APROVADO", "ENVIADO"]:
+    for target in ["EM_REVISAO", "APROVADO"]:
         changed = client.patch(f"/api/v1/leads/{lead['id']}/contracts/{contract['id']}/status", headers=auth(token), json={"status": target})
         assert changed.status_code == 200, changed.text
+    due_at = str(date.today() + timedelta(days=7))
+    delivery = client.post(f"/api/v1/contracts/{contract['id']}/deliveries", headers=auth(token), json={"channel": "EMAIL", "recipient": "maria@example.com", "signature_due_at": due_at})
+    assert delivery.status_code == 201, delivery.text
+    resend = client.post(f"/api/v1/contracts/{contract['id']}/deliveries", headers=auth(token), json={"channel": "WHATSAPP", "recipient": "11999990000", "signature_due_at": due_at, "notes": "Cliente solicitou reenvio"})
+    assert resend.status_code == 201, resend.text
+    deliveries = client.get(f"/api/v1/contracts/{contract['id']}/deliveries", headers=auth(token))
+    assert deliveries.status_code == 200 and len(deliveries.json()) == 2
     signed = client.patch(f"/api/v1/leads/{lead['id']}/contracts/{contract['id']}/status", headers=auth(token), json={"status": "ASSINADO", "signature_reference": "Documento físico arquivado"})
     assert signed.status_code == 200, signed.text
     assert signed.json()["signed_at"]
@@ -91,6 +101,8 @@ def test_accepted_proposal_generates_and_tracks_contract(client, token):
     assert listed.status_code == 200, listed.text
     assert listed.json()[0]["contract_number"] == contract["contract_number"]
     assert listed.json()[0]["client_name"] == "Maria da Silva"
+    assert listed.json()[0]["delivery_channel"] == "WHATSAPP"
+    assert listed.json()[0]["signature_due_at"] == due_at
 
 
 def test_contract_template_crud(client, token):

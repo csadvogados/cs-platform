@@ -205,6 +205,7 @@ class ContractRead(ORMModel):
     template_id: UUID | None
     contract_number: str; title: str; content: str; status: str; version: int
     approved_by_id: UUID | None; approved_at: datetime | None; sent_at: datetime | None
+    signature_due_at: date | None; delivery_channel: str | None; delivery_recipient: str | None
     signed_at: datetime | None; signature_reference: str | None; notes: str | None
     created_at: datetime; updated_at: datetime
 
@@ -221,6 +222,22 @@ class ContractSummary(BaseModel):
     awaiting_signature: int = 0
     signed: int = 0
     cancelled: int = 0
+    overdue_signatures: int = 0
+
+
+class ContractDeliveryCreate(BaseModel):
+    channel: Literal["EMAIL", "WHATSAPP", "OUTRO"]
+    recipient: str = Field(min_length=3, max_length=320)
+    signature_due_at: date
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class ContractDeliveryRead(ContractDeliveryCreate, ORMModel):
+    id: UUID
+    contract_id: UUID
+    sent_by_id: UUID | None
+    sent_at: datetime
+    created_at: datetime
 
 
 class ContractTemplateCreate(BaseModel):

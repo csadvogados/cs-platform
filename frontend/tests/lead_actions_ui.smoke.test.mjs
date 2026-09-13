@@ -89,6 +89,16 @@ test("central de contratos permite acompanhar, filtrar e abrir documentos", () =
   assert.match(app, /data-contract-document/);
 });
 
+test("envio de contrato registra canal, destinatário, prazo e reenvio", () => {
+  assert.match(index, /id="contract-delivery-dialog"/);
+  assert.match(index, /name="signature_due_at" type="date"/);
+  assert.match(index, /id="contract-overdue"/);
+  assert.match(app, /data-send-contract/);
+  assert.match(app, /\/deliveries`/);
+  assert.match(app, /Registrar reenvio/);
+  assert.match(app, /Envio registrado no histórico do contrato/);
+});
+
 test("modelos configuráveis preenchem e geram contratos pelo serviço", () => {
   assert.match(index, /id="contract-template-dialog"/);
   assert.match(index, /\{\{cliente_nome\}\}/);

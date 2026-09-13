@@ -193,9 +193,25 @@ class CommercialContract(TimestampMixin, Base):
     approved_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    signature_due_at: Mapped[date | None] = mapped_column(Date)
+    delivery_channel: Mapped[str | None] = mapped_column(String(20))
+    delivery_recipient: Mapped[str | None] = mapped_column(String(320))
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     signature_reference: Mapped[str | None] = mapped_column(String(300))
     notes: Mapped[str | None] = mapped_column(Text)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     __table_args__ = (UniqueConstraint("organization_id", "contract_number", name="uq_contract_org_number"),)
+
+
+class ContractDelivery(TimestampMixin, Base):
+    __tablename__ = "contract_deliveries"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    contract_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("commercial_contracts.id", ondelete="CASCADE"), index=True)
+    sent_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    recipient: Mapped[str] = mapped_column(String(320), nullable=False)
+    signature_due_at: Mapped[date] = mapped_column(Date, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

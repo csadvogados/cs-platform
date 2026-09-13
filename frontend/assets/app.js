@@ -1957,7 +1957,12 @@
     $("#contract-review").textContent = summary.awaiting_approval || 0;
     $("#contract-signature").textContent = summary.awaiting_signature || 0;
     $("#contract-signed").textContent = summary.signed || 0;
-    $("#contract-table-body").innerHTML = state.contracts.items.map((contract) => `<tr><td><strong>${escapeHtml(contract.contract_number)}</strong><small>${escapeHtml(contract.title)}</small></td><td><strong>${escapeHtml(contract.client_name)}</strong><small>Lead: ${escapeHtml(contract.lead_name)}</small></td><td><span class="badge">${escapeHtml(contractStatusLabels[contract.status] || contract.status)}</span></td><td>${escapeHtml(formatDate(contract.updated_at, true))}</td><td><span class="button-row"><button class="text-link" type="button" data-contract-open-lead="${contract.lead_id}">Abrir lead</button><button class="text-link" type="button" data-contract-document="${contract.id}" data-contract-lead-id="${contract.lead_id}">Abrir documento</button></span></td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">Nenhum contrato encontrado.</td></tr>';
+    $("#contract-overdue").textContent = summary.overdue_signatures || 0;
+    $("#contract-table-body").innerHTML = state.contracts.items.map((contract) => {
+      const overdue = contract.status === "ENVIADO" && contract.signature_due_at && new Date(`${contract.signature_due_at}T23:59:59`) < new Date();
+      const deliveryButton = ["APROVADO", "ENVIADO"].includes(contract.status) ? `<button class="text-link" type="button" data-send-contract="${contract.id}" data-contract-lead-id="${contract.lead_id}">${contract.status === "ENVIADO" ? "Registrar reenvio" : "Registrar envio"}</button>` : "";
+      return `<tr><td><strong>${escapeHtml(contract.contract_number)}</strong><small>${escapeHtml(contract.title)}</small></td><td><strong>${escapeHtml(contract.client_name)}</strong><small>Lead: ${escapeHtml(contract.lead_name)}</small></td><td><span class="badge">${escapeHtml(contractStatusLabels[contract.status] || contract.status)}</span>${contract.delivery_channel ? `<small>${escapeHtml(contract.delivery_channel)} · ${escapeHtml(contract.delivery_recipient)}</small>` : ""}</td><td><span class="${overdue ? "danger-text" : ""}">${contract.signature_due_at ? escapeHtml(formatDate(contract.signature_due_at)) : "—"}</span></td><td>${escapeHtml(formatDate(contract.updated_at, true))}</td><td><span class="button-row"><button class="text-link" type="button" data-contract-open-lead="${contract.lead_id}">Abrir lead</button><button class="text-link" type="button" data-contract-document="${contract.id}" data-contract-lead-id="${contract.lead_id}">Abrir documento</button>${deliveryButton}</span></td></tr>`;
+    }).join("") || '<tr><td colspan="6" class="empty-cell">Nenhum contrato encontrado.</td></tr>';
     $("#new-contract-template").hidden = !canManageContractTemplates();
     $("#contract-template-list").innerHTML = state.contracts.templates.map((template) => `<article class="list-row"><span class="list-icon">DOC</span><div><strong>${escapeHtml(template.name)}</strong><small>${escapeHtml(template.title)} · ${template.service_type_id ? escapeHtml(leadCatalogName("services", template.service_type_id)) : "Todos os serviços"} · ${template.active ? "Ativo" : "Inativo"}</small></div>${canManageContractTemplates() ? `<div class="button-row"><button class="text-link" type="button" data-edit-contract-template="${template.id}">Editar</button><button class="text-link danger-text" type="button" data-delete-contract-template="${template.id}">Excluir</button></div>` : ""}</article>`).join("") || '<p class="empty-cell">Nenhum modelo cadastrado.</p>';
   }
@@ -2012,6 +2017,22 @@
     form.elements.proposal_id.value = proposalId;
     $("#contract-generation-template").innerHTML = templates.map((template) => `<option value="${template.id}">${escapeHtml(template.name)}</option>`).join("");
     $("#contract-generation-dialog").showModal();
+  }
+
+  function openContractDeliveryDialog(contractId, leadId) {
+    const contract = state.contracts.items.find((item) => String(item.id) === String(contractId));
+    const lead = state.leads.items.find((item) => String(item.id) === String(leadId));
+    const form = $("#contract-delivery-form");
+    form.reset();
+    form.elements.contract_id.value = contractId;
+    form.elements.lead_id.value = leadId || contract?.lead_id || "";
+    form.elements.recipient.value = contract?.delivery_recipient || lead?.email || lead?.whatsapp || lead?.phone || "";
+    const due = new Date();
+    due.setDate(due.getDate() + 7);
+    form.elements.signature_due_at.min = localDateValue(new Date());
+    form.elements.signature_due_at.value = localDateValue(due);
+    $("#contract-delivery-title").textContent = contract?.status === "ENVIADO" ? "Registrar reenvio" : "Registrar envio";
+    $("#contract-delivery-dialog").showModal();
   }
 
   const leadStatuses = ["NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA", "CONVERTIDO", "PERDIDO"];
@@ -2089,10 +2110,11 @@
       const contractButton = x.status === "ACEITA" && lead.client_id && !contract ? `<button class="text-link" type="button" data-create-contract="${x.id}" data-contract-lead-id="${id}">Gerar contrato</button>` : "";
       return `<article class="lead-proposal-event"><strong>PROPOSTA · ${escapeHtml(x.status)}</strong><span>${escapeHtml(formatCurrency(x.fixed_value))}${Number(x.success_percentage || 0) ? ` + ${escapeHtml(x.success_percentage)}% de êxito` : ""}</span>${x.notes ? `<span>${escapeHtml(x.notes)}</span>` : ""}<small>${x.valid_until ? `Válida até ${escapeHtml(formatDate(x.valid_until))}` : `Criada em ${escapeHtml(formatDate(x.created_at, true))}`}</small>${["RASCUNHO", "ENVIADA"].includes(x.status) ? `<span class="proposal-status-actions"><button class="text-link" type="button" data-proposal-status="ACEITA" data-proposal-id="${x.id}" data-proposal-lead-id="${id}">Marcar aceita</button><button class="text-link danger-text" type="button" data-proposal-status="RECUSADA" data-proposal-id="${x.id}" data-proposal-lead-id="${id}">Marcar recusada</button></span>` : contractButton}</article>`;
     });
-    const contractActions = { RASCUNHO:["EM_REVISAO","Enviar para revisão"], EM_REVISAO:["APROVADO","Aprovar"], APROVADO:["ENVIADO","Registrar envio"], ENVIADO:["ASSINADO","Registrar assinatura"] };
+    const contractActions = { RASCUNHO:["EM_REVISAO","Enviar para revisão"], EM_REVISAO:["APROVADO","Aprovar"], ENVIADO:["ASSINADO","Registrar assinatura"] };
     const contractEvents = contracts.map((x) => {
       const next = contractActions[x.status];
-      return `<article class="lead-contract-event"><strong>CONTRATO ${escapeHtml(x.contract_number)} · ${escapeHtml(x.status.replaceAll("_", " "))}</strong><span>${escapeHtml(x.title)}</span><small>Versão ${x.version} · criado em ${escapeHtml(formatDate(x.created_at, true))}</small><span class="proposal-status-actions"><button class="text-link" type="button" data-open-contract="${x.id}" data-contract-lead-id="${id}">Abrir documento</button>${next ? `<button class="text-link" type="button" data-contract-status="${next[0]}" data-contract-id="${x.id}" data-contract-lead-id="${id}">${next[1]}</button>` : ""}</span></article>`;
+      const deliveryButton = ["APROVADO", "ENVIADO"].includes(x.status) ? `<button class="text-link" type="button" data-send-contract="${x.id}" data-contract-lead-id="${id}">${x.status === "ENVIADO" ? "Registrar reenvio" : "Registrar envio"}</button>` : "";
+      return `<article class="lead-contract-event"><strong>CONTRATO ${escapeHtml(x.contract_number)} · ${escapeHtml(x.status.replaceAll("_", " "))}</strong><span>${escapeHtml(x.title)}</span><small>Versão ${x.version} · criado em ${escapeHtml(formatDate(x.created_at, true))}${x.signature_due_at ? ` · assinatura até ${escapeHtml(formatDate(x.signature_due_at))}` : ""}</small><span class="proposal-status-actions"><button class="text-link" type="button" data-open-contract="${x.id}" data-contract-lead-id="${id}">Abrir documento</button>${deliveryButton}${next ? `<button class="text-link" type="button" data-contract-status="${next[0]}" data-contract-id="${x.id}" data-contract-lead-id="${id}">${next[1]}</button>` : ""}</span></article>`;
     });
     const service = state.leads.catalogs.services.find((item) => String(item.id) === String(lead.service_type_id));
     const recoveryButton = lead.status === "CONVERTIDO" && service?.code === "CS_RECUPERA" && !lead.recovery_case_id ? `<button class="primary-button" data-recovery-lead="${id}">Abrir caso CS Recupera</button>` : "";
@@ -5039,8 +5061,10 @@
     $("#contract-table-body").addEventListener("click", (event) => {
       const openLead = event.target.closest("[data-contract-open-lead]");
       const openDocument = event.target.closest("[data-contract-document]");
+      const sendContract = event.target.closest("[data-send-contract]");
       if (openLead) openContractLead(openLead.dataset.contractOpenLead).catch((error) => toast(error.message, "error"));
       else if (openDocument) openLeadContractDocument(openDocument.dataset.contractLeadId, openDocument.dataset.contractDocument).catch((error) => toast(error.message, "error"));
+      else if (sendContract) openContractDeliveryDialog(sendContract.dataset.sendContract, sendContract.dataset.contractLeadId);
     });
     $("#new-contract-template").addEventListener("click", () => openContractTemplateDialog());
     $("#contract-template-list").addEventListener("click", async (event) => {
@@ -5092,6 +5116,21 @@
       setBusy(button, true, "Gerando…");
       try { await createLeadContract(raw.lead_id, raw.proposal_id, raw.template_id); }
       catch (error) { toast(error.message, "error"); }
+      finally { setBusy(button, false); }
+    });
+    $("#contract-delivery-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const raw = Object.fromEntries(new FormData(form));
+      const button = $('button[type="submit"]', form);
+      setBusy(button, true, "Registrando…");
+      try {
+        await api(`/api/v1/contracts/${raw.contract_id}/deliveries`, { method:"POST", body:JSON.stringify({ channel:raw.channel, recipient:raw.recipient.trim(), signature_due_at:raw.signature_due_at, notes:raw.notes.trim() || null }) });
+        closeDialog($("#contract-delivery-dialog"));
+        await loadContracts();
+        if (raw.lead_id && $("#lead-detail-dialog").open) await openLeadDetail(raw.lead_id);
+        toast("Envio registrado no histórico do contrato.");
+      } catch (error) { toast(error.message, "error"); }
       finally { setBusy(button, false); }
     });
     $("#lead-distribute").addEventListener("click", openLeadDistribution);
@@ -5151,7 +5190,7 @@
       }
     });
     $("#lead-detail-dialog").addEventListener("click", async (event) => {
-      const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]"), recovery = event.target.closest("[data-recovery-lead]"), completeLeadTask = event.target.closest("[data-complete-lead-task]"), proposalStatus = event.target.closest("[data-proposal-status]"), createContract = event.target.closest("[data-create-contract]"), contractStatus = event.target.closest("[data-contract-status]"), openContract = event.target.closest("[data-open-contract]");
+      const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]"), recovery = event.target.closest("[data-recovery-lead]"), completeLeadTask = event.target.closest("[data-complete-lead-task]"), proposalStatus = event.target.closest("[data-proposal-status]"), createContract = event.target.closest("[data-create-contract]"), contractStatus = event.target.closest("[data-contract-status]"), openContract = event.target.closest("[data-open-contract]"), sendContract = event.target.closest("[data-send-contract]");
       if (edit) editLead(edit.dataset.editLead);
       else if (interact) { const description = window.prompt("Descreva a interação realizada:"); if (description) { await api(`/api/v1/leads/${interact.dataset.interactLead}/interactions`, { method: "POST", body: JSON.stringify({ interaction_type: "NOTA", description, occurred_at: new Date().toISOString() }) }); await openLeadDetail(interact.dataset.interactLead); } }
       else if (task) openLeadTaskDialog(task.dataset.taskLead);
@@ -5168,6 +5207,7 @@
       else if (createContract) await openContractGenerationDialog(createContract.dataset.contractLeadId, createContract.dataset.createContract).catch((error) => toast(error.message, "error"));
       else if (contractStatus) await updateLeadContractStatus(contractStatus.dataset.contractLeadId, contractStatus.dataset.contractId, contractStatus.dataset.contractStatus).catch((error) => toast(error.message, "error"));
       else if (openContract) await openLeadContractDocument(openContract.dataset.contractLeadId, openContract.dataset.openContract).catch((error) => toast(error.message, "error"));
+      else if (sendContract) openContractDeliveryDialog(sendContract.dataset.sendContract, sendContract.dataset.contractLeadId);
     });
     $("#contract-signature-form").addEventListener("submit", async (event) => {
       event.preventDefault();
