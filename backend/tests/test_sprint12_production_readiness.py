@@ -11,7 +11,7 @@ def test_database_has_single_migration_head():
     config = Config(str(ROOT / "backend" / "alembic.ini"))
     config.set_main_option("script_location", str(ROOT / "backend" / "alembic"))
     heads = ScriptDirectory.from_config(config).get_heads()
-    assert heads == ["0027_contract_templates"]
+    assert heads == ["0028_contract_deliveries"]
 
 
 def test_production_endpoints_are_in_openapi(client, token):
