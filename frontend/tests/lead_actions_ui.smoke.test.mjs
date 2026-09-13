@@ -96,6 +96,9 @@ test("modelos configuráveis preenchem e geram contratos pelo serviço", () => {
   assert.match(app, /\/api\/v1\/contracts\/templates/);
   assert.match(app, /openContractGenerationDialog/);
   assert.match(app, /template_id:templateId/);
+  assert.match(index, /id="contract-template-delete-dialog"/);
+  assert.match(app, /contract-template-delete-form/);
+  assert.doesNotMatch(app, /window\.confirm\("Excluir este modelo de contrato/);
 });
 
 test("timeline permite decidir proposta com transição auditada pela API", () => {

@@ -108,6 +108,9 @@ def delete_template(template_id: UUID, db: Session = Depends(get_db), identity: 
     obj = db.scalar(select(ContractTemplate).where(ContractTemplate.id == template_id, ContractTemplate.organization_id == identity.organization_id, ContractTemplate.deleted_at.is_(None)))
     if not obj:
         raise HTTPException(404, "Modelo não encontrado")
+    remaining = db.scalar(select(func.count(ContractTemplate.id)).where(ContractTemplate.organization_id == identity.organization_id, ContractTemplate.id != template_id, ContractTemplate.deleted_at.is_(None))) or 0
+    if remaining == 0:
+        raise HTTPException(409, "Mantenha pelo menos um modelo de contrato cadastrado")
     obj.deleted_at = datetime.now(timezone.utc)
     record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id, entity_type="contract_template", entity_id=obj.id, action="delete", new_values={"name": obj.name})
     save(db)

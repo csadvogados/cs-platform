@@ -95,6 +95,8 @@ def test_accepted_proposal_generates_and_tracks_contract(client, token):
 
 def test_contract_template_crud(client, token):
     services = catalogs(client, token)["services"]
+    default_templates = client.get("/api/v1/contracts/templates", headers=auth(token))
+    assert default_templates.status_code == 200 and len(default_templates.json()) == 1
     service_id = next(item["id"] for item in services if item["code"] == "CS_RECUPERA")
     created = client.post("/api/v1/contracts/templates", headers=auth(token), json={
         "name": "Modelo CS Recupera", "title": "Contrato CS Recupera",
