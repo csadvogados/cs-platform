@@ -32,6 +32,7 @@ from app.api.routes import (
     documents,
     judicial_reports,
     leads,
+    contracts,
 )
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -183,6 +184,11 @@ app.include_router(
     leads.router,
     prefix=f"{settings.api_v1_prefix}/leads",
     tags=["CS Captação / Leads"],
+)
+app.include_router(
+    contracts.router,
+    prefix=f"{settings.api_v1_prefix}/contracts",
+    tags=["Commercial Contracts"],
 )
 app.include_router(
     clients.router,

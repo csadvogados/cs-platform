@@ -18,6 +18,7 @@
     judicialReport: { data: null, dateFrom: "", dateTo: "" },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
     leads: { items: [], dashboard: null, reports: null, team: [], catalogs: { sources: [], services: [] } },
+    contracts: { items: [], summary: null, filters: { search: "", status: "" } },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
@@ -59,6 +60,7 @@
     agenda: ["ROTINA UNIFICADA", "Agenda operacional", "Atualizar"],
     clientDetail: ["CADASTRO DO CLIENTE", "Detalhes do cliente", "Nova receita"],
     crm: ["CORE COMERCIAL", "CS Captação", "Novo lead"],
+    contracts: ["GESTÃO COMERCIAL", "Central de contratos", "Atualizar"],
     users: ["ORGANIZAÇÃO", "Equipe", "Atualizar"],
     audit: ["CONTROLE E SEGURANÇA", "Histórico de atividades", "Atualizar"],
     settings: ["SEGURANÇA E CONTA", "Configurações", "Atualizar"]
@@ -605,7 +607,7 @@
     $("#view-kicker").textContent = viewMeta[view][0];
     $("#view-title").textContent = viewMeta[view][1];
     $("#top-action-button").textContent = viewMeta[view][2];
-    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management", "performance", "notifications", "recovery"].includes(view);
+    $("#top-action-button").hidden = ["audit", "collections", "agenda", "management", "performance", "notifications", "recovery", "contracts"].includes(view);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1937,6 +1939,40 @@
     renderLeads();
     renderCrm();
     renderDashboard();
+  }
+
+  const contractStatusLabels = {
+    RASCUNHO: "Rascunho", EM_REVISAO: "Em revisão", APROVADO: "Aprovado",
+    ENVIADO: "Aguardando assinatura", ASSINADO: "Assinado", CANCELADO: "Cancelado"
+  };
+
+  function renderContracts() {
+    const summary = state.contracts.summary || {};
+    $("#contract-total").textContent = summary.total || 0;
+    $("#contract-draft").textContent = summary.draft || 0;
+    $("#contract-review").textContent = summary.awaiting_approval || 0;
+    $("#contract-signature").textContent = summary.awaiting_signature || 0;
+    $("#contract-signed").textContent = summary.signed || 0;
+    $("#contract-table-body").innerHTML = state.contracts.items.map((contract) => `<tr><td><strong>${escapeHtml(contract.contract_number)}</strong><small>${escapeHtml(contract.title)}</small></td><td><strong>${escapeHtml(contract.client_name)}</strong><small>Lead: ${escapeHtml(contract.lead_name)}</small></td><td><span class="badge">${escapeHtml(contractStatusLabels[contract.status] || contract.status)}</span></td><td>${escapeHtml(formatDate(contract.updated_at, true))}</td><td><span class="button-row"><button class="text-link" type="button" data-contract-open-lead="${contract.lead_id}">Abrir lead</button><button class="text-link" type="button" data-contract-document="${contract.id}" data-contract-lead-id="${contract.lead_id}">Abrir documento</button></span></td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">Nenhum contrato encontrado.</td></tr>';
+  }
+
+  async function loadContracts() {
+    const params = new URLSearchParams({ limit: "200" });
+    if (state.contracts.filters.search) params.set("search", state.contracts.filters.search);
+    if (state.contracts.filters.status) params.set("status", state.contracts.filters.status);
+    const [summary, items] = await Promise.all([
+      api("/api/v1/contracts/summary"),
+      api(`/api/v1/contracts?${params}`)
+    ]);
+    state.contracts.summary = summary;
+    state.contracts.items = Array.isArray(items) ? items : [];
+    renderContracts();
+  }
+
+  async function openContractLead(leadId) {
+    if (!state.leads.items.some((lead) => String(lead.id) === String(leadId))) await loadCrm();
+    setView("crm");
+    await openLeadDetail(leadId);
   }
 
   const leadStatuses = ["NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA", "CONVERTIDO", "PERDIDO"];
@@ -4948,6 +4984,24 @@
       else if (select) changeOpportunityStage(select.dataset.opportunityStage, select.value, select);
     });
     $("#lead-refresh").addEventListener("click", () => loadCrm().catch((error) => toast(error.message, "error")));
+    $("#contract-refresh").addEventListener("click", () => loadContracts().catch((error) => toast(error.message, "error")));
+    $("#contract-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      state.contracts.filters.search = $("#contract-search").value.trim();
+      state.contracts.filters.status = $("#contract-status-filter").value;
+      loadContracts().catch((error) => toast(error.message, "error"));
+    });
+    $("#contract-clear-filters").addEventListener("click", () => {
+      $("#contract-filter-form").reset();
+      state.contracts.filters = { search: "", status: "" };
+      loadContracts().catch((error) => toast(error.message, "error"));
+    });
+    $("#contract-table-body").addEventListener("click", (event) => {
+      const openLead = event.target.closest("[data-contract-open-lead]");
+      const openDocument = event.target.closest("[data-contract-document]");
+      if (openLead) openContractLead(openLead.dataset.contractOpenLead).catch((error) => toast(error.message, "error"));
+      else if (openDocument) openLeadContractDocument(openDocument.dataset.contractLeadId, openDocument.dataset.contractDocument).catch((error) => toast(error.message, "error"));
+    });
     $("#lead-distribute").addEventListener("click", openLeadDistribution);
     $("#lead-distribution-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -5096,6 +5150,7 @@
       if (button.dataset.view === "management") loadManagement().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "performance") loadPerformance().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "recovery") loadRecoveryCases(1).catch((error) => toast(error.message, "error"));
+      if (button.dataset.view === "contracts") loadContracts().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "settings") loadSettings().catch((error) => toast(error.message, "error"));
       if (button.dataset.view === "audit" && canViewAudit()) loadAudit(1).catch((error) => toast(error.message, "error"));
     }));
