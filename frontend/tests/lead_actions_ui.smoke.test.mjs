@@ -75,6 +75,9 @@ test("proposta aceita gera contrato com aprovação e assinatura manual", () => 
   assert.match(app, /Gerar contrato/);
   assert.match(app, /Registrar assinatura/);
   assert.match(app, /openLeadContractDocument/);
+  assert.match(index, /id="contract-signature-dialog"/);
+  assert.match(index, /Confirmar assinatura/);
+  assert.doesNotMatch(app, /window\.prompt\("Informe a referência da assinatura/);
 });
 
 test("timeline permite decidir proposta com transição auditada pela API", () => {

@@ -699,6 +699,19 @@
 
     <dialog id="lead-detail-dialog" class="modal modal-wide"><div id="lead-detail-content"></div></dialog>
 
+    <dialog id="contract-signature-dialog" class="modal">
+      <form id="contract-signature-form">
+        <div class="modal-header"><div><p class="eyebrow dark">CONTRATO COMERCIAL</p><h2>Registrar assinatura</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="lead_id" type="hidden" />
+        <input name="contract_id" type="hidden" />
+        <div class="form-grid single">
+          <label><span>Referência da assinatura *</span><input name="signature_reference" required maxlength="300" placeholder="Ex.: documento físico assinado e arquivado" /></label>
+          <p class="form-help">Informe onde ou como o documento assinado foi guardado. Esta etapa registra uma assinatura já realizada.</p>
+        </div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Confirmar assinatura</button></div>
+      </form>
+    </dialog>
+
     <dialog id="lead-task-dialog" class="modal">
       <form id="lead-task-form" method="dialog">
         <div class="modal-header"><div><p class="eyebrow dark">CS CAPTAÇÃO</p><h2>Agendar próxima ação</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
