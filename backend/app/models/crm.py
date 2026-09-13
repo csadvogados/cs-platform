@@ -162,6 +162,21 @@ class LeadProposal(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
 
+class ContractTemplate(TimestampMixin, Base):
+    __tablename__ = "contract_templates"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    service_type_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("service_types.id", ondelete="SET NULL"), index=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_contract_template_org_name"),)
+
+
 class CommercialContract(TimestampMixin, Base):
     __tablename__ = "commercial_contracts"
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -169,6 +184,7 @@ class CommercialContract(TimestampMixin, Base):
     lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"), index=True)
     proposal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("lead_proposals.id", ondelete="RESTRICT"), unique=True, index=True)
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="RESTRICT"), index=True)
+    template_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contract_templates.id", ondelete="SET NULL"), index=True)
     contract_number: Mapped[str] = mapped_column(String(40), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)

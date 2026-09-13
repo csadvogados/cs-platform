@@ -183,7 +183,8 @@ class ProposalUpdate(BaseModel):
 
 
 class ContractCreate(BaseModel):
-    title: str = Field(default="Contrato de prestação de serviços advocatícios", min_length=3, max_length=200)
+    template_id: UUID | None = None
+    title: str | None = Field(default=None, min_length=3, max_length=200)
     content: str | None = Field(default=None, max_length=50000)
     notes: str | None = Field(default=None, max_length=5000)
 
@@ -201,6 +202,7 @@ class ContractStatusUpdate(BaseModel):
 
 class ContractRead(ORMModel):
     id: UUID; organization_id: UUID; lead_id: UUID; proposal_id: UUID; client_id: UUID
+    template_id: UUID | None
     contract_number: str; title: str; content: str; status: str; version: int
     approved_by_id: UUID | None; approved_at: datetime | None; sent_at: datetime | None
     signed_at: datetime | None; signature_reference: str | None; notes: str | None
@@ -219,6 +221,30 @@ class ContractSummary(BaseModel):
     awaiting_signature: int = 0
     signed: int = 0
     cancelled: int = 0
+
+
+class ContractTemplateCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=150)
+    title: str = Field(min_length=3, max_length=200)
+    content: str = Field(min_length=20, max_length=50000)
+    service_type_id: UUID | None = None
+    active: bool = True
+
+
+class ContractTemplateUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=150)
+    title: str | None = Field(default=None, min_length=3, max_length=200)
+    content: str | None = Field(default=None, min_length=20, max_length=50000)
+    service_type_id: UUID | None = None
+    active: bool | None = None
+
+
+class ContractTemplateRead(ContractTemplateCreate, ORMModel):
+    id: UUID
+    organization_id: UUID
+    created_by_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class ConvertLead(BaseModel):

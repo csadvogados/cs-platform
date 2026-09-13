@@ -18,7 +18,7 @@
     judicialReport: { data: null, dateFrom: "", dateTo: "" },
     crm: { summary: null, contacts: [], opportunities: [], tasks: [], interactions: [] },
     leads: { items: [], dashboard: null, reports: null, team: [], catalogs: { sources: [], services: [] } },
-    contracts: { items: [], summary: null, filters: { search: "", status: "" } },
+    contracts: { items: [], templates: [], summary: null, filters: { search: "", status: "" } },
     crmFilters: { search: "", taskStatus: "all", priority: "all", interactionType: "all" },
     editingCrm: { contact: null, opportunity: null, task: null, interaction: null },
     selectedClient: null,
@@ -1946,6 +1946,10 @@
     ENVIADO: "Aguardando assinatura", ASSINADO: "Assinado", CANCELADO: "Cancelado"
   };
 
+  function canManageContractTemplates() {
+    return Boolean(state.user?.is_superuser || ["admin", "supervisor", "advogado"].includes(String(state.user?.role || "").toLowerCase()));
+  }
+
   function renderContracts() {
     const summary = state.contracts.summary || {};
     $("#contract-total").textContent = summary.total || 0;
@@ -1954,18 +1958,22 @@
     $("#contract-signature").textContent = summary.awaiting_signature || 0;
     $("#contract-signed").textContent = summary.signed || 0;
     $("#contract-table-body").innerHTML = state.contracts.items.map((contract) => `<tr><td><strong>${escapeHtml(contract.contract_number)}</strong><small>${escapeHtml(contract.title)}</small></td><td><strong>${escapeHtml(contract.client_name)}</strong><small>Lead: ${escapeHtml(contract.lead_name)}</small></td><td><span class="badge">${escapeHtml(contractStatusLabels[contract.status] || contract.status)}</span></td><td>${escapeHtml(formatDate(contract.updated_at, true))}</td><td><span class="button-row"><button class="text-link" type="button" data-contract-open-lead="${contract.lead_id}">Abrir lead</button><button class="text-link" type="button" data-contract-document="${contract.id}" data-contract-lead-id="${contract.lead_id}">Abrir documento</button></span></td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">Nenhum contrato encontrado.</td></tr>';
+    $("#new-contract-template").hidden = !canManageContractTemplates();
+    $("#contract-template-list").innerHTML = state.contracts.templates.map((template) => `<article class="list-row"><span class="list-icon">DOC</span><div><strong>${escapeHtml(template.name)}</strong><small>${escapeHtml(template.title)} · ${template.service_type_id ? escapeHtml(leadCatalogName("services", template.service_type_id)) : "Todos os serviços"} · ${template.active ? "Ativo" : "Inativo"}</small></div>${canManageContractTemplates() ? `<div class="button-row"><button class="text-link" type="button" data-edit-contract-template="${template.id}">Editar</button><button class="text-link danger-text" type="button" data-delete-contract-template="${template.id}">Excluir</button></div>` : ""}</article>`).join("") || '<p class="empty-cell">Nenhum modelo cadastrado.</p>';
   }
 
   async function loadContracts() {
     const params = new URLSearchParams({ limit: "200" });
     if (state.contracts.filters.search) params.set("search", state.contracts.filters.search);
     if (state.contracts.filters.status) params.set("status", state.contracts.filters.status);
-    const [summary, items] = await Promise.all([
+    const [summary, items, templates] = await Promise.all([
       api("/api/v1/contracts/summary"),
-      api(`/api/v1/contracts?${params}`)
+      api(`/api/v1/contracts?${params}`),
+      api("/api/v1/contracts/templates?active_only=false")
     ]);
     state.contracts.summary = summary;
     state.contracts.items = Array.isArray(items) ? items : [];
+    state.contracts.templates = Array.isArray(templates) ? templates : [];
     renderContracts();
   }
 
@@ -1973,6 +1981,37 @@
     if (!state.leads.items.some((lead) => String(lead.id) === String(leadId))) await loadCrm();
     setView("crm");
     await openLeadDetail(leadId);
+  }
+
+  function openContractTemplateDialog(templateId = "") {
+    const form = $("#contract-template-form");
+    form.reset();
+    const template = state.contracts.templates.find((item) => String(item.id) === String(templateId));
+    form.elements.template_id.value = template?.id || "";
+    form.elements.name.value = template?.name || "";
+    form.elements.title.value = template?.title || "Contrato de prestação de serviços advocatícios";
+    form.elements.content.value = template?.content || state.contracts.templates.find((item) => item.active)?.content || "";
+    form.elements.active.value = String(template?.active ?? true);
+    $("#contract-template-service").innerHTML = '<option value="">Todos os serviços</option>' + state.leads.catalogs.services.map((service) => `<option value="${service.id}">${escapeHtml(service.name)}</option>`).join("");
+    form.elements.service_type_id.value = template?.service_type_id || "";
+    $("#contract-template-dialog-title").textContent = template ? "Editar modelo" : "Novo modelo";
+    $("#contract-template-dialog").showModal();
+  }
+
+  async function openContractGenerationDialog(leadId, proposalId) {
+    if (!state.contracts.templates.length) await loadContracts();
+    const lead = state.leads.items.find((item) => String(item.id) === String(leadId));
+    const templates = state.contracts.templates.filter((item) => item.active && (!item.service_type_id || String(item.service_type_id) === String(lead?.service_type_id)));
+    if (!templates.length) {
+      toast("Cadastre um modelo ativo para este serviço antes de gerar o contrato.", "error");
+      return;
+    }
+    const form = $("#contract-generation-form");
+    form.reset();
+    form.elements.lead_id.value = leadId;
+    form.elements.proposal_id.value = proposalId;
+    $("#contract-generation-template").innerHTML = templates.map((template) => `<option value="${template.id}">${escapeHtml(template.name)}</option>`).join("");
+    $("#contract-generation-dialog").showModal();
   }
 
   const leadStatuses = ["NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA", "CONVERTIDO", "PERDIDO"];
@@ -2063,9 +2102,10 @@
     if (!dialog.open) dialog.showModal();
   }
 
-  async function createLeadContract(leadId, proposalId) {
-    await api(`/api/v1/leads/${leadId}/proposals/${proposalId}/contract`, { method:"POST", body:JSON.stringify({}) });
+  async function createLeadContract(leadId, proposalId, templateId) {
+    await api(`/api/v1/leads/${leadId}/proposals/${proposalId}/contract`, { method:"POST", body:JSON.stringify({ template_id:templateId }) });
     toast("Contrato gerado em rascunho.");
+    closeDialog($("#contract-generation-dialog"));
     await openLeadDetail(leadId);
   }
 
@@ -5002,6 +5042,45 @@
       if (openLead) openContractLead(openLead.dataset.contractOpenLead).catch((error) => toast(error.message, "error"));
       else if (openDocument) openLeadContractDocument(openDocument.dataset.contractLeadId, openDocument.dataset.contractDocument).catch((error) => toast(error.message, "error"));
     });
+    $("#new-contract-template").addEventListener("click", () => openContractTemplateDialog());
+    $("#contract-template-list").addEventListener("click", async (event) => {
+      const edit = event.target.closest("[data-edit-contract-template]");
+      const remove = event.target.closest("[data-delete-contract-template]");
+      if (edit) openContractTemplateDialog(edit.dataset.editContractTemplate);
+      else if (remove && window.confirm("Excluir este modelo de contrato? Os contratos já gerados serão preservados.")) {
+        try {
+          await api(`/api/v1/contracts/templates/${remove.dataset.deleteContractTemplate}`, { method:"DELETE" });
+          await loadContracts();
+          toast("Modelo excluído. Os contratos existentes foram preservados.");
+        } catch (error) { toast(error.message, "error"); }
+      }
+    });
+    $("#contract-template-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const raw = Object.fromEntries(new FormData(form));
+      const id = raw.template_id;
+      const payload = { name:raw.name.trim(), title:raw.title.trim(), content:raw.content.trim(), service_type_id:raw.service_type_id || null, active:raw.active === "true" };
+      const button = $('button[type="submit"]', form);
+      setBusy(button, true, "Salvando…");
+      try {
+        await api(id ? `/api/v1/contracts/templates/${id}` : "/api/v1/contracts/templates", { method:id ? "PATCH" : "POST", body:JSON.stringify(payload) });
+        closeDialog($("#contract-template-dialog"));
+        await loadContracts();
+        toast(id ? "Modelo atualizado." : "Modelo cadastrado.");
+      } catch (error) { toast(error.message, "error"); }
+      finally { setBusy(button, false); }
+    });
+    $("#contract-generation-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const raw = Object.fromEntries(new FormData(form));
+      const button = $('button[type="submit"]', form);
+      setBusy(button, true, "Gerando…");
+      try { await createLeadContract(raw.lead_id, raw.proposal_id, raw.template_id); }
+      catch (error) { toast(error.message, "error"); }
+      finally { setBusy(button, false); }
+    });
     $("#lead-distribute").addEventListener("click", openLeadDistribution);
     $("#lead-distribution-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -5073,7 +5152,7 @@
         await loadCrm();
       }
       else if (proposalStatus) await updateLeadProposalStatus(proposalStatus.dataset.proposalLeadId, proposalStatus.dataset.proposalId, proposalStatus.dataset.proposalStatus);
-      else if (createContract) await createLeadContract(createContract.dataset.contractLeadId, createContract.dataset.createContract).catch((error) => toast(error.message, "error"));
+      else if (createContract) await openContractGenerationDialog(createContract.dataset.contractLeadId, createContract.dataset.createContract).catch((error) => toast(error.message, "error"));
       else if (contractStatus) await updateLeadContractStatus(contractStatus.dataset.contractLeadId, contractStatus.dataset.contractId, contractStatus.dataset.contractStatus).catch((error) => toast(error.message, "error"));
       else if (openContract) await openLeadContractDocument(openContract.dataset.contractLeadId, openContract.dataset.openContract).catch((error) => toast(error.message, "error"));
     });
