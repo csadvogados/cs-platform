@@ -550,8 +550,24 @@
     const element = document.createElement("div");
     element.className = `toast ${type === "error" ? "error" : ""}`;
     element.textContent = message;
-    $("#toast-region").appendChild(element);
-    window.setTimeout(() => element.remove(), 4500);
+    const openDialogs = $$('dialog[open]');
+    const activeDialog = openDialogs[openDialogs.length - 1];
+    let region = $("#toast-region");
+    if (activeDialog) {
+      region = $(".dialog-toast-region", activeDialog);
+      if (!region) {
+        region = document.createElement("div");
+        region.className = "dialog-toast-region";
+        region.setAttribute("aria-live", "assertive");
+        activeDialog.appendChild(region);
+      }
+    }
+    region.appendChild(element);
+    window.setTimeout(() => {
+      const parent = element.parentElement;
+      element.remove();
+      if (parent?.classList.contains("dialog-toast-region") && !parent.children.length) parent.remove();
+    }, 7000);
   }
 
   function showLogin(message = "") {
@@ -2173,6 +2189,7 @@
     if (!lead) return;
     const form = $("#lead-proposal-form");
     form.reset();
+    $("#lead-proposal-error").hidden = true;
     form.elements.lead_id.value = id;
     form.elements.reference.value = `${lead.full_name} · ${leadCatalogName("services", lead.service_type_id)}`;
     form.elements.valid_until.min = localDateValue(new Date());
@@ -5240,6 +5257,7 @@
     $("#lead-proposal-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
+      $("#lead-proposal-error").hidden = true;
       const raw = Object.fromEntries(new FormData(form));
       const id = raw.lead_id;
       const payload = {
@@ -5255,7 +5273,11 @@
         await loadCrm();
         toast("Proposta salva e vinculada ao lead.");
         await openLeadDetail(id);
-      } catch (error) { toast(error.message, "error"); }
+      } catch (error) {
+        $("#lead-proposal-error").textContent = error.message || "Não foi possível salvar a proposta.";
+        $("#lead-proposal-error").hidden = false;
+        toast(error.message, "error");
+      }
     });
     $("#lead-conversion-form").addEventListener("submit", async (event) => {
       event.preventDefault(); const form = event.currentTarget; const raw = Object.fromEntries(new FormData(form));

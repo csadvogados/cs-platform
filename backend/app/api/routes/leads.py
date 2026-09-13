@@ -27,7 +27,7 @@ DEFAULT_SERVICES = [("CS_RECUPERA","CS Recupera"),("CONSUMIDOR","Consumidor"),("
 
 
 def authorize(ident: IdentityContext):
-    if not ident.is_superuser and ident.role not in ALLOWED_ROLES:
+    if not ident.is_superuser and str(ident.role).lower() not in ALLOWED_ROLES:
         raise HTTPException(403, "Perfil sem acesso ao core comercial")
 
 
