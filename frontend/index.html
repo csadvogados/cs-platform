@@ -427,6 +427,7 @@
               <button id="contract-clear-filters" class="secondary-button" type="button">Limpar</button>
             </form>
             <div class="table-wrap"><table><thead><tr><th>Contrato</th><th>Cliente</th><th>Situação</th><th>Atualizado em</th><th>Ações</th></tr></thead><tbody id="contract-table-body"><tr><td colspan="5" class="empty-cell">Abra a central para carregar os contratos.</td></tr></tbody></table></div>
+            <section class="panel"><div class="panel-header"><div><p class="eyebrow dark">PADRONIZAÇÃO</p><h3>Modelos de contrato</h3></div><button id="new-contract-template" class="primary-button" type="button">Novo modelo</button></div><div id="contract-template-list" class="stack-list panel-list"><div class="loading-row">Carregando modelos…</div></div></section>
           </section>
 
           <section id="view-users" class="page-view" aria-labelledby="users-heading">
@@ -728,6 +729,31 @@
           <p class="form-help">Informe onde ou como o documento assinado foi guardado. Esta etapa registra uma assinatura já realizada.</p>
         </div>
         <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Confirmar assinatura</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="contract-generation-dialog" class="modal">
+      <form id="contract-generation-form">
+        <div class="modal-header"><div><p class="eyebrow dark">CONTRATO COMERCIAL</p><h2>Gerar contrato</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="lead_id" type="hidden" /><input name="proposal_id" type="hidden" />
+        <div class="form-grid single"><label><span>Modelo *</span><select id="contract-generation-template" name="template_id" required></select></label><p class="form-help">O sistema preencherá automaticamente os dados do cliente e os valores da proposta.</p></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Gerar contrato</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="contract-template-dialog" class="modal modal-wide">
+      <form id="contract-template-form">
+        <div class="modal-header"><div><p class="eyebrow dark">MODELO DE CONTRATO</p><h2 id="contract-template-dialog-title">Novo modelo</h2></div><button type="button" class="icon-button" data-close-dialog onclick="this.closest('dialog').close()" aria-label="Fechar">×</button></div>
+        <input name="template_id" type="hidden" />
+        <div class="form-grid">
+          <label><span>Nome do modelo *</span><input name="name" required minlength="3" maxlength="150" /></label>
+          <label><span>Serviço</span><select id="contract-template-service" name="service_type_id"><option value="">Todos os serviços</option></select></label>
+          <label class="wide"><span>Título do contrato *</span><input name="title" required minlength="3" maxlength="200" /></label>
+          <label class="wide"><span>Cláusulas e conteúdo *</span><textarea name="content" rows="16" required minlength="20" maxlength="50000"></textarea></label>
+          <label><span>Situação</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
+        </div>
+        <p class="form-help">Campos automáticos disponíveis: {{escritorio}}, {{cliente_nome}}, {{cliente_cpf}}, {{servico}}, {{valor_fixo}}, {{entrada}}, {{parcelas}}, {{valor_parcela}} e {{percentual_exito}}.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-dialog onclick="this.closest('dialog').close()">Cancelar</button><button class="primary-button" type="submit">Salvar modelo</button></div>
       </form>
     </dialog>
 

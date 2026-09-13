@@ -57,12 +57,18 @@ def test_accepted_proposal_generates_and_tracks_contract(client, token):
     converted = client.post(f"/api/v1/leads/{lead['id']}/convert", headers=auth(token), json={"create_recovery_case": False})
     assert converted.status_code == 200, converted.text
 
-    created = client.post(f"/api/v1/leads/{lead['id']}/proposals/{proposal.json()['id']}/contract", headers=auth(token), json={})
+    templates = client.get("/api/v1/contracts/templates", headers=auth(token))
+    assert templates.status_code == 200, templates.text
+    template = templates.json()[0]
+    created = client.post(f"/api/v1/leads/{lead['id']}/proposals/{proposal.json()['id']}/contract", headers=auth(token), json={"template_id": template["id"]})
     assert created.status_code == 201, created.text
     contract = created.json()
     assert contract["status"] == "RASCUNHO"
     assert contract["contract_number"].startswith("CTR-")
     assert "CONTRATO DE PRESTAÇÃO" in contract["content"]
+    assert contract["template_id"] == template["id"]
+    assert "Maria da Silva" in contract["content"]
+    assert "{{cliente_nome}}" not in contract["content"]
 
     for target in ["EM_REVISAO", "APROVADO", "ENVIADO"]:
         changed = client.patch(f"/api/v1/leads/{lead['id']}/contracts/{contract['id']}/status", headers=auth(token), json={"status": target})
@@ -85,6 +91,25 @@ def test_accepted_proposal_generates_and_tracks_contract(client, token):
     assert listed.status_code == 200, listed.text
     assert listed.json()[0]["contract_number"] == contract["contract_number"]
     assert listed.json()[0]["client_name"] == "Maria da Silva"
+
+
+def test_contract_template_crud(client, token):
+    services = catalogs(client, token)["services"]
+    service_id = next(item["id"] for item in services if item["code"] == "CS_RECUPERA")
+    created = client.post("/api/v1/contracts/templates", headers=auth(token), json={
+        "name": "Modelo CS Recupera", "title": "Contrato CS Recupera",
+        "content": "CONTRATANTE: {{cliente_nome}}. SERVIÇO: {{servico}}. VALOR: {{valor_fixo}}.",
+        "service_type_id": service_id, "active": True,
+    })
+    assert created.status_code == 201, created.text
+    template_id = created.json()["id"]
+    changed = client.patch(f"/api/v1/contracts/templates/{template_id}", headers=auth(token), json={"title": "Contrato CS Recupera atualizado"})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["title"].endswith("atualizado")
+    deleted = client.delete(f"/api/v1/contracts/templates/{template_id}", headers=auth(token))
+    assert deleted.status_code == 204, deleted.text
+    listed = client.get("/api/v1/contracts/templates?active_only=false", headers=auth(token))
+    assert all(item["id"] != template_id for item in listed.json())
 
 
 def test_search_filters_and_soft_delete(client, token):

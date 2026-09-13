@@ -1,23 +1,116 @@
-from uuid import UUID
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_identity_context
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.crm import CommercialContract, Lead
-from app.schemas.leads import ContractListItem, ContractRead, ContractSummary
+from app.models.crm import CommercialContract, ContractTemplate, Lead, ServiceType
+from app.schemas.leads import ContractListItem, ContractRead, ContractSummary, ContractTemplateCreate, ContractTemplateRead, ContractTemplateUpdate
 from app.security.identity import IdentityContext
+from app.services.audit import record_audit
 
 router = APIRouter()
 ALLOWED_ROLES = {"admin", "supervisor", "advogado", "atendimento"}
+TEMPLATE_MANAGER_ROLES = {"admin", "supervisor", "advogado"}
+DEFAULT_TEMPLATE_CONTENT = """CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS
+
+CONTRATADA: {{escritorio}}.
+CONTRATANTE: {{cliente_nome}}, CPF {{cliente_cpf}}.
+
+OBJETO: prestação de serviços jurídicos de {{servico}}, conforme a proposta comercial vinculada.
+
+HONORÁRIOS: valor fixo de {{valor_fixo}}; entrada de {{entrada}}; {{parcelas}} parcela(s) de {{valor_parcela}}; êxito de {{percentual_exito}}%.
+
+As condições específicas, obrigações das partes, vigência e hipóteses de rescisão deverão ser revisadas antes da aprovação.
+
+Ao aprovar este documento, a equipe confirma que o conteúdo foi revisado. O registro de assinatura nesta plataforma é manual."""
 
 
 def authorize(identity: IdentityContext):
     if not identity.is_superuser and str(identity.role).lower() not in ALLOWED_ROLES:
         raise HTTPException(403, "Perfil sem acesso aos contratos comerciais")
+
+
+def authorize_template_manager(identity: IdentityContext):
+    authorize(identity)
+    if not identity.is_superuser and str(identity.role).lower() not in TEMPLATE_MANAGER_ROLES:
+        raise HTTPException(403, "Perfil sem permissão para alterar modelos de contrato")
+
+
+def validate_service(db: Session, identity: IdentityContext, service_type_id: UUID | None):
+    if service_type_id and not db.scalar(select(ServiceType.id).where(ServiceType.id == service_type_id, ServiceType.organization_id == identity.organization_id)):
+        raise HTTPException(422, "Serviço não pertence à organização")
+
+
+def save(db: Session):
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Já existe um modelo com este nome") from exc
+
+
+def ensure_default_template(db: Session, identity: IdentityContext):
+    existing = db.scalar(select(ContractTemplate.id).where(ContractTemplate.organization_id == identity.organization_id, ContractTemplate.deleted_at.is_(None)).limit(1))
+    if existing:
+        return
+    db.add(ContractTemplate(organization_id=identity.organization_id, name="Prestação de serviços advocatícios", title="Contrato de prestação de serviços advocatícios", content=DEFAULT_TEMPLATE_CONTENT, created_by_id=identity.user_id))
+    db.commit()
+
+
+@router.get("/templates", response_model=list[ContractTemplateRead])
+def list_templates(active_only: bool = True, db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
+    authorize(identity)
+    ensure_default_template(db, identity)
+    conditions = [ContractTemplate.organization_id == identity.organization_id, ContractTemplate.deleted_at.is_(None)]
+    if active_only:
+        conditions.append(ContractTemplate.active.is_(True))
+    return list(db.scalars(select(ContractTemplate).where(*conditions).order_by(ContractTemplate.name)))
+
+
+@router.post("/templates", response_model=ContractTemplateRead, status_code=201)
+def create_template(payload: ContractTemplateCreate, db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
+    authorize_template_manager(identity)
+    validate_service(db, identity, payload.service_type_id)
+    obj = ContractTemplate(id=uuid4(), organization_id=identity.organization_id, created_by_id=identity.user_id, **payload.model_dump())
+    db.add(obj)
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id, entity_type="contract_template", entity_id=obj.id, action="create", new_values={"name": obj.name})
+    save(db)
+    db.refresh(obj)
+    return obj
+
+
+@router.patch("/templates/{template_id}", response_model=ContractTemplateRead)
+def update_template(template_id: UUID, payload: ContractTemplateUpdate, db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
+    authorize_template_manager(identity)
+    obj = db.scalar(select(ContractTemplate).where(ContractTemplate.id == template_id, ContractTemplate.organization_id == identity.organization_id, ContractTemplate.deleted_at.is_(None)))
+    if not obj:
+        raise HTTPException(404, "Modelo não encontrado")
+    changes = payload.model_dump(exclude_unset=True)
+    if "service_type_id" in changes:
+        validate_service(db, identity, changes["service_type_id"])
+    for key, value in changes.items():
+        setattr(obj, key, value)
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id, entity_type="contract_template", entity_id=obj.id, action="update", new_values={"fields": list(changes)})
+    save(db)
+    db.refresh(obj)
+    return obj
+
+
+@router.delete("/templates/{template_id}", status_code=204)
+def delete_template(template_id: UUID, db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
+    authorize_template_manager(identity)
+    obj = db.scalar(select(ContractTemplate).where(ContractTemplate.id == template_id, ContractTemplate.organization_id == identity.organization_id, ContractTemplate.deleted_at.is_(None)))
+    if not obj:
+        raise HTTPException(404, "Modelo não encontrado")
+    obj.deleted_at = datetime.now(timezone.utc)
+    record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id, entity_type="contract_template", entity_id=obj.id, action="delete", new_values={"name": obj.name})
+    save(db)
 
 
 @router.get("/summary", response_model=ContractSummary)

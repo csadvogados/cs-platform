@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_identity_context
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.crm import CommercialContract, Lead, LeadInteraction, LeadProposal, LeadSource, LeadTask, ServiceType
+from app.models.crm import CommercialContract, ContractTemplate, Lead, LeadInteraction, LeadProposal, LeadSource, LeadTask, ServiceType
 from app.models.organization import Organization
 from app.models.recovery import RecoveryCaseSource
 from app.models.user import User
@@ -63,6 +63,24 @@ def default_contract_content(organization, client, lead, proposal):
         "As condições específicas, obrigações das partes, vigência e hipóteses de rescisão deverão ser revisadas antes da aprovação.\n\n"
         "Ao aprovar este documento, a equipe confirma que o conteúdo foi revisado. O registro de assinatura nesta plataforma é manual."
     )
+
+
+def render_contract_template(content, organization, client, service, proposal):
+    values = {
+        "escritorio": organization.trade_name or organization.legal_name,
+        "cliente_nome": client.full_name,
+        "cliente_cpf": client.cpf or "não informado",
+        "servico": service.name if service else "serviços jurídicos contratados",
+        "valor_fixo": f"R$ {float(proposal.fixed_value):,.2f}",
+        "entrada": f"R$ {float(proposal.down_payment):,.2f}",
+        "parcelas": str(proposal.installments),
+        "valor_parcela": f"R$ {float(proposal.installment_value):,.2f}",
+        "percentual_exito": f"{float(proposal.success_percentage):g}",
+    }
+    rendered = content
+    for key, value in values.items():
+        rendered = rendered.replace("{{" + key + "}}", value)
+    return rendered
 
 
 def ensure_catalogs(db: Session, organization_id: UUID):
@@ -315,16 +333,23 @@ def create_contract(lead_id: UUID, proposal_id: UUID, payload: ContractCreate, d
     if existing: return existing
     organization = db.get(Organization, ident.organization_id)
     client = db.get(Client, lead.client_id)
+    service = db.get(ServiceType, lead.service_type_id)
+    template = None
+    if payload.template_id:
+        template = db.scalar(select(ContractTemplate).where(ContractTemplate.id == payload.template_id, ContractTemplate.organization_id == ident.organization_id, ContractTemplate.active.is_(True), ContractTemplate.deleted_at.is_(None)))
+        if not template: raise HTTPException(422, "Modelo de contrato não encontrado ou inativo")
+        if template.service_type_id and template.service_type_id != lead.service_type_id: raise HTTPException(422, "Este modelo pertence a outro serviço")
     sequence = (db.scalar(select(func.count(CommercialContract.id)).where(CommercialContract.organization_id == ident.organization_id)) or 0) + 1
     number = f"CTR-{datetime.now(timezone.utc).year}-{sequence:05d}"
     obj = CommercialContract(
         organization_id=ident.organization_id, lead_id=lead.id, proposal_id=proposal.id, client_id=client.id,
-        contract_number=number, title=payload.title,
-        content=payload.content or default_contract_content(organization, client, lead, proposal), notes=payload.notes,
+        contract_number=number, template_id=template.id if template else None,
+        title=payload.title or (template.title if template else "Contrato de prestação de serviços advocatícios"),
+        content=payload.content or (render_contract_template(template.content, organization, client, service, proposal) if template else default_contract_content(organization, client, lead, proposal)), notes=payload.notes,
     )
     db.add(obj); db.flush()
     db.add(LeadInteraction(organization_id=ident.organization_id, lead_id=lead.id, user_id=ident.user_id, interaction_type="DOCUMENTO", description=f"Contrato {number} gerado", occurred_at=datetime.now(timezone.utc)))
-    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="commercial_contract", entity_id=obj.id, action="create", new_values={"number": number, "proposal_id": str(proposal.id)})
+    record_audit(db, organization_id=ident.organization_id, user_id=ident.user_id, entity_type="commercial_contract", entity_id=obj.id, action="create", new_values={"number": number, "proposal_id": str(proposal.id), "template_id": str(template.id) if template else None})
     save(db); db.refresh(obj); return obj
 
 

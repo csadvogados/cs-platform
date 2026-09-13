@@ -89,6 +89,15 @@ test("central de contratos permite acompanhar, filtrar e abrir documentos", () =
   assert.match(app, /data-contract-document/);
 });
 
+test("modelos configuráveis preenchem e geram contratos pelo serviço", () => {
+  assert.match(index, /id="contract-template-dialog"/);
+  assert.match(index, /\{\{cliente_nome\}\}/);
+  assert.match(index, /id="contract-generation-dialog"/);
+  assert.match(app, /\/api\/v1\/contracts\/templates/);
+  assert.match(app, /openContractGenerationDialog/);
+  assert.match(app, /template_id:templateId/);
+});
+
 test("timeline permite decidir proposta com transição auditada pela API", () => {
   assert.match(app, /data-proposal-status="ACEITA"/);
   assert.match(app, /data-proposal-status="RECUSADA"/);
