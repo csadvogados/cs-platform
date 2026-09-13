@@ -863,33 +863,33 @@
       fillCollectionUserSelects();
     }
     const loaders = [
-      loadDashboard(),
-      loadCollections(),
-      loadOperationalAlerts(),
-      loadOperationalAgenda(),
-      loadClients(),
-      loadCrm(),
-      ...(canReadUsers() ? [loadUsers()] : []),
-      loadSettings(),
-      checkHealth()
+      { name:"Visão geral", request:loadDashboard() },
+      { name:"Cobranças", request:loadCollections() },
+      { name:"Alertas", request:loadOperationalAlerts() },
+      { name:"Agenda", request:loadOperationalAgenda() },
+      { name:"Clientes", request:loadClients() },
+      { name:"CRM", request:loadCrm() },
+      ...(canReadUsers() ? [{ name:"Equipe", request:loadUsers() }] : []),
+      { name:"Configurações", request:loadSettings() },
+      { name:"Conexão", request:checkHealth() }
     ];
     if (state.currentView === "clientDetail" && state.selectedClient) {
-      loaders.push(loadClientDetail(state.selectedClient.id));
+      loaders.push({ name:"Cliente selecionado", request:loadClientDetail(state.selectedClient.id) });
     }
     if (canViewManagement()) {
-      loaders.push(loadManagement());
+      loaders.push({ name:"Indicadores", request:loadManagement() });
     }
     if (state.currentView === "performance" && canViewPerformance()) {
-      loaders.push(loadPerformance());
+      loaders.push({ name:"Metas", request:loadPerformance() });
     }
-    if (state.currentView === "notifications") loaders.push(loadNotificationsPage());
+    if (state.currentView === "notifications") loaders.push({ name:"Notificações", request:loadNotificationsPage() });
     if (state.currentView === "audit" && canViewAudit()) {
-      loaders.push(loadAudit(state.audit.page));
+      loaders.push({ name:"Histórico", request:loadAudit(state.audit.page) });
     }
-    const requests = await Promise.allSettled(loaders);
+    const requests = await Promise.allSettled(loaders.map((loader) => loader.request));
     setBusy(button, false);
-    const failed = requests.filter((request) => request.status === "rejected");
-    if (failed.length) toast(`${failed.length} área(s) não puderam ser atualizadas.`, "error");
+    const failed = requests.map((request, index) => ({ request, name:loaders[index].name })).filter((item) => item.request.status === "rejected");
+    if (failed.length) toast(`Não foi possível atualizar: ${failed.map((item) => item.name).join(", ")}. Tente novamente em instantes.`, "error");
     else if (showNotice) toast("Dados atualizados.");
   }
 
