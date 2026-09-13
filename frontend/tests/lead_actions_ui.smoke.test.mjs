@@ -26,6 +26,9 @@ test("proposta comercial identifica o lead e aparece na timeline", () => {
   assert.match(app, /openLeadProposalDialog/);
   assert.match(app, /timeline\.proposals/);
   assert.match(app, /Proposta salva e vinculada ao lead/);
+  assert.match(index, /id="lead-proposal-error"/);
+  assert.match(app, /dialog-toast-region/);
+  assert.match(styles, /\.dialog-toast-region/);
 });
 
 test("conversão atualiza imediatamente o cartão do lead", () => {

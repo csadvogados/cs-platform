@@ -825,8 +825,10 @@ tr:last-child td { border-bottom: 0; }
 .final-confirmation-panel p { font-size: 13px; }
 .final-confirmation-panel small { font-size: 11px; }
 .toast-region { position: fixed; right: 22px; bottom: 22px; z-index: 100; display: grid; gap: 10px; }
+.dialog-toast-region { position: absolute; right: 18px; bottom: 18px; z-index: 10; display: grid; gap: 10px; }
 .toast { width: min(390px, calc(100vw - 44px)); padding: 14px 17px; border-left: 4px solid var(--forest-2); color: #fff; background: #1c2d26; box-shadow: var(--shadow); animation: toast-in .2s ease; font-size: 13px; line-height: 1.45; }
 .toast.error { border-color: #dc7771; }
+.form-error { margin: 14px 0 0; border-left: 4px solid var(--danger); padding: 11px 13px; color: #8b2922; background: #fff0ee; font-size: 12px; line-height: 1.45; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 @media (max-width: 1080px) {
