@@ -80,6 +80,15 @@ test("proposta aceita gera contrato com aprovação e assinatura manual", () => 
   assert.doesNotMatch(app, /window\.prompt\("Informe a referência da assinatura/);
 });
 
+test("central de contratos permite acompanhar, filtrar e abrir documentos", () => {
+  assert.match(index, /data-view="contracts"/);
+  assert.match(index, /id="view-contracts"/);
+  assert.match(index, /id="contract-status-filter"/);
+  assert.match(app, /\/api\/v1\/contracts\/summary/);
+  assert.match(app, /data-contract-open-lead/);
+  assert.match(app, /data-contract-document/);
+});
+
 test("timeline permite decidir proposta com transição auditada pela API", () => {
   assert.match(app, /data-proposal-status="ACEITA"/);
   assert.match(app, /data-proposal-status="RECUSADA"/);

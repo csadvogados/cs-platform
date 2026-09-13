@@ -77,6 +77,15 @@ def test_accepted_proposal_generates_and_tracks_contract(client, token):
     timeline = client.get(f"/api/v1/leads/{lead['id']}/timeline", headers=auth(token)).json()
     assert timeline["contracts"][0]["status"] == "ASSINADO"
 
+    summary = client.get("/api/v1/contracts/summary", headers=auth(token))
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["total"] == 1
+    assert summary.json()["signed"] == 1
+    listed = client.get("/api/v1/contracts?search=Maria&status=ASSINADO", headers=auth(token))
+    assert listed.status_code == 200, listed.text
+    assert listed.json()[0]["contract_number"] == contract["contract_number"]
+    assert listed.json()[0]["client_name"] == "Maria da Silva"
+
 
 def test_search_filters_and_soft_delete(client, token):
     lead = new_lead(client, token)

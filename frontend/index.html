@@ -74,6 +74,7 @@
             <button class="nav-item" data-view="collections"><span aria-hidden="true">▣</span> Cobranças</button>
             <button class="nav-item" data-view="agenda"><span aria-hidden="true">◫</span> Agenda</button>
             <button class="nav-item" data-view="crm"><span aria-hidden="true">◇</span> CRM</button>
+            <button class="nav-item" data-view="contracts"><span aria-hidden="true">▤</span> Contratos</button>
             <button class="nav-item" data-view="users"><span aria-hidden="true">♙</span> Equipe</button>
             <button id="audit-nav-item" class="nav-item" data-view="audit" hidden><span aria-hidden="true">◷</span> Histórico</button>
             <button class="nav-item" data-view="settings"><span aria-hidden="true">⚙</span> Configurações</button>
@@ -408,6 +409,24 @@
             <div id="crm-contacts" class="crm-tab-panel"><div class="panel-list-header"><span id="contact-count">0 contatos</span><button class="secondary-button" data-open-dialog="contact-dialog">Novo contato</button></div><div id="contact-list" class="contact-grid"></div></div>
             <div id="crm-interactions" class="crm-tab-panel"><div class="panel-list-header"><span id="interaction-count">0 atendimentos</span><button class="primary-button" data-open-dialog="interaction-dialog">Novo atendimento</button></div><div id="interaction-list" class="interaction-list"></div></div>
             </section>
+          </section>
+
+          <section id="view-contracts" class="page-view" aria-labelledby="contracts-heading">
+            <div class="section-intro"><div><p class="eyebrow dark">GESTÃO COMERCIAL</p><h1 id="contracts-heading">Central de contratos</h1><p>Acompanhe documentos desde o rascunho até a assinatura.</p></div><button id="contract-refresh" class="secondary-button" type="button">Atualizar</button></div>
+            <div class="lead-dashboard" aria-label="Resumo dos contratos">
+              <article><span>Total</span><strong id="contract-total">0</strong></article>
+              <article><span>Rascunhos</span><strong id="contract-draft">0</strong></article>
+              <article><span>Em revisão</span><strong id="contract-review">0</strong></article>
+              <article><span>Aguardando assinatura</span><strong id="contract-signature">0</strong></article>
+              <article><span>Assinados</span><strong id="contract-signed">0</strong></article>
+            </div>
+            <form id="contract-filter-form" class="crm-filter-bar">
+              <label class="crm-search-field"><span>Buscar</span><input id="contract-search" type="search" placeholder="Cliente, lead, número ou título" autocomplete="off" /></label>
+              <label><span>Situação</span><select id="contract-status-filter"><option value="">Todas</option><option value="RASCUNHO">Rascunho</option><option value="EM_REVISAO">Em revisão</option><option value="APROVADO">Aprovado</option><option value="ENVIADO">Aguardando assinatura</option><option value="ASSINADO">Assinado</option><option value="CANCELADO">Cancelado</option></select></label>
+              <button class="primary-button" type="submit">Aplicar filtros</button>
+              <button id="contract-clear-filters" class="secondary-button" type="button">Limpar</button>
+            </form>
+            <div class="table-wrap"><table><thead><tr><th>Contrato</th><th>Cliente</th><th>Situação</th><th>Atualizado em</th><th>Ações</th></tr></thead><tbody id="contract-table-body"><tr><td colspan="5" class="empty-cell">Abra a central para carregar os contratos.</td></tr></tbody></table></div>
           </section>
 
           <section id="view-users" class="page-view" aria-labelledby="users-heading">

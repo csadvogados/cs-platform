@@ -207,6 +207,20 @@ class ContractRead(ORMModel):
     created_at: datetime; updated_at: datetime
 
 
+class ContractListItem(ContractRead):
+    client_name: str
+    lead_name: str
+
+
+class ContractSummary(BaseModel):
+    total: int = 0
+    draft: int = 0
+    awaiting_approval: int = 0
+    awaiting_signature: int = 0
+    signed: int = 0
+    cancelled: int = 0
+
+
 class ConvertLead(BaseModel):
     confirm_duplicate_client_id: UUID | None = None
     create_recovery_case: bool = False
