@@ -11,12 +11,12 @@ from app.security.permissions import PermissionCode
 
 DEFAULT_ROLES = {
     "admin": set(PermissionCode.values()),
-    "supervisor": {"user.read", "client.create", "client.read", "client.update", "dashboard.read", "report.read", "audit.read", "crm.create", "crm.read", "crm.update", "crm.delete", "crm.convert"},
-    "advogado": {"client.create", "client.read", "client.update", "debt.read", "diagnosis.create", "diagnosis.read", "document.read", "document.upload", "dashboard.read", "crm.create", "crm.read", "crm.update", "crm.convert"},
-    "negociador": {"client.read", "client.update", "debt.read", "debt.update", "negotiation.create", "negotiation.read", "negotiation.update", "dashboard.read", "crm.create", "crm.read", "crm.update"},
-    "financeiro": {"client.read", "creditor.read", "debt.read", "debt.update", "report.read", "report.export", "dashboard.read", "crm.read"},
-    "atendimento": {"client.create", "client.read", "client.update", "document.upload", "document.read", "dashboard.read", "crm.create", "crm.read", "crm.update", "crm.convert"},
-    "consulta": {"client.read", "debt.read", "diagnosis.read", "document.read", "dashboard.read", "crm.read"},
+    "supervisor": {"user.read", "client.create", "client.read", "client.update", "dashboard.read", "report.read", "audit.read"},
+    "advogado": {"client.create", "client.read", "client.update", "debt.read", "diagnosis.create", "diagnosis.read", "document.read", "document.upload", "dashboard.read"},
+    "negociador": {"client.read", "client.update", "debt.read", "debt.update", "negotiation.create", "negotiation.read", "negotiation.update", "dashboard.read"},
+    "financeiro": {"client.read", "creditor.read", "debt.read", "debt.update", "report.read", "report.export", "dashboard.read"},
+    "atendimento": {"client.create", "client.read", "client.update", "document.upload", "document.read", "dashboard.read"},
+    "consulta": {"client.read", "debt.read", "diagnosis.read", "document.read", "dashboard.read"},
 }
 
 

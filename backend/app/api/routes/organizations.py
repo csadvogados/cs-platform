@@ -10,6 +10,7 @@ from app.security.identity import IdentityContext
 from app.security.permissions import PermissionCode
 from app.security.rbac import RolePermissionRegistry
 from app.services.organization import OrganizationService
+from app.services.audit import record_audit
 
 
 router = APIRouter()
@@ -75,4 +76,15 @@ def update_organization(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Somente superadministrador pode alterar a organização padrão",
         )
-    return OrganizationService(db).update(organization_id, payload)
+    updated = OrganizationService(db).update(organization_id, payload)
+    record_audit(
+        db,
+        organization_id=organization_id,
+        user_id=identity.user_id,
+        entity_type="organization",
+        entity_id=organization_id,
+        action="update",
+        new_values=payload.model_dump(exclude_unset=True, mode="json"),
+    )
+    db.commit()
+    return updated

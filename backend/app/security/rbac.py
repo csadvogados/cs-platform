@@ -48,11 +48,16 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.REPORT_READ.value,
         PermissionCode.REPORT_EXPORT.value,
         PermissionCode.AUDIT_READ.value,
-        PermissionCode.CRM_CREATE.value,
-        PermissionCode.CRM_READ.value,
-        PermissionCode.CRM_UPDATE.value,
-        PermissionCode.CRM_DELETE.value,
-        PermissionCode.CRM_CONVERT.value,
+        PermissionCode.RECOVERY_CASE_CREATE.value,
+        PermissionCode.RECOVERY_CASE_READ.value,
+        PermissionCode.RECOVERY_CASE_UPDATE.value,
+        PermissionCode.RECOVERY_CASE_TRANSITION.value,
+        PermissionCode.RECOVERY_CASE_ASSIGN.value,
+        PermissionCode.JUDICIAL_PROCESS_READ.value,
+        PermissionCode.JUDICIAL_PROCESS_UPDATE.value,
+        PermissionCode.JUDICIAL_PROCESS_CLOSE.value,
+        PermissionCode.JUDICIAL_REPORT_READ.value,
+        PermissionCode.JUDICIAL_REPORT_EXPORT.value,
     }),
 
     RoleType.LAWYER.value: frozenset({
@@ -74,10 +79,15 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.DIAGNOSIS_UPDATE.value,
         PermissionCode.DASHBOARD_READ.value,
         PermissionCode.REPORT_READ.value,
-        PermissionCode.CRM_CREATE.value,
-        PermissionCode.CRM_READ.value,
-        PermissionCode.CRM_UPDATE.value,
-        PermissionCode.CRM_CONVERT.value,
+        PermissionCode.RECOVERY_CASE_CREATE.value,
+        PermissionCode.RECOVERY_CASE_READ.value,
+        PermissionCode.RECOVERY_CASE_UPDATE.value,
+        PermissionCode.RECOVERY_CASE_TRANSITION.value,
+        PermissionCode.JUDICIAL_PROCESS_READ.value,
+        PermissionCode.JUDICIAL_PROCESS_UPDATE.value,
+        PermissionCode.JUDICIAL_PROCESS_CLOSE.value,
+        PermissionCode.JUDICIAL_REPORT_READ.value,
+        PermissionCode.JUDICIAL_REPORT_EXPORT.value,
     }),
 
     RoleType.NEGOTIATOR.value: frozenset({
@@ -91,9 +101,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.NEGOTIATION_UPDATE.value,
         PermissionCode.DOCUMENT_READ.value,
         PermissionCode.DASHBOARD_READ.value,
-        PermissionCode.CRM_CREATE.value,
-        PermissionCode.CRM_READ.value,
-        PermissionCode.CRM_UPDATE.value,
+        PermissionCode.RECOVERY_CASE_READ.value,
+        PermissionCode.RECOVERY_CASE_UPDATE.value,
     }),
 
     RoleType.FINANCIAL.value: frozenset({
@@ -106,7 +115,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.DASHBOARD_READ.value,
         PermissionCode.REPORT_READ.value,
         PermissionCode.REPORT_EXPORT.value,
-        PermissionCode.CRM_READ.value,
+        PermissionCode.RECOVERY_CASE_READ.value,
     }),
 
     RoleType.SUPPORT.value: frozenset({
@@ -117,10 +126,9 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.DOCUMENT_UPLOAD.value,
         PermissionCode.DOCUMENT_READ.value,
         PermissionCode.DASHBOARD_READ.value,
-        PermissionCode.CRM_CREATE.value,
-        PermissionCode.CRM_READ.value,
-        PermissionCode.CRM_UPDATE.value,
-        PermissionCode.CRM_CONVERT.value,
+        PermissionCode.RECOVERY_CASE_CREATE.value,
+        PermissionCode.RECOVERY_CASE_READ.value,
+        PermissionCode.RECOVERY_CASE_UPDATE.value,
     }),
 
     RoleType.CLIENT.value: frozenset({
@@ -129,6 +137,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PermissionCode.NEGOTIATION_READ.value,
         PermissionCode.DOCUMENT_READ.value,
         PermissionCode.DIAGNOSIS_READ.value,
+        PermissionCode.RECOVERY_CASE_READ.value,
     }),
 }
 

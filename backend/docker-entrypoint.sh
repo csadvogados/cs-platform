@@ -1,52 +1,28 @@
 #!/bin/sh
 set -eu
 
+cd /app
+
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
 WEB_CONCURRENCY="${WEB_CONCURRENCY:-1}"
-MIGRATIONS_ENABLED="${MIGRATIONS_ENABLED:-true}"
 
-case "$PORT" in
-  ''|*[!0-9]*)
-    echo "[deploy][erro] PORT deve ser inteiro; recebido: '$PORT'" >&2
-    exit 64
-    ;;
-esac
+echo "[deploy] CS-Platform-v5.25.0"
+echo "[deploy] Waiting for database"
+python -m scripts.wait_for_database
 
-cd /app
+echo "[deploy] Alembic heads"
+python -m alembic -c /app/alembic.ini heads
 
-echo "[deploy] CS Platform v5.5.1 — CS Captação / CRM MVP + Docker Healthcheck Hotfix"
-echo "[deploy] Diretório atual: $(pwd)"
-echo "[deploy] Porta: $PORT"
-echo "[deploy] Arquivos de migration presentes:"
-find /app/alembic/versions -maxdepth 1 -type f -name '*.py' -print | sort
+echo "[deploy] Applying migrations"
+python -m alembic -c /app/alembic.ini upgrade head
 
-if [ ! -f /app/alembic/versions/0007_cs_captacao_mvp.py ]; then
-  echo "[deploy][erro] A imagem não contém 0007_cs_captacao_mvp.py." >&2
-  echo "[deploy][erro] Confirme o commit implantado, Root Directory=/backend e Dockerfile Path=/backend/Dockerfile." >&2
-  exit 66
-fi
+echo "[deploy] Current revision"
+python -m alembic -c /app/alembic.ini current
 
-if [ "$MIGRATIONS_ENABLED" = "true" ] || [ "$MIGRATIONS_ENABLED" = "1" ]; then
-  echo "[deploy] Aguardando banco..."
-  python /app/scripts/wait_for_database.py
-
-  echo "[deploy] Heads Alembic disponíveis:"
-  python -m alembic -c /app/alembic.ini heads
-
-  echo "[deploy] Aplicando migrations até head..."
-  python -m alembic -c /app/alembic.ini upgrade head
-
-  echo "[deploy] Revisão ativa:"
-  python -m alembic -c /app/alembic.ini current
-else
-  echo "[deploy] Migrations desabilitadas: MIGRATIONS_ENABLED=$MIGRATIONS_ENABLED"
-fi
-
-echo "[deploy] Iniciando Uvicorn..."
+echo "[deploy] Starting Uvicorn on ${HOST}:${PORT}"
 exec python -m uvicorn app.main:app \
   --host "$HOST" \
   --port "$PORT" \
   --workers "$WEB_CONCURRENCY" \
-  --proxy-headers \
-  --forwarded-allow-ips="*"
+  --proxy-headers
