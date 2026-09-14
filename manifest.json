@@ -1,7 +1,7 @@
 {
   "product": "CS Platform Enterprise",
-  "version": "5.5.0",
-  "release": "CS Captação / CRM MVP",
+  "version": "5.5.1",
+  "release": "CS Captação / CRM MVP + Docker Healthcheck Hotfix",
   "base_required": "02B.4 installed",
   "database_migration": "0007_cs_captacao_mvp",
   "destructive_changes": false,
@@ -10,10 +10,11 @@
     "test_cs_captacao_pipeline_history_detail_and_conversion",
     "test_cs_captacao_dashboard_and_filters"
   ],
-  "name": "CS Platform v5.5.0 CS Captação / CRM MVP",
+  "name": "CS Platform v5.5.1 CS Captação / CRM MVP + Docker Healthcheck Hotfix",
   "database_revision": "0007_cs_captacao_mvp",
-  "base_version": "5.4.2-revised",
+  "base_version": "5.5.0",
   "deployment_entrypoint": "backend/docker-entrypoint.sh",
   "healthcheck_path": "/api/v1/health",
-  "release_name": "CS Captação / CRM MVP"
+  "release_name": "CS Captação / CRM MVP + Docker Healthcheck Hotfix",
+  "hotfix": "Dockerfile HEALTHCHECK: CMD-SHELL -> CMD"
 }

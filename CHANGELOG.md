@@ -1,3 +1,10 @@
+# v5.5.1
+
+- Hotfix de build Railway/Docker: `HEALTHCHECK CMD-SHELL` substituído por `HEALTHCHECK CMD`.
+- Mantida a migration `0007_cs_captacao_mvp`; nenhuma alteração destrutiva de banco.
+- Adicionado teste de regressão para impedir reintrodução de `CMD-SHELL` no Dockerfile.
+- Versão da aplicação atualizada para 5.5.1.
+
 # v5.5.0
 
 - CS Captação / CRM MVP implementado sobre o CRM Enterprise.

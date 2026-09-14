@@ -66,3 +66,9 @@ Consulte `CHECKLIST_DEPLOY_v5.4.2.md` antes da publicação.
 A versão 5.5.0 adiciona o núcleo backend do CS Captação: pipeline, histórico, filtros comerciais, dashboard, conversão e criação de caso CS Recupera. A migration ativa passa a ser `0007_cs_captacao_mvp`.
 
 Antes de publicar, consulte `AUDITORIA_CS_CAPTACAO_MVP_v5.5.0.md` e `CHECKLIST_DEPLOY_v5.5.0.md`.
+
+## Hotfix v5.5.1 — Railway / Docker
+
+A v5.5.1 corrige exclusivamente o `HEALTHCHECK` do `backend/Dockerfile`. O builder usado no deploy rejeitou `CMD-SHELL` dentro de `HEALTHCHECK`; o arquivo agora usa a sintaxe Dockerfile suportada `HEALTHCHECK ... CMD ...`.
+
+A migration de banco continua sendo `0007_cs_captacao_mvp`. Não há nova migration nem mudança destrutiva de schema neste hotfix.
