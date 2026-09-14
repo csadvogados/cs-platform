@@ -9,7 +9,7 @@ class ClientBase(BaseModel):
     rg: str | None = None
     birth_date: date | None = None
     profession: str | None = None
-    email: EmailStr | None = None
+    email: str | None = None
     phone: str | None = None
     city: str | None = None
     state: str | None = Field(default=None, min_length=2, max_length=2)
@@ -20,6 +20,14 @@ class ClientBase(BaseModel):
     notes: str | None = None
     assigned_user_id: uuid.UUID | None = None
 
+    @field_validator("state")
+    @classmethod
+    def normalize_state(cls, value: str | None) -> str | None:
+        return value.upper() if value else value
+
+class ClientCreate(ClientBase):
+    email: EmailStr | None = None
+
     @field_validator("cpf")
     @classmethod
     def normalize_cpf(cls, value: str) -> str:
@@ -27,14 +35,6 @@ class ClientBase(BaseModel):
         if len(digits) != 11 or digits == digits[0] * 11:
             raise ValueError("CPF deve conter 11 dígitos válidos estruturalmente")
         return digits
-
-    @field_validator("state")
-    @classmethod
-    def normalize_state(cls, value: str | None) -> str | None:
-        return value.upper() if value else value
-
-class ClientCreate(ClientBase):
-    pass
 
 class ClientUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=3, max_length=200)
