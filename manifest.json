@@ -1,20 +1,19 @@
 {
   "product": "CS Platform Enterprise",
-  "version": "5.4.2-revised",
-  "release": "Enterprise Security & Multi-Tenant",
+  "version": "5.5.0",
+  "release": "CS Captação / CRM MVP",
   "base_required": "02B.4 installed",
-  "database_migration": "none",
+  "database_migration": "0007_cs_captacao_mvp",
   "destructive_changes": false,
   "organization_router_default": false,
   "tests_added": [
-    "test_me_returns_identity_context",
-    "test_rejects_token_with_wrong_organization_claim",
-    "test_rejects_token_with_stale_role_claim"
+    "test_cs_captacao_pipeline_history_detail_and_conversion",
+    "test_cs_captacao_dashboard_and_filters"
   ],
-  "name": "CS Platform v5.4.2 Infrastructure & Deployment",
-  "database_revision": "0006_crm_stabilization",
-  "base_version": "5.4.1",
+  "name": "CS Platform v5.5.0 CS Captação / CRM MVP",
+  "database_revision": "0007_cs_captacao_mvp",
+  "base_version": "5.4.2-revised",
   "deployment_entrypoint": "backend/docker-entrypoint.sh",
   "healthcheck_path": "/api/v1/health",
-  "release_name": "Infrastructure & Deployment — Revised"
+  "release_name": "CS Captação / CRM MVP"
 }

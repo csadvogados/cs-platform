@@ -1,7 +1,5 @@
 import uuid
-from datetime import datetime
 from decimal import Decimal
-from typing import Any
 from pydantic import BaseModel, ConfigDict
 class DiagnosisPreview(BaseModel):
     total_income: Decimal
@@ -18,12 +16,6 @@ class DiagnosisPreview(BaseModel):
     eligible_debts: int
     attention_debts: int
     chart_data: dict
-    risk_level: str
-    recommended_strategy: str
-    max_payment_capacity: Decimal
-    data_quality_score: int
-    score_breakdown: dict[str, int]
-    analysis_snapshot: dict
 class DiagnosisRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -41,20 +33,3 @@ class DiagnosisRead(BaseModel):
     eligibility_result: str
     economic_conclusion: str
     legal_alerts: str
-    risk_level: str
-    recommended_strategy: str
-    max_payment_capacity: Decimal
-    data_quality_score: int
-    score_breakdown: dict[str, int]
-    analysis_snapshot: dict
-    created_at: datetime
-
-
-class ClientDossier(BaseModel):
-    client: dict[str, Any]
-    financial_summary: DiagnosisPreview
-    creditors: list[dict[str, Any]]
-    debts: list[dict[str, Any]]
-    latest_diagnosis: DiagnosisRead | None = None
-    missing_information: list[str]
-    generated_at: datetime

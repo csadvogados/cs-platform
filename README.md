@@ -60,3 +60,9 @@ A migration `0003_merge_auth_organization` é apenas de merge e não altera tabe
 A inicialização de produção é controlada por `backend/docker-entrypoint.sh`. No Railway, deixe os campos **Start Command** e **Pre-deploy Command** vazios. O entrypoint aguarda o banco, aplica `alembic upgrade head` e inicia o Uvicorn usando a variável dinâmica `PORT`.
 
 Consulte `CHECKLIST_DEPLOY_v5.4.2.md` antes da publicação.
+
+## CS Captação / CRM — v5.5.0
+
+A versão 5.5.0 adiciona o núcleo backend do CS Captação: pipeline, histórico, filtros comerciais, dashboard, conversão e criação de caso CS Recupera. A migration ativa passa a ser `0007_cs_captacao_mvp`.
+
+Antes de publicar, consulte `AUDITORIA_CS_CAPTACAO_MVP_v5.5.0.md` e `CHECKLIST_DEPLOY_v5.5.0.md`.

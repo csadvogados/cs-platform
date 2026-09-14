@@ -94,6 +94,13 @@ test("central de contratos permite acompanhar, filtrar e abrir documentos", () =
   assert.match(app, /data-contract-document/);
 });
 
+test("perfil 360 consolida a jornada dentro da ficha do cliente", () => {
+  assert.match(app, /\/api\/v1\/clients\/\$\{client\.id\}\/profile/);
+  assert.match(app, /Visão unificada do cliente/);
+  assert.match(app, /Histórico unificado/);
+  assert.match(styles, /\.client-360-grid/);
+});
+
 test("envio de contrato registra canal, destinatário, prazo e reenvio", () => {
   assert.match(index, /id="contract-delivery-dialog"/);
   assert.match(index, /name="signature_due_at" type="date"/);

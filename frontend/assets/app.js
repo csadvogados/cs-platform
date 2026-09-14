@@ -24,7 +24,7 @@
     selectedClient: null,
     editingClientId: null,
     clientImport: { filename: "", clients: [], preview: null },
-    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [], dossier: null, documents: [], judicialChecklist: null },
+    financial: { incomes: [], expenses: [], debts: [], creditors: [], agreements: [], negotiations: [], recoveryCases: [], diagnosis: null, history: [], dossier: null, documents: [], judicialChecklist: null, profile: null },
     paymentPlan: null,
     editingFinancial: null,
     installmentPaymentTarget: null,
@@ -1931,7 +1931,8 @@
       `/api/v1/recovery-cases?page=1&page_size=100&client_id=${encodeURIComponent(client.id)}`,
       `/api/v1/diagnoses/${client.id}/dossier`,
       `/api/v1/documents/clients/${client.id}`,
-      `/api/v1/documents/clients/${client.id}/judicial-checklist`
+      `/api/v1/documents/clients/${client.id}/judicial-checklist`,
+      `/api/v1/clients/${client.id}/profile`
     ];
     const results = await Promise.allSettled(paths.map((path) => api(path)));
     const valueAt = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
@@ -1947,7 +1948,8 @@
       recoveryCases: Array.isArray(valueAt(8, {}).items) ? valueAt(8, {}).items : [],
       dossier: valueAt(9, null),
       documents: Array.isArray(valueAt(10, [])) ? valueAt(10, []) : [],
-      judicialChecklist: valueAt(11, null)
+      judicialChecklist: valueAt(11, null),
+      profile: valueAt(12, null)
     };
     fillCreditorSelect();
     fillAgreementDebtSelect();
@@ -3431,7 +3433,7 @@
   function renderClientDetail() {
     const client = state.selectedClient;
     if (!client) return;
-    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history, dossier, documents, judicialChecklist } = state.financial;
+    const { incomes, expenses, debts, agreements, negotiations, diagnosis, history, dossier, documents, judicialChecklist, profile } = state.financial;
     const totalIncome = incomes.reduce((total, item) => total + Number(item.net_amount || 0), 0);
     const totalExpenses = expenses.reduce((total, item) => total + Number(item.amount || 0), 0);
     const totalDebt = debts.reduce((total, item) => total + Number(item.current_balance || 0), 0);
@@ -3453,6 +3455,22 @@
         <div><span>Localização</span><strong>${escapeHtml([client.city, client.state].filter(Boolean).join(" / ") || "Não informada")}</strong></div>
         <div><span>Observações</span><strong>${escapeHtml(client.notes || "Sem observações")}</strong></div>
       </div>
+
+      <section class="panel client-360-panel">
+        <div class="panel-header"><div><p class="eyebrow dark">PERFIL 360</p><h3>Visão unificada do cliente</h3></div><span class="result-count">Comercial, jurídico e financeiro</span></div>
+        <div class="client-360-grid">
+          ${renderClient360Item("Origem comercial", profile?.lead, "Nenhum lead vinculado")}
+          ${renderClient360Item("Contrato", profile?.contract, "Nenhum contrato")}
+          ${renderClient360Item("Caso CS Recupera", profile?.recovery_case, "Nenhum caso aberto")}
+          ${renderClient360Item("Próxima ação", profile?.next_action, "Nenhuma ação pendente")}
+          ${renderClient360Item("Último diagnóstico", profile?.latest_diagnosis, "Nenhum diagnóstico salvo")}
+          <article><span>Registros vinculados</span><strong>${Number(profile?.document_count || 0)} documento(s)</strong><small>${Number(profile?.negotiation_count || 0)} negociação(ões) · ${Number(profile?.agreement_count || 0)} acordo(s)</small></article>
+        </div>
+        <div class="client-360-timeline">
+          <h4>Histórico unificado</h4>
+          ${profile?.timeline?.length ? profile.timeline.map((item) => `<article><span class="timeline-dot"></span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.subtitle || item.status || "Registro do cliente")} · ${escapeHtml(formatDate(item.occurred_at, true))}</small></div></article>`).join("") : '<div class="empty-state">O histórico será formado conforme o atendimento avançar.</div>'}
+        </div>
+      </section>
 
       <div class="financial-summary">
         <article><span>Receita mensal</span><strong>${formatCurrency(totalIncome)}</strong><small>${incomes.length} registro(s)</small></article>
@@ -3543,6 +3561,11 @@
     $$('[data-generate-agreement]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => generateAgreementFromOffer(button)));
     $$('[data-download-document]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => downloadDocument(button.dataset.downloadDocument)));
     $$('[data-validate-document]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => validateDocument(button.dataset.validateDocument, button.dataset.documentStatus, button)));
+  }
+
+  function renderClient360Item(label, item, emptyText) {
+    if (!item) return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(emptyText)}</strong><small>—</small></article>`;
+    return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.subtitle || item.status || "Atualizado")} ${item.occurred_at ? `· ${escapeHtml(formatDate(item.occurred_at, true))}` : ""}</small></article>`;
   }
 
   async function submitDocument(event) {
