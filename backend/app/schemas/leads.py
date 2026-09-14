@@ -29,7 +29,7 @@ class LeadBase(BaseModel):
     cpf: str | None = None
     phone: str | None = Field(default=None, max_length=30)
     whatsapp: str | None = Field(default=None, max_length=30)
-    email: EmailStr | None = None
+    email: str | None = None
     city: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, min_length=2, max_length=2)
     birth_date: date | None = None
@@ -60,6 +60,13 @@ class LeadBase(BaseModel):
     @classmethod
     def normalize_name(cls, value): return " ".join(value.split())
 
+    @field_validator("state")
+    @classmethod
+    def normalize_state(cls, value): return value.upper() if value else value
+
+class LeadCreate(LeadBase):
+    email: EmailStr | None = None
+
     @field_validator("cpf")
     @classmethod
     def normalize_cpf(cls, value):
@@ -68,18 +75,11 @@ class LeadBase(BaseModel):
         if len(digits) != 11 or digits == digits[0] * 11: raise ValueError("CPF deve conter 11 dígitos válidos estruturalmente")
         return digits
 
-    @field_validator("state")
-    @classmethod
-    def normalize_state(cls, value): return value.upper() if value else value
-
     @model_validator(mode="after")
     def validate_contact(self):
         if not any([self.phone, self.whatsapp, self.email]):
             raise ValueError("Informe ao menos telefone, WhatsApp ou e-mail")
         return self
-
-
-class LeadCreate(LeadBase): pass
 
 
 class LeadUpdate(BaseModel):
@@ -112,6 +112,18 @@ class LeadUpdate(BaseModel):
     delinquency_status: str | None = Field(default=None, max_length=100)
     is_negative_listed: bool | None = None
     has_existing_lawsuit: bool | None = None
+
+    @field_validator("cpf")
+    @classmethod
+    def normalize_cpf(cls, value):
+        if not value: return None
+        digits = re.sub(r"\D", "", value)
+        if len(digits) != 11 or digits == digits[0] * 11: raise ValueError("CPF deve conter 11 dígitos válidos estruturalmente")
+        return digits
+
+    @field_validator("state")
+    @classmethod
+    def normalize_state(cls, value): return value.upper() if value else value
 
 
 class LeadRead(LeadBase, ORMModel):
