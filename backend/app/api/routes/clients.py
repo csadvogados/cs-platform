@@ -14,8 +14,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_permissions, require_roles
 from app.db.session import get_db
 from app.models.client import Client
-from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask
-from app.models.financial import Debt, Diagnosis, Expense, Income
+from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask, CommercialContract, Lead, LeadInteraction, LeadTask, LeadSource, ServiceType
+from app.models.document import ClientDocument
+from app.models.financial import Debt, Diagnosis, Expense, Income, PaymentAgreement
+from app.models.negotiation import Negotiation
+from app.models.recovery import RecoveryCase
 from app.models.user import User
 from app.schemas.client import (
     ClientCreate,
@@ -24,6 +27,8 @@ from app.schemas.client import (
     ClientImportRequest,
     ClientImportResult,
     ClientPage,
+    ClientProfileItem,
+    ClientProfileSummary,
     ClientRead,
     ClientUpdate,
 )
@@ -713,6 +718,146 @@ def get_client(
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     return client
+
+
+@router.get("/{client_id}/profile", response_model=ClientProfileSummary)
+def get_client_profile(
+    client_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    client = db.scalar(select(Client).where(
+        Client.id == client_id,
+        Client.organization_id == actor.organization_id,
+        Client.archived_at.is_(None),
+    ))
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    lead_row = db.execute(
+        select(Lead, LeadSource.name, ServiceType.name, User.full_name)
+        .join(LeadSource, LeadSource.id == Lead.source_id)
+        .join(ServiceType, ServiceType.id == Lead.service_type_id)
+        .outerjoin(User, User.id == Lead.owner_id)
+        .where(
+            Lead.organization_id == actor.organization_id,
+            Lead.client_id == client_id,
+            Lead.deleted_at.is_(None),
+        )
+        .order_by(Lead.updated_at.desc())
+        .limit(1)
+    ).first()
+    lead = lead_row[0] if lead_row else None
+    lead_item = ClientProfileItem(
+        id=lead.id,
+        title=lead_row[2],
+        subtitle=f"Origem: {lead_row[1]} · Responsável: {lead_row[3] or 'Não definido'}",
+        status=lead.status,
+        occurred_at=lead.created_at,
+    ) if lead_row else None
+
+    contract = db.scalar(select(CommercialContract).where(
+        CommercialContract.organization_id == actor.organization_id,
+        CommercialContract.client_id == client_id,
+        CommercialContract.deleted_at.is_(None),
+    ).order_by(CommercialContract.updated_at.desc()).limit(1))
+    contract_item = ClientProfileItem(
+        id=contract.id,
+        title=contract.contract_number,
+        subtitle=contract.title,
+        status=contract.status,
+        occurred_at=contract.updated_at,
+    ) if contract else None
+
+    recovery = db.execute(
+        select(RecoveryCase, User.full_name)
+        .outerjoin(User, User.id == RecoveryCase.assigned_user_id)
+        .where(
+            RecoveryCase.organization_id == actor.organization_id,
+            RecoveryCase.client_id == client_id,
+            RecoveryCase.deleted_at.is_(None),
+        )
+        .order_by(RecoveryCase.updated_at.desc())
+        .limit(1)
+    ).first()
+    recovery_item = ClientProfileItem(
+        id=recovery[0].id,
+        title=recovery[0].case_number,
+        subtitle=f"Etapa: {recovery[0].stage} · Responsável: {recovery[1] or 'Não definido'}",
+        status=recovery[0].status,
+        occurred_at=recovery[0].updated_at,
+    ) if recovery else None
+
+    next_task = None
+    if lead:
+        next_task = db.scalar(select(LeadTask).where(
+            LeadTask.organization_id == actor.organization_id,
+            LeadTask.lead_id == lead.id,
+            LeadTask.status == "PENDENTE",
+        ).order_by(LeadTask.due_at.asc()).limit(1))
+    next_action_item = ClientProfileItem(
+        id=next_task.id,
+        title=next_task.description,
+        subtitle="Próxima ação comercial",
+        status=next_task.status,
+        occurred_at=next_task.due_at,
+    ) if next_task else None
+
+    latest_diagnosis = db.scalar(select(Diagnosis).where(
+        Diagnosis.organization_id == actor.organization_id,
+        Diagnosis.client_id == client_id,
+    ).order_by(Diagnosis.created_at.desc()).limit(1))
+    diagnosis_item = ClientProfileItem(
+        id=latest_diagnosis.id,
+        title=latest_diagnosis.eligibility_result,
+        subtitle=f"Versão {latest_diagnosis.version} · {latest_diagnosis.eligibility_score} pontos",
+        status=latest_diagnosis.risk_level,
+        occurred_at=latest_diagnosis.created_at,
+    ) if latest_diagnosis else None
+
+    timeline: list[ClientProfileItem] = []
+    if lead:
+        interactions = list(db.scalars(select(LeadInteraction).where(
+            LeadInteraction.organization_id == actor.organization_id,
+            LeadInteraction.lead_id == lead.id,
+        ).order_by(LeadInteraction.occurred_at.desc()).limit(30)))
+        timeline.extend(ClientProfileItem(
+            id=item.id, title=item.description, subtitle="Histórico comercial",
+            status=item.interaction_type, occurred_at=item.occurred_at,
+        ) for item in interactions)
+    if contract_item:
+        timeline.append(ClientProfileItem(id=contract_item.id, title=f"Contrato {contract_item.title}", subtitle=contract_item.subtitle, status=contract_item.status, occurred_at=contract_item.occurred_at))
+    if recovery_item:
+        timeline.append(ClientProfileItem(id=recovery_item.id, title=f"Caso {recovery_item.title}", subtitle=recovery_item.subtitle, status=recovery_item.status, occurred_at=recovery_item.occurred_at))
+    if diagnosis_item:
+        timeline.append(ClientProfileItem(id=diagnosis_item.id, title="Diagnóstico financeiro salvo", subtitle=diagnosis_item.subtitle, status=diagnosis_item.status, occurred_at=diagnosis_item.occurred_at))
+    timeline.sort(key=lambda item: item.occurred_at.timestamp() if item.occurred_at else 0, reverse=True)
+
+    document_count = db.scalar(select(func.count(ClientDocument.id)).where(
+        ClientDocument.organization_id == actor.organization_id,
+        ClientDocument.client_id == client_id,
+        ClientDocument.deleted_at.is_(None),
+    )) or 0
+    negotiation_count = db.scalar(select(func.count(Negotiation.id)).where(
+        Negotiation.organization_id == actor.organization_id,
+        Negotiation.client_id == client_id,
+    )) or 0
+    agreement_count = db.scalar(select(func.count(PaymentAgreement.id)).where(
+        PaymentAgreement.organization_id == actor.organization_id,
+        PaymentAgreement.client_id == client_id,
+    )) or 0
+
+    return ClientProfileSummary(
+        lead=lead_item,
+        contract=contract_item,
+        recovery_case=recovery_item,
+        next_action=next_action_item,
+        latest_diagnosis=diagnosis_item,
+        document_count=document_count,
+        negotiation_count=negotiation_count,
+        agreement_count=agreement_count,
+        timeline=timeline[:40],
+    )
 
 
 @router.patch("/{client_id}", response_model=ClientRead)

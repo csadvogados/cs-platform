@@ -64,6 +64,26 @@ class ClientPage(BaseModel):
     pages: int = Field(ge=0)
 
 
+class ClientProfileItem(BaseModel):
+    id: uuid.UUID | None = None
+    title: str
+    subtitle: str | None = None
+    status: str | None = None
+    occurred_at: datetime | None = None
+
+
+class ClientProfileSummary(BaseModel):
+    lead: ClientProfileItem | None = None
+    contract: ClientProfileItem | None = None
+    recovery_case: ClientProfileItem | None = None
+    next_action: ClientProfileItem | None = None
+    latest_diagnosis: ClientProfileItem | None = None
+    document_count: int = 0
+    negotiation_count: int = 0
+    agreement_count: int = 0
+    timeline: list[ClientProfileItem] = Field(default_factory=list)
+
+
 class ClientImportPreviewRow(BaseModel):
     line: int
     valid: bool

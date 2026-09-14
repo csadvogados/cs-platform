@@ -17,3 +17,30 @@ def test_duplicate_cpf(client, token):
     assert client.post("/api/v1/clients",json=payload,headers=headers).status_code == 201
     payload["full_name"]="Cliente Dois"
     assert client.post("/api/v1/clients",json=payload,headers=headers).status_code == 409
+
+
+def test_client_profile_returns_unified_empty_summary(client, token):
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        "/api/v1/clients",
+        json={"full_name": "Cliente Perfil", "cpf": "52998224725"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+
+    response = client.get(
+        f"/api/v1/clients/{created.json()['id']}/profile",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "lead": None,
+        "contract": None,
+        "recovery_case": None,
+        "next_action": None,
+        "latest_diagnosis": None,
+        "document_count": 0,
+        "negotiation_count": 0,
+        "agreement_count": 0,
+        "timeline": [],
+    }
