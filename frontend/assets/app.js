@@ -492,10 +492,24 @@
     if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
 
     let response;
-    try {
-      response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-    } catch {
-      throw new Error("Não foi possível conectar à API. Confira a internet e a configuração de CORS no Railway.");
+    const method = String(options.method || "GET").toUpperCase();
+    const retryableStatuses = new Set([429, 502, 503, 504]);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      } catch {
+        if (attempt === 0 && method === "GET") {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          continue;
+        }
+        throw new Error("Não foi possível conectar à API. Confira a internet e a configuração de CORS no Railway.");
+      }
+      if (attempt === 0 && method === "GET" && retryableStatuses.has(response.status)) {
+        const retryAfter = Number(response.headers.get("Retry-After"));
+        await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1000, 3000) : 800));
+        continue;
+      }
+      break;
     }
 
     if (response.status === 401 && path !== "/api/v1/auth/login") {
@@ -889,7 +903,10 @@
     const requests = await Promise.allSettled(loaders.map((loader) => loader.request));
     setBusy(button, false);
     const failed = requests.map((request, index) => ({ request, name:loaders[index].name })).filter((item) => item.request.status === "rejected");
-    if (failed.length) toast(`Não foi possível atualizar: ${failed.map((item) => item.name).join(", ")}. Tente novamente em instantes.`, "error");
+    if (failed.length) {
+      const details = failed.map((item) => `${item.name}: ${item.request.reason?.message || "erro desconhecido"}`).join(" | ");
+      toast(`Não foi possível atualizar: ${details}`, "error");
+    }
     else if (showNotice) toast("Dados atualizados.");
   }
 
@@ -1866,7 +1883,14 @@
   }
 
   async function loadClients(page = 1) {
-    await Promise.all([loadClientOptions(), loadClientPage(page)]);
+    const requests = await Promise.allSettled([loadClientOptions(), loadClientPage(page)]);
+    const labels = ["lista para seleção", "página de clientes"];
+    const failed = requests
+      .map((request, index) => ({ request, label:labels[index] }))
+      .filter((item) => item.request.status === "rejected");
+    if (failed.length) {
+      throw new Error(failed.map((item) => `${item.label} (${item.request.reason?.message || "erro desconhecido"})`).join("; "));
+    }
   }
 
   async function loadClientDetail(clientId) {
@@ -1931,8 +1955,9 @@
   }
 
   async function loadCrm() {
-    const leadAccess = ["admin", "supervisor", "advogado", "atendimento"].includes(String(state.user?.role || "")) || state.user?.is_superuser;
-    const [summary, contacts, opportunities, tasks, interactions, leads, leadDashboard, leadReports, leadTeam, leadCatalogs] = await Promise.all([
+    const leadAccess = ["admin", "supervisor", "advogado", "atendimento"].includes(String(state.user?.role || "").toLowerCase()) || state.user?.is_superuser;
+    const labels = ["resumo", "contatos", "oportunidades", "tarefas", "interações", "leads", "indicadores de leads", "relatórios de leads", "equipe", "catálogos"];
+    const requests = await Promise.allSettled([
       api("/api/v1/crm/summary"),
       api("/api/v1/crm/contacts?limit=100"),
       api("/api/v1/crm/opportunities?limit=100"),
@@ -1944,6 +1969,11 @@
       leadAccess ? api("/api/v1/leads/analytics/team") : Promise.resolve([]),
       leadAccess ? api("/api/v1/leads/catalogs") : Promise.resolve({ sources: [], services: [] })
     ]);
+    const valueAt = (index, fallback) => requests[index].status === "fulfilled" ? requests[index].value : fallback;
+    const [summary, contacts, opportunities, tasks, interactions, leads, leadDashboard, leadReports, leadTeam, leadCatalogs] = [
+      valueAt(0, {}), valueAt(1, []), valueAt(2, []), valueAt(3, []), valueAt(4, []),
+      valueAt(5, []), valueAt(6, {}), valueAt(7, {}), valueAt(8, []), valueAt(9, { sources: [], services: [] })
+    ];
     state.crm = {
       summary,
       contacts: Array.isArray(contacts) ? contacts : contacts.items || [],
@@ -1955,6 +1985,12 @@
     renderLeads();
     renderCrm();
     renderDashboard();
+    const failed = requests
+      .map((request, index) => ({ request, label:labels[index] }))
+      .filter((item) => item.request.status === "rejected");
+    if (failed.length) {
+      throw new Error(failed.map((item) => `${item.label} (${item.request.reason?.message || "erro desconhecido"})`).join("; "));
+    }
   }
 
   const contractStatusLabels = {
