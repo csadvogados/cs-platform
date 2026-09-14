@@ -1,5 +1,5 @@
 import re, uuid
-from datetime import date, datetime
+from datetime import date
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.models.enums import ClientStatus
 
@@ -9,7 +9,7 @@ class ClientBase(BaseModel):
     rg: str | None = None
     birth_date: date | None = None
     profession: str | None = None
-    email: str | None = None
+    email: EmailStr | None = None
     phone: str | None = None
     city: str | None = None
     state: str | None = Field(default=None, min_length=2, max_length=2)
@@ -20,14 +20,6 @@ class ClientBase(BaseModel):
     notes: str | None = None
     assigned_user_id: uuid.UUID | None = None
 
-    @field_validator("state")
-    @classmethod
-    def normalize_state(cls, value: str | None) -> str | None:
-        return value.upper() if value else value
-
-class ClientCreate(ClientBase):
-    email: EmailStr | None = None
-
     @field_validator("cpf")
     @classmethod
     def normalize_cpf(cls, value: str) -> str:
@@ -35,6 +27,14 @@ class ClientCreate(ClientBase):
         if len(digits) != 11 or digits == digits[0] * 11:
             raise ValueError("CPF deve conter 11 dígitos válidos estruturalmente")
         return digits
+
+    @field_validator("state")
+    @classmethod
+    def normalize_state(cls, value: str | None) -> str | None:
+        return value.upper() if value else value
+
+class ClientCreate(ClientBase):
+    pass
 
 class ClientUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=3, max_length=200)
@@ -53,62 +53,3 @@ class ClientRead(ClientBase):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     organization_id: uuid.UUID
-    archived_at: datetime | None = None
-
-
-class ClientPage(BaseModel):
-    items: list[ClientRead]
-    total: int = Field(ge=0)
-    page: int = Field(ge=1)
-    page_size: int = Field(ge=1, le=100)
-    pages: int = Field(ge=0)
-
-
-class ClientProfileItem(BaseModel):
-    id: uuid.UUID | None = None
-    title: str
-    subtitle: str | None = None
-    status: str | None = None
-    occurred_at: datetime | None = None
-
-
-class ClientProfileSummary(BaseModel):
-    lead: ClientProfileItem | None = None
-    contract: ClientProfileItem | None = None
-    recovery_case: ClientProfileItem | None = None
-    next_action: ClientProfileItem | None = None
-    latest_diagnosis: ClientProfileItem | None = None
-    document_count: int = 0
-    negotiation_count: int = 0
-    agreement_count: int = 0
-    timeline: list[ClientProfileItem] = Field(default_factory=list)
-
-
-class ClientImportPreviewRow(BaseModel):
-    line: int
-    valid: bool
-    duplicate: bool = False
-    display_name: str | None = None
-    display_cpf: str | None = None
-    data: ClientCreate | None = None
-    errors: list[str] = Field(default_factory=list)
-
-
-class ClientImportPreview(BaseModel):
-    filename: str
-    total_rows: int
-    valid_rows: int
-    invalid_rows: int
-    duplicate_rows: int
-    rows: list[ClientImportPreviewRow]
-
-
-class ClientImportRequest(BaseModel):
-    source_filename: str | None = Field(default=None, max_length=255)
-    clients: list[ClientCreate] = Field(min_length=1, max_length=500)
-
-
-class ClientImportResult(BaseModel):
-    imported: int
-    client_ids: list[uuid.UUID]
-

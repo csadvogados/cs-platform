@@ -20,7 +20,7 @@ services:
       - key: INITIAL_ADMIN_PASSWORD
         sync: false
       - key: CORS_ORIGINS
-        value: https://cs-platform-web-production.up.railway.app,https://sistema.rdsconsultoria.com.br
+        value: https://sistema.rdsconsultoria.com.br
 
 databases:
   - name: cs-platform-db

@@ -1,3 +1,13 @@
+# v5.5.0
+
+- CS Captação / CRM MVP implementado sobre o CRM Enterprise.
+- Funil NOVO, CONTATADO, QUALIFICADO, PROPOSTA, CONVERTIDO e PERDIDO.
+- Pipeline, detalhe do lead, histórico de etapa, dashboard e filtros comerciais.
+- Conversão para cliente contratado e criação de caso CS Recupera.
+- RBAC específico `crm.*` e auditoria com valores anteriores/posteriores.
+- Migration `0007_cs_captacao_mvp`.
+- 48 testes aprovados na validação manual.
+
 # v5.4.2
 
 - Deploy Railway consolidado no Docker entrypoint.
