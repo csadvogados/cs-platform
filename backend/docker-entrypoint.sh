@@ -15,7 +15,7 @@ esac
 
 cd /app
 
-echo "[deploy] CS Platform v5.5.0 — CS Captação / CRM MVP"
+echo "[deploy] CS Platform v5.5.1 — CS Captação / CRM MVP + Docker Healthcheck Hotfix"
 echo "[deploy] Diretório atual: $(pwd)"
 echo "[deploy] Porta: $PORT"
 echo "[deploy] Arquivos de migration presentes:"

@@ -6,8 +6,8 @@ from app.core.constants import APP_VERSION
 BACKEND = Path(__file__).resolve().parents[1]
 
 
-def test_release_version_is_v550():
-    assert APP_VERSION == "5.5.0"
+def test_release_version_is_v551():
+    assert APP_VERSION == "5.5.1"
 
 
 def test_docker_entrypoint_uses_runtime_port_and_runs_migrations():
@@ -32,6 +32,8 @@ def test_dockerfile_uses_cmd_not_entrypoint_to_avoid_override_recursion():
     assert 'CMD ["/app/docker-entrypoint.sh"]' in content
     assert "ENTRYPOINT" not in content
     assert "test -f /app/alembic/versions/0007_cs_captacao_mvp.py" in content
+    assert "CMD-SHELL" not in content
+    assert "HEALTHCHECK" in content and "CMD python -c" in content
 
 
 def test_required_migration_is_packaged():
