@@ -522,6 +522,24 @@
     return response.json();
   }
 
+  async function settleWithConcurrency(factories, concurrency = 3) {
+    const results = new Array(factories.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < factories.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        try {
+          results[index] = { status:"fulfilled", value:await factories[index]() };
+        } catch (reason) {
+          results[index] = { status:"rejected", reason };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length:Math.min(concurrency, factories.length) }, () => worker()));
+    return results;
+  }
+
   async function openDiagnosisReport(path, button) {
     const popup = window.open("", "_blank");
     if (!popup) {
@@ -877,30 +895,30 @@
       fillCollectionUserSelects();
     }
     const loaders = [
-      { name:"Visão geral", request:loadDashboard() },
-      { name:"Cobranças", request:loadCollections() },
-      { name:"Alertas", request:loadOperationalAlerts() },
-      { name:"Agenda", request:loadOperationalAgenda() },
-      { name:"Clientes", request:loadClients() },
-      { name:"CRM", request:loadCrm() },
-      ...(canReadUsers() ? [{ name:"Equipe", request:loadUsers() }] : []),
-      { name:"Configurações", request:loadSettings() },
-      { name:"Conexão", request:checkHealth() }
+      { name:"Visão geral", request:() => loadDashboard() },
+      { name:"Cobranças", request:() => loadCollections() },
+      { name:"Alertas", request:() => loadOperationalAlerts() },
+      { name:"Agenda", request:() => loadOperationalAgenda() },
+      { name:"Clientes", request:() => loadClients() },
+      { name:"CRM", request:() => loadCrm() },
+      ...(canReadUsers() ? [{ name:"Equipe", request:() => loadUsers() }] : []),
+      { name:"Configurações", request:() => loadSettings() },
+      { name:"Conexão", request:() => checkHealth() }
     ];
     if (state.currentView === "clientDetail" && state.selectedClient) {
-      loaders.push({ name:"Cliente selecionado", request:loadClientDetail(state.selectedClient.id) });
+      loaders.push({ name:"Cliente selecionado", request:() => loadClientDetail(state.selectedClient.id) });
     }
     if (canViewManagement()) {
-      loaders.push({ name:"Indicadores", request:loadManagement() });
+      loaders.push({ name:"Indicadores", request:() => loadManagement() });
     }
     if (state.currentView === "performance" && canViewPerformance()) {
-      loaders.push({ name:"Metas", request:loadPerformance() });
+      loaders.push({ name:"Metas", request:() => loadPerformance() });
     }
-    if (state.currentView === "notifications") loaders.push({ name:"Notificações", request:loadNotificationsPage() });
+    if (state.currentView === "notifications") loaders.push({ name:"Notificações", request:() => loadNotificationsPage() });
     if (state.currentView === "audit" && canViewAudit()) {
-      loaders.push({ name:"Histórico", request:loadAudit(state.audit.page) });
+      loaders.push({ name:"Histórico", request:() => loadAudit(state.audit.page) });
     }
-    const requests = await Promise.allSettled(loaders.map((loader) => loader.request));
+    const requests = await settleWithConcurrency(loaders.map((loader) => loader.request), 2);
     setBusy(button, false);
     const failed = requests.map((request, index) => ({ request, name:loaders[index].name })).filter((item) => item.request.status === "rejected");
     if (failed.length) {
@@ -1883,7 +1901,7 @@
   }
 
   async function loadClients(page = 1) {
-    const requests = await Promise.allSettled([loadClientOptions(), loadClientPage(page)]);
+    const requests = await settleWithConcurrency([() => loadClientOptions(), () => loadClientPage(page)], 1);
     const labels = ["lista para seleção", "página de clientes"];
     const failed = requests
       .map((request, index) => ({ request, label:labels[index] }))
@@ -1957,18 +1975,18 @@
   async function loadCrm() {
     const leadAccess = ["admin", "supervisor", "advogado", "atendimento"].includes(String(state.user?.role || "").toLowerCase()) || state.user?.is_superuser;
     const labels = ["resumo", "contatos", "oportunidades", "tarefas", "interações", "leads", "indicadores de leads", "relatórios de leads", "equipe", "catálogos"];
-    const requests = await Promise.allSettled([
-      api("/api/v1/crm/summary"),
-      api("/api/v1/crm/contacts?limit=100"),
-      api("/api/v1/crm/opportunities?limit=100"),
-      api("/api/v1/crm/tasks?limit=100"),
-      api("/api/v1/crm/interactions?limit=100"),
-      leadAccess ? api(`/api/v1/leads?limit=200&_=${Date.now()}`) : Promise.resolve([]),
-      leadAccess ? api("/api/v1/leads/analytics/dashboard") : Promise.resolve({}),
-      leadAccess ? api("/api/v1/leads/analytics/reports") : Promise.resolve({}),
-      leadAccess ? api("/api/v1/leads/analytics/team") : Promise.resolve([]),
-      leadAccess ? api("/api/v1/leads/catalogs") : Promise.resolve({ sources: [], services: [] })
-    ]);
+    const requests = await settleWithConcurrency([
+      () => api("/api/v1/crm/summary"),
+      () => api("/api/v1/crm/contacts?limit=100"),
+      () => api("/api/v1/crm/opportunities?limit=100"),
+      () => api("/api/v1/crm/tasks?limit=100"),
+      () => api("/api/v1/crm/interactions?limit=100"),
+      () => leadAccess ? api(`/api/v1/leads?limit=200&_=${Date.now()}`) : Promise.resolve([]),
+      () => leadAccess ? api("/api/v1/leads/analytics/dashboard") : Promise.resolve({}),
+      () => leadAccess ? api("/api/v1/leads/analytics/reports") : Promise.resolve({}),
+      () => leadAccess ? api("/api/v1/leads/analytics/team") : Promise.resolve([]),
+      () => leadAccess ? api("/api/v1/leads/catalogs") : Promise.resolve({ sources: [], services: [] })
+    ], 2);
     const valueAt = (index, fallback) => requests[index].status === "fulfilled" ? requests[index].value : fallback;
     const [summary, contacts, opportunities, tasks, interactions, leads, leadDashboard, leadReports, leadTeam, leadCatalogs] = [
       valueAt(0, {}), valueAt(1, []), valueAt(2, []), valueAt(3, []), valueAt(4, []),

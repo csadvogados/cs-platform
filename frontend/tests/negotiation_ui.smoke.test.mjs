@@ -30,7 +30,7 @@ test("interface não reaproveita a lista da equipe em sessão sem permissão", (
   assert.match(app, /function canReadUsers\(\)/);
   assert.match(app, /\$\('\[data-view="users"\]'\)\.hidden = !canReadUsers\(\)/);
   assert.match(app, /if \(!canReadUsers\(\)\) \{\s*state\.users = \[\];/);
-  assert.match(app, /\.\.\.\(canReadUsers\(\) \? \[\{ name:"Equipe", request:loadUsers\(\) \}\] : \[\]\)/);
+  assert.match(app, /\.\.\.\(canReadUsers\(\) \? \[\{ name:"Equipe", request:\(\) => loadUsers\(\) \}\] : \[\]\)/);
 });
 
 test("interface permite ao administrador redefinir senha temporária", () => {
