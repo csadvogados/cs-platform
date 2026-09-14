@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import require_roles
 from app.core.security import hash_password
 from app.db.session import get_db
-from app.models.access_control import Role, UserSession
+from app.models.access_control import PasswordHistory, Role, UserSession
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
-from app.schemas.user import ALLOWED_ROLES, UserCreate, UserPage, UserRead, UserUpdate
+from app.schemas.user import ALLOWED_ROLES, UserCreate, UserPage, UserPasswordReset, UserRead, UserUpdate
 from app.services.audit import record_audit
 
 router=APIRouter()
@@ -70,6 +70,23 @@ def block_user(user_id:uuid.UUID,db:Session=Depends(get_db),actor:User=Depends(r
 def unblock_user(user_id:uuid.UUID,db:Session=Depends(get_db),actor:User=Depends(require_roles("admin"))):
     user=_get_user(db,user_id,actor.organization_id); user.status="active";user.failed_login_attempts=0;user.locked_until=None
     record_audit(db,organization_id=actor.organization_id,user_id=actor.id,entity_type="user",entity_id=user.id,action="unblock");db.commit();db.refresh(user);return user
+
+@router.post("/{user_id}/reset-password",status_code=status.HTTP_204_NO_CONTENT)
+def reset_user_password(user_id:uuid.UUID,payload:UserPasswordReset,db:Session=Depends(get_db),actor:User=Depends(require_roles("admin"))):
+    user=_get_user(db,user_id,actor.organization_id)
+    if user.id==actor.id: raise HTTPException(400,"Use a alteração de senha da conta atual")
+    now=datetime.now(timezone.utc)
+    db.add(PasswordHistory(user_id=user.id,password_hash=user.password_hash,created_at=now))
+    user.password_hash=hash_password(payload.new_password)
+    user.must_change_password=True
+    user.password_changed_at=now
+    user.failed_login_attempts=0
+    user.locked_until=None
+    db.execute(update(RefreshToken).where(RefreshToken.user_id==user.id,RefreshToken.revoked.is_(False)).values(revoked=True,revoked_at=now))
+    db.execute(update(UserSession).where(UserSession.user_id==user.id,UserSession.revoked_at.is_(None)).values(revoked_at=now))
+    record_audit(db,organization_id=actor.organization_id,user_id=actor.id,entity_type="user",entity_id=user.id,action="reset_password",new_values={"sessions_revoked":True,"force_change_next_login":True})
+    db.commit()
+    return None
 
 @router.delete("/{user_id}",status_code=204)
 def delete_user(user_id:uuid.UUID,db:Session=Depends(get_db),actor:User=Depends(require_roles("admin"))):

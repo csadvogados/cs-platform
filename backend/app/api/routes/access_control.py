@@ -3,13 +3,14 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_roles
 from app.core.security import hash_password, hash_token
 from app.db.session import get_db
 from app.models.access_control import Permission, Role, UserInvitation, UserSession
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.access_control import *
 from app.services.access_control import create_invitation
@@ -78,8 +79,20 @@ def accept_invitation(payload:InvitationAccept,db:Session=Depends(get_db)):
 def my_sessions(db:Session=Depends(get_db),actor:User=Depends(get_current_user)):
     return list(db.scalars(select(UserSession).where(UserSession.user_id==actor.id).order_by(UserSession.created_at.desc())))
 
+@sessions_router.delete("", status_code=204)
+def revoke_all_sessions(db:Session=Depends(get_db),actor:User=Depends(get_current_user)):
+    now=datetime.now(timezone.utc)
+    db.execute(update(UserSession).where(UserSession.user_id==actor.id,UserSession.revoked_at.is_(None)).values(revoked_at=now))
+    db.execute(update(RefreshToken).where(RefreshToken.user_id==actor.id,RefreshToken.revoked.is_(False)).values(revoked=True,revoked_at=now))
+    record_audit(db,organization_id=actor.organization_id,user_id=actor.id,entity_type="session",entity_id=actor.id,action="revoke_all")
+    db.commit(); return None
+
 @sessions_router.delete("/{session_id}", status_code=204)
 def revoke_session(session_id:uuid.UUID,db:Session=Depends(get_db),actor:User=Depends(get_current_user)):
     session=db.scalar(select(UserSession).where(UserSession.id==session_id,UserSession.user_id==actor.id))
     if not session: raise HTTPException(404,"Sessão não encontrada")
-    session.revoked_at=datetime.now(timezone.utc); db.commit(); return None
+    now=datetime.now(timezone.utc); session.revoked_at=now
+    token=db.scalar(select(RefreshToken).where(RefreshToken.token_hash==session.refresh_token_hash,RefreshToken.user_id==actor.id))
+    if token and not token.revoked: token.revoked=True; token.revoked_at=now
+    record_audit(db,organization_id=actor.organization_id,user_id=actor.id,entity_type="session",entity_id=session.id,action="revoke")
+    db.commit(); return None

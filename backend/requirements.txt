@@ -11,3 +11,4 @@ pwdlib[argon2]>=0.2,<1
 python-multipart>=0.0.12,<1
 pytest>=8,<9
 httpx>=0.27,<1
+swagger-ui-bundle-v2==5.31.0
