@@ -11,7 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_permissions, require_roles
+from app.api.deps import require_permissions
 from app.db.session import get_db
 from app.models.client import Client
 from app.models.crm import CRMContact, CRMInteraction, CRMOpportunity, CRMTask, CommercialContract, Lead, LeadInteraction, LeadTask, LeadSource, ServiceType
@@ -350,7 +350,9 @@ def _boolean_label(value: bool | None) -> str:
 def create_client(
     payload: ClientCreate,
     db: Session = Depends(get_db),
-    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+    actor: IdentityContext = Depends(
+        require_permissions(PermissionCode.CLIENT_CREATE.value)
+    ),
 ):
     client = Client(organization_id=actor.organization_id, **payload.model_dump(mode="json"))
     db.add(client)
@@ -362,7 +364,7 @@ def create_client(
     record_audit(
         db,
         organization_id=actor.organization_id,
-        user_id=actor.id,
+        user_id=actor.user_id,
         entity_type="client",
         entity_id=client.id,
         action="create",
@@ -382,7 +384,9 @@ def list_clients(
     include_archived: bool = Query(False),
     archived_only: bool = Query(False),
     db: Session = Depends(get_db),
-    actor: User = Depends(get_current_user),
+    actor: IdentityContext = Depends(
+        require_permissions(PermissionCode.CLIENT_READ.value)
+    ),
 ):
     stmt = (
         _client_query(actor.organization_id, q, client_status, include_archived, archived_only)
@@ -402,7 +406,9 @@ def paginate_clients(
     include_archived: bool = Query(False),
     archived_only: bool = Query(False),
     db: Session = Depends(get_db),
-    actor: User = Depends(get_current_user),
+    actor: IdentityContext = Depends(
+        require_permissions(PermissionCode.CLIENT_READ.value)
+    ),
 ):
     filtered = _client_query(
         actor.organization_id, q, client_status, include_archived, archived_only
@@ -706,7 +712,9 @@ def import_clients(
 def get_client(
     client_id: uuid.UUID,
     db: Session = Depends(get_db),
-    actor: User = Depends(get_current_user),
+    actor: IdentityContext = Depends(
+        require_permissions(PermissionCode.CLIENT_READ.value)
+    ),
 ):
     client = db.scalar(
         select(Client).where(
@@ -724,7 +732,9 @@ def get_client(
 def get_client_profile(
     client_id: uuid.UUID,
     db: Session = Depends(get_db),
-    actor: User = Depends(get_current_user),
+    actor: IdentityContext = Depends(
+        require_permissions(PermissionCode.CLIENT_READ.value)
+    ),
 ):
     client = db.scalar(select(Client).where(
         Client.id == client_id,
@@ -880,7 +890,9 @@ def update_client(
     client_id: uuid.UUID,
     payload: ClientUpdate,
     db: Session = Depends(get_db),
-    actor: User = Depends(require_roles("admin", "lawyer", "team")),
+    actor: IdentityContext = Depends(
+        require_permissions(PermissionCode.CLIENT_UPDATE.value)
+    ),
 ):
     client = db.scalar(
         select(Client).where(
@@ -897,7 +909,7 @@ def update_client(
     record_audit(
         db,
         organization_id=actor.organization_id,
-        user_id=actor.id,
+        user_id=actor.user_id,
         entity_type="client",
         entity_id=client.id,
         action="update",
