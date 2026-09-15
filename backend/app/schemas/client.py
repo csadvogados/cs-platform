@@ -66,6 +66,7 @@ class ClientPage(BaseModel):
 
 class ClientProfileItem(BaseModel):
     id: uuid.UUID | None = None
+    lead_id: uuid.UUID | None = None
     title: str
     subtitle: str | None = None
     status: str | None = None

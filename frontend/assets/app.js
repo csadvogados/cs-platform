@@ -2171,7 +2171,11 @@
   }
 
   async function openLeadDetail(id) {
-    const lead = state.leads.items.find((x) => String(x.id) === String(id)); if (!lead) return;
+    let lead = state.leads.items.find((x) => String(x.id) === String(id));
+    if (!lead) {
+      lead = await api(`/api/v1/leads/${encodeURIComponent(id)}`);
+      state.leads.items.push(lead);
+    }
     const timeline = await api(`/api/v1/leads/${id}/timeline`);
     const dialog = $("#lead-detail-dialog");
     const interactions = (timeline.interactions || []).map((x) => `<article><strong>${escapeHtml(x.interaction_type)}</strong><span>${escapeHtml(x.description)}</span><small>${escapeHtml(formatDate(x.occurred_at, true))}</small></article>`);
@@ -3459,16 +3463,16 @@
       <section class="panel client-360-panel">
         <div class="panel-header"><div><p class="eyebrow dark">PERFIL 360</p><h3>Visão unificada do cliente</h3></div><span class="result-count">Comercial, jurídico e financeiro</span></div>
         <div class="client-360-grid">
-          ${renderClient360Item("Origem comercial", profile?.lead, "Nenhum lead vinculado")}
+          ${renderClient360Item("Origem comercial", profile?.lead, "Nenhum lead vinculado", "lead")}
           ${renderClient360Item("Contrato", profile?.contract, "Nenhum contrato")}
           ${renderClient360Item("Caso CS Recupera", profile?.recovery_case, "Nenhum caso aberto")}
-          ${renderClient360Item("Próxima ação", profile?.next_action, "Nenhuma ação pendente")}
+          ${renderClient360Item("Próxima ação", profile?.next_action, "Nenhuma ação pendente", "task")}
           ${renderClient360Item("Último diagnóstico", profile?.latest_diagnosis, "Nenhum diagnóstico salvo")}
           <article><span>Registros vinculados</span><strong>${Number(profile?.document_count || 0)} documento(s)</strong><small>${Number(profile?.negotiation_count || 0)} negociação(ões) · ${Number(profile?.agreement_count || 0)} acordo(s)</small></article>
         </div>
         <div class="client-360-timeline">
           <h4>Histórico unificado</h4>
-          ${profile?.timeline?.length ? profile.timeline.map((item) => `<article><span class="timeline-dot"></span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.subtitle || item.status || "Registro do cliente")} · ${escapeHtml(formatDate(item.occurred_at, true))}</small></div></article>`).join("") : '<div class="empty-state">O histórico será formado conforme o atendimento avançar.</div>'}
+          ${profile?.timeline?.length ? profile.timeline.map((item) => `<article><span class="timeline-dot"></span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.subtitle || "Registro do cliente")} · ${escapeHtml(client360Status(item.status))} · ${escapeHtml(formatDate(item.occurred_at, true))}</small></div></article>`).join("") : '<div class="empty-state">O histórico será formado conforme o atendimento avançar.</div>'}
         </div>
       </section>
 
@@ -3541,6 +3545,8 @@
       </section>`;
 
     $("#back-to-clients").addEventListener("click", () => setView("clients"));
+    $$('[data-profile-lead]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openContractLead(button.dataset.profileLead).catch((error) => toast(error.message, "error"))));
+    $$('[data-profile-contract]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openLeadContractDocument(button.dataset.leadId, button.dataset.profileContract).catch((error) => toast(error.message, "error"))));
     $("#edit-client-button").addEventListener("click", openClientEditor);
     $("#delete-client-button")?.addEventListener("click", deleteSelectedClient);
     $$("[data-open-dialog]", $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.openDialog)));
@@ -3563,9 +3569,16 @@
     $$('[data-validate-document]', $("#client-detail-content")).forEach((button) => button.addEventListener("click", () => validateDocument(button.dataset.validateDocument, button.dataset.documentStatus, button)));
   }
 
-  function renderClient360Item(label, item, emptyText) {
+  function client360Status(status) {
+    return contractStatusLabels[status] || leadStatusLabels[status] || recoveryStatusLabels[status] || agreementStatusLabels[status] || negotiationStatusLabels[status] || ({pending:"Pendente", validated:"Validado", PENDENTE:"Pendente", high:"Alto", moderate:"Moderado", low:"Baixo", critical:"Crítico"})[status] || String(status || "").replaceAll("_", " ");
+  }
+
+  function renderClient360Item(label, item, emptyText, kind = "") {
     if (!item) return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(emptyText)}</strong><small>—</small></article>`;
-    return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.subtitle || item.status || "Atualizado")} ${item.occurred_at ? `· ${escapeHtml(formatDate(item.occurred_at, true))}` : ""}</small></article>`;
+    const overdue = kind === "task" && item.status === "PENDENTE" && new Date(item.occurred_at).getTime() < Date.now();
+    const access = state.user?.is_superuser || ["admin", "supervisor", "advogado", "atendimento"].includes(String(state.user?.role || "").toLowerCase());
+    const action = access && kind === "lead" ? `<button type="button" class="text-link" data-profile-lead="${escapeHtml(item.id)}">Abrir lead</button>` : access && item.lead_id ? `<button type="button" class="text-link" data-profile-contract="${escapeHtml(item.id)}" data-lead-id="${escapeHtml(item.lead_id)}">Abrir contrato</button>` : "";
+    return `<article class="${overdue ? "profile-overdue" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.subtitle || "")} · ${escapeHtml(client360Status(item.status))} ${item.occurred_at ? `· ${escapeHtml(formatDate(item.occurred_at, true))}` : ""}</small>${overdue ? '<strong class="danger-text">Ação atrasada</strong>' : ""}${action}</article>`;
   }
 
   async function submitDocument(event) {

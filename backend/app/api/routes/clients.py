@@ -763,6 +763,7 @@ def get_client_profile(
     ).order_by(CommercialContract.updated_at.desc()).limit(1))
     contract_item = ClientProfileItem(
         id=contract.id,
+        lead_id=contract.lead_id,
         title=contract.contract_number,
         subtitle=contract.title,
         status=contract.status,
@@ -831,7 +832,21 @@ def get_client_profile(
         timeline.append(ClientProfileItem(id=recovery_item.id, title=f"Caso {recovery_item.title}", subtitle=recovery_item.subtitle, status=recovery_item.status, occurred_at=recovery_item.occurred_at))
     if diagnosis_item:
         timeline.append(ClientProfileItem(id=diagnosis_item.id, title="Diagnóstico financeiro salvo", subtitle=diagnosis_item.subtitle, status=diagnosis_item.status, occurred_at=diagnosis_item.occurred_at))
-    timeline.sort(key=lambda item: item.occurred_at.timestamp() if item.occurred_at else 0, reverse=True)
+    # Select metadata only: document contents must not be loaded for this summary.
+    documents = db.execute(select(ClientDocument.id, ClientDocument.filename, ClientDocument.status, ClientDocument.created_at).where(
+        ClientDocument.organization_id == actor.organization_id,
+        ClientDocument.client_id == client_id, ClientDocument.deleted_at.is_(None),
+    ).order_by(ClientDocument.created_at.desc()).limit(40)).all()
+    timeline.extend(ClientProfileItem(id=row.id, title=f"Documento: {row.filename}", subtitle="Documento recebido", status=row.status, occurred_at=row.created_at) for row in documents)
+    negotiations = db.execute(select(Negotiation.id, Negotiation.status, Negotiation.opened_at).where(
+        Negotiation.organization_id == actor.organization_id, Negotiation.client_id == client_id,
+    ).order_by(Negotiation.opened_at.desc()).limit(40)).all()
+    timeline.extend(ClientProfileItem(id=row.id, title="Negociação aberta", subtitle="Negociação com credor", status=row.status, occurred_at=row.opened_at) for row in negotiations)
+    agreements = db.execute(select(PaymentAgreement.id, PaymentAgreement.title, PaymentAgreement.status, PaymentAgreement.created_at).where(
+        PaymentAgreement.organization_id == actor.organization_id, PaymentAgreement.client_id == client_id,
+    ).order_by(PaymentAgreement.created_at.desc()).limit(40)).all()
+    timeline.extend(ClientProfileItem(id=row.id, title=f"Acordo: {row.title}", subtitle="Acordo registrado", status=row.status, occurred_at=row.created_at) for row in agreements)
+    timeline.sort(key=lambda item: item.occurred_at.replace(tzinfo=timezone.utc).timestamp() if item.occurred_at and item.occurred_at.tzinfo is None else item.occurred_at.timestamp() if item.occurred_at else 0, reverse=True)
 
     document_count = db.scalar(select(func.count(ClientDocument.id)).where(
         ClientDocument.organization_id == actor.organization_id,
