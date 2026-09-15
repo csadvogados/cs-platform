@@ -3,11 +3,17 @@ set -eu
 
 cd /app
 
+# Garante que os pacotes da aplicação sejam encontrados por qualquer
+# script executado durante o startup do container.
+export PYTHONPATH="/app${PYTHONPATH:+:$PYTHONPATH}"
+
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
 WEB_CONCURRENCY="${WEB_CONCURRENCY:-1}"
 
 echo "[deploy] CS-Platform-v5.25.0"
+echo "[deploy] PYTHONPATH=${PYTHONPATH}"
+
 echo "[deploy] Waiting for database"
 python -m scripts.wait_for_database
 
