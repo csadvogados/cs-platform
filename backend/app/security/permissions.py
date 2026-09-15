@@ -53,6 +53,13 @@ class PermissionCode(StrEnum):
     NEGOTIATION_UPDATE = "negotiation.update"
     NEGOTIATION_APPROVE = "negotiation.approve"
 
+    # CRM / CS Captação
+    CRM_CREATE = "crm.create"
+    CRM_READ = "crm.read"
+    CRM_UPDATE = "crm.update"
+    CRM_DELETE = "crm.delete"
+    CRM_CONVERT = "crm.convert"
+
     # Documentos
     DOCUMENT_UPLOAD = "document.upload"
     DOCUMENT_READ = "document.read"
