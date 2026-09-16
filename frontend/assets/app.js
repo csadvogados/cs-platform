@@ -399,6 +399,12 @@
     return Boolean(state.user?.is_superuser)
       || (state.user?.permissions || []).includes("client.delete");
   }
+
+  function canDeleteLeads() {
+    return Boolean(state.user?.is_superuser)
+      || (state.user?.permissions || []).includes("crm.delete");
+  }
+
   function canRestoreClients() {
     return Boolean(state.user?.is_superuser) || (state.user?.permissions || []).includes("client.restore");
   }
@@ -683,11 +689,12 @@
     if (id === "client-import-dialog") resetClientImportDialog();
     if (id === "user-dialog") resetUserDialog();
     if (id === "lead-dialog") {
-  const form = $("#lead-form");
-  form.reset();
-  form.elements.lead_id.value = "";
-  $("#lead-dialog-title").textContent = "Novo lead";
-  fillLeadSelects()};
+      const form = $("#lead-form");
+      form.reset();
+      form.elements.lead_id.value = "";
+      $("#lead-dialog-title").textContent = "Novo lead";
+      fillLeadSelects();
+    }
     if (["opportunity-dialog", "task-dialog", "interaction-dialog"].includes(id)) {
       try {
         await loadClients();
@@ -2203,7 +2210,10 @@ const leadAccess = Boolean(state.user?.is_superuser)
     const recoveryButton = lead.status === "CONVERTIDO" && service?.code === "CS_RECUPERA" && !lead.recovery_case_id ? `<button class="primary-button" data-recovery-lead="${id}">Abrir caso CS Recupera</button>` : "";
     const recoveryStatus = lead.recovery_case_id ? `<p class="success-note">Caso CS Recupera vinculado.</p>` : "";
     const lostStatus = lead.status === "PERDIDO" ? `<p class="warning-note"><strong>Motivo da perda:</strong> ${escapeHtml(lostReasonLabels[lead.lost_reason] || lead.lost_reason || "Não informado")}${lead.lost_notes ? `<br>${escapeHtml(lead.lost_notes)}` : ""}</p>` : "";
-    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p>${recoveryStatus}${lostStatus}<div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : recoveryButton}</div></section><section><h3>Timeline, propostas, contratos e próximas ações</h3><div class="lead-timeline">${[...contractEvents, ...proposals, ...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
+    const archiveButton = canDeleteLeads()
+      ? `<button class="secondary-button danger-text" type="button" data-archive-lead="${id}">Arquivar lead</button>`
+      : "";
+    dialog.innerHTML = `<div class="modal-header"><div><p class="eyebrow dark">${leadStatusLabels[lead.status]}</p><h2>${escapeHtml(lead.full_name)}</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">×</button></div><div class="lead-detail-grid"><section><h3>Contato</h3><p>${escapeHtml(lead.whatsapp || lead.phone || "Não informado")}</p><p>${escapeHtml(lead.email || "")}</p><h3>Oportunidade</h3><p>${escapeHtml(leadCatalogName("services", lead.service_type_id))} · ${escapeHtml(leadCatalogName("sources", lead.source_id))}</p><p>Responsável: ${escapeHtml(leadOwnerName(lead.owner_id))}</p>${recoveryStatus}${lostStatus}<div class="button-row"><button class="secondary-button" data-edit-lead="${id}">Editar</button><button class="secondary-button" data-interact-lead="${id}">Interação</button><button class="secondary-button" data-task-lead="${id}">Próxima ação</button><button class="secondary-button" data-proposal-lead="${id}">Proposta</button>${archiveButton}${lead.status !== "CONVERTIDO" ? `<button class="primary-button" data-convert-lead="${id}">Converter</button>` : recoveryButton}</div></section><section><h3>Timeline, propostas, contratos e próximas ações</h3><div class="lead-timeline">${[...contractEvents, ...proposals, ...tasks, ...interactions].join("") || "Sem registros"}</div></section></div>`;
     if (!dialog.open) dialog.showModal();
   }
 
@@ -5303,11 +5313,21 @@ crm: () => openDialog("lead-dialog"),      users: () => refreshAll(true),
       }
     });
     $("#lead-detail-dialog").addEventListener("click", async (event) => {
-      const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), convert = event.target.closest("[data-convert-lead]"), recovery = event.target.closest("[data-recovery-lead]"), completeLeadTask = event.target.closest("[data-complete-lead-task]"), proposalStatus = event.target.closest("[data-proposal-status]"), createContract = event.target.closest("[data-create-contract]"), contractStatus = event.target.closest("[data-contract-status]"), openContract = event.target.closest("[data-open-contract]"), sendContract = event.target.closest("[data-send-contract]");
+      const edit = event.target.closest("[data-edit-lead]"), interact = event.target.closest("[data-interact-lead]"), task = event.target.closest("[data-task-lead]"), proposal = event.target.closest("[data-proposal-lead]"), archive = event.target.closest("[data-archive-lead]"), convert = event.target.closest("[data-convert-lead]"), recovery = event.target.closest("[data-recovery-lead]"), completeLeadTask = event.target.closest("[data-complete-lead-task]"), proposalStatus = event.target.closest("[data-proposal-status]"), createContract = event.target.closest("[data-create-contract]"), contractStatus = event.target.closest("[data-contract-status]"), openContract = event.target.closest("[data-open-contract]"), sendContract = event.target.closest("[data-send-contract]");
       if (edit) editLead(edit.dataset.editLead);
       else if (interact) { const description = window.prompt("Descreva a interação realizada:"); if (description) { await api(`/api/v1/leads/${interact.dataset.interactLead}/interactions`, { method: "POST", body: JSON.stringify({ interaction_type: "NOTA", description, occurred_at: new Date().toISOString() }) }); await openLeadDetail(interact.dataset.interactLead); } }
       else if (task) openLeadTaskDialog(task.dataset.taskLead);
       else if (proposal) openLeadProposalDialog(proposal.dataset.proposalLead);
+      else if (archive && window.confirm("Arquivar este lead? Ele deixará de aparecer no funil e nos relatórios.")) {
+        try {
+          await api(`/api/v1/leads/${archive.dataset.archiveLead}`, { method: "DELETE" });
+          closeDialog($("#lead-detail-dialog"));
+          await loadCrm();
+          toast("Lead arquivado.");
+        } catch (error) {
+          toast(error.message || "Não foi possível arquivar o lead.", "error");
+        }
+      }
       else if (convert) openLeadConversion(convert.dataset.convertLead).catch((error) => toast(error.message, "error"));
       else if (recovery && window.confirm("Abrir agora o caso deste cliente no CS Recupera?")) createRecoveryCaseFromLead(recovery.dataset.recoveryLead).catch((error) => toast(error.message, "error"));
       else if (completeLeadTask) {
