@@ -687,7 +687,7 @@
   form.reset();
   form.elements.lead_id.value = "";
   $("#lead-dialog-title").textContent = "Novo lead";
-  fillLeadSelects();
+  fillLeadSelects()};
     if (["opportunity-dialog", "task-dialog", "interaction-dialog"].includes(id)) {
       try {
         await loadClients();
