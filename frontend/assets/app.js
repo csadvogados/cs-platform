@@ -4771,8 +4771,7 @@ const leadAccess = Boolean(state.user?.is_superuser)
       clients: () => openDialog("client-dialog"),
       collections: () => loadCollections(true),
       clientDetail: () => openDialog("income-dialog"),
-      crm: () => openDialog("opportunity-dialog"),
-      users: () => refreshAll(true),
+crm: () => openDialog("lead-dialog"),      users: () => refreshAll(true),
       audit: async () => {
         await loadAudit(state.audit.page);
         toast("Histórico atualizado.");
