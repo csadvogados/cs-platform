@@ -682,6 +682,12 @@
     if (id === "client-dialog") resetClientDialog();
     if (id === "client-import-dialog") resetClientImportDialog();
     if (id === "user-dialog") resetUserDialog();
+    if (id === "lead-dialog") {
+  const form = $("#lead-form");
+  form.reset();
+  form.elements.lead_id.value = "";
+  $("#lead-dialog-title").textContent = "Novo lead";
+  fillLeadSelects();
     if (["opportunity-dialog", "task-dialog", "interaction-dialog"].includes(id)) {
       try {
         await loadClients();
