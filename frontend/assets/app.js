@@ -1975,7 +1975,8 @@
   }
 
   async function loadCrm() {
-    const leadAccess = ["admin", "supervisor", "advogado", "atendimento"].includes(String(state.user?.role || "").toLowerCase()) || state.user?.is_superuser;
+const leadAccess = Boolean(state.user?.is_superuser)
+  || (state.user?.permissions || []).includes("crm.read");
     const labels = ["resumo", "contatos", "oportunidades", "tarefas", "interações", "leads", "indicadores de leads", "relatórios de leads", "equipe", "catálogos"];
     const requests = await settleWithConcurrency([
       () => api("/api/v1/crm/summary"),
