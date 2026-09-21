@@ -733,7 +733,7 @@ def get_client_profile(
     client_id: uuid.UUID,
     db: Session = Depends(get_db),
     actor: IdentityContext = Depends(
-        require_permissions(PermissionCode.CLIENT_READ.value)
+        require_permissions(PermissionCode.CLIENT_READ.value, PermissionCode.CRM_READ.value)
     ),
 ):
     client = db.scalar(select(Client).where(
