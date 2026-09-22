@@ -33,3 +33,10 @@ Aplicar `alembic upgrade head`. A revision `0026_commercial_contracts` cria a ta
 5. Avance por revisão, aprovação e registro de envio.
 6. Registre a assinatura informando onde ou como o documento assinado foi arquivado.
 7. Confirme todos os eventos na timeline e no histórico de auditoria.
+# Arquivamento administrativo
+
+Na Central de contratos, administrador/superadministrador pode usar **Arquivar contrato**, com confirmação. `DELETE /api/v1/contracts/{contract_id}` retorna 204 e faz exclusão lógica por `deleted_at`, sem migration. Repetir a operação não duplica o histórico. O contrato deve pertencer à organização atual, inclusive para superadministrador.
+
+Conteúdo, assinatura e situação são preservados no banco. O documento arquivado deixa de ser acessível pelas telas ativas; esta entrega não inclui tela de arquivo/restauração. A operação gera auditoria e interação na timeline do lead. Não cancela juridicamente o contrato, nem arquiva cliente, lead ou proposta. Indicadores de propostas/receita comercial podem continuar incluindo a proposta até tratamento separado do lead.
+
+Teste: administrador arquiva contrato de teste, lista e resumo de contratos deixam de contá-lo; timeline registra uma única ação; outros perfis recebem 403, outra organização recebe 404. Nunca usar limpeza de testes em contratos reais sem decisão administrativa específica.

@@ -104,6 +104,38 @@ def test_accepted_proposal_generates_and_tracks_contract(client, token):
     assert listed.json()[0]["delivery_channel"] == "WHATSAPP"
     assert listed.json()[0]["signature_due_at"] == due_at
 
+    from types import SimpleNamespace
+    from uuid import UUID, uuid4
+    from app.api.deps import get_identity_context
+    from app.main import app
+    from app.db.session import SessionLocal
+    from app.models.crm import CommercialContract
+    me = client.get("/api/v1/auth/me", headers=auth(token)).json()
+    identity = SimpleNamespace(is_superuser=False, role="atendimento", organization_id=UUID(me["organization_id"]), user_id=UUID(me["id"]))
+    app.dependency_overrides[get_identity_context] = lambda: identity
+    try:
+        for role in ["atendimento", "advogado", "supervisor", "financeiro"]:
+            identity.role = role
+            assert client.delete(f"/api/v1/contracts/{contract['id']}", headers=auth(token)).status_code == 403
+        identity.role = "admin"
+        identity.organization_id = uuid4()
+        assert client.delete(f"/api/v1/contracts/{contract['id']}", headers=auth(token)).status_code == 404
+        identity.organization_id = UUID(me["organization_id"])
+        for _ in range(2):
+            assert client.delete(f"/api/v1/contracts/{contract['id']}", headers=auth(token)).status_code == 204
+    finally:
+        app.dependency_overrides.pop(get_identity_context, None)
+    assert client.get("/api/v1/contracts/summary", headers=auth(token)).json()["total"] == 0
+    assert client.get("/api/v1/contracts", headers=auth(token)).json() == []
+    timeline = client.get(f"/api/v1/leads/{lead['id']}/timeline", headers=auth(token)).json()
+    assert timeline["contracts"] == []
+    assert len([i for i in timeline["interactions"] if "arquivado" in i["description"]]) == 1
+    with SessionLocal() as db:
+        archived = db.get(CommercialContract, UUID(contract["id"]))
+        assert archived.deleted_at is not None
+        assert archived.status == "ASSINADO"
+        assert archived.content == contract["content"]
+
 
 def test_contract_template_crud(client, token):
     services = catalogs(client, token)["services"]

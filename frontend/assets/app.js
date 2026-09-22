@@ -2046,7 +2046,8 @@ const leadAccess = Boolean(state.user?.is_superuser)
     $("#contract-overdue").textContent = summary.overdue_signatures || 0;
     $("#contract-table-body").innerHTML = state.contracts.items.map((contract) => {
       const overdue = contract.status === "ENVIADO" && contract.signature_due_at && new Date(`${contract.signature_due_at}T23:59:59`) < new Date();
-      const deliveryButton = ["APROVADO", "ENVIADO"].includes(contract.status) ? `<button class="text-link" type="button" data-send-contract="${contract.id}" data-contract-lead-id="${contract.lead_id}">${contract.status === "ENVIADO" ? "Registrar reenvio" : "Registrar envio"}</button>` : "";
+      let deliveryButton = ["APROVADO", "ENVIADO"].includes(contract.status) ? `<button class="text-link" type="button" data-send-contract="${contract.id}" data-contract-lead-id="${contract.lead_id}">${contract.status === "ENVIADO" ? "Registrar reenvio" : "Registrar envio"}</button>` : "";
+      if (state.user?.is_superuser || state.user?.role === "admin") deliveryButton += `<button class="text-link danger-text" type="button" data-archive-contract="${contract.id}">Arquivar contrato</button>`;
       return `<tr><td><strong>${escapeHtml(contract.contract_number)}</strong><small>${escapeHtml(contract.title)}</small></td><td><strong>${escapeHtml(contract.client_name)}</strong><small>Lead: ${escapeHtml(contract.lead_name)}</small></td><td><span class="badge">${escapeHtml(contractStatusLabels[contract.status] || contract.status)}</span>${contract.delivery_channel ? `<small>${escapeHtml(contract.delivery_channel)} · ${escapeHtml(contract.delivery_recipient)}</small>` : ""}</td><td><span class="${overdue ? "danger-text" : ""}">${contract.signature_due_at ? escapeHtml(formatDate(contract.signature_due_at)) : "—"}</span></td><td>${escapeHtml(formatDate(contract.updated_at, true))}</td><td><span class="button-row"><button class="text-link" type="button" data-contract-open-lead="${contract.lead_id}">Abrir lead</button><button class="text-link" type="button" data-contract-document="${contract.id}" data-contract-lead-id="${contract.lead_id}">Abrir documento</button>${deliveryButton}</span></td></tr>`;
     }).join("") || '<tr><td colspan="6" class="empty-cell">Nenhum contrato encontrado.</td></tr>';
     $("#new-contract-template").hidden = !canManageContractTemplates();
@@ -5185,6 +5186,17 @@ crm: () => openDialog("lead-dialog"),      users: () => refreshAll(true),
       const openLead = event.target.closest("[data-contract-open-lead]");
       const openDocument = event.target.closest("[data-contract-document]");
       const sendContract = event.target.closest("[data-send-contract]");
+      const archiveContract = event.target.closest("[data-archive-contract]");
+      if (archiveContract) {
+        const contract = state.contracts.items.find((item) => String(item.id) === archiveContract.dataset.archiveContract);
+        if (!window.confirm(`Arquivar o contrato ${contract?.contract_number || "selecionado"}? Ele sairá da lista e dos indicadores de contratos ativos. Documento e histórico serão preservados. O cliente e o lead não serão arquivados.`)) return;
+        archiveContract.disabled = true;
+        api(`/api/v1/contracts/${archiveContract.dataset.archiveContract}`, { method: "DELETE" })
+          .then(() => { toast("Contrato arquivado. Documento preservado."); return loadContracts(); })
+          .catch((error) => toast(error.message, "error"))
+          .finally(() => { archiveContract.disabled = false; });
+        return;
+      }
       if (openLead) openContractLead(openLead.dataset.contractOpenLead).catch((error) => toast(error.message, "error"));
       else if (openDocument) openLeadContractDocument(openDocument.dataset.contractLeadId, openDocument.dataset.contractDocument).catch((error) => toast(error.message, "error"));
       else if (sendContract) openContractDeliveryDialog(sendContract.dataset.sendContract, sendContract.dataset.contractLeadId);

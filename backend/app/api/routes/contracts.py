@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,6 +15,30 @@ from app.security.identity import IdentityContext
 from app.services.audit import record_audit
 
 router = APIRouter()
+
+
+@router.delete("/{contract_id}", status_code=204, summary="Arquivar contrato (administrador)")
+def archive_contract(contract_id: UUID, db: Session = Depends(get_db), identity: IdentityContext = Depends(get_identity_context)):
+    if not identity.is_superuser and str(identity.role).lower() != "admin":
+        raise HTTPException(403, "Somente administrador pode arquivar contratos")
+    obj = db.scalar(select(CommercialContract).where(
+        CommercialContract.id == contract_id,
+        CommercialContract.organization_id == identity.organization_id,
+    ).with_for_update())
+    if not obj:
+        raise HTTPException(404, "Contrato não encontrado")
+    if obj.deleted_at is None:
+        now = datetime.now(timezone.utc)
+        obj.deleted_at = now
+        db.add(LeadInteraction(organization_id=identity.organization_id, lead_id=obj.lead_id,
+            user_id=identity.user_id, interaction_type="DOCUMENTO", occurred_at=now,
+            description=f"Contrato {obj.contract_number} arquivado. Documento e situação preservados."))
+        record_audit(db, organization_id=identity.organization_id, user_id=identity.user_id,
+            entity_type="commercial_contract", entity_id=obj.id, action="archive",
+            new_values={"deleted_at": now.isoformat(), "status": obj.status, "contract_number": obj.contract_number})
+        save(db)
+    return Response(status_code=204)
+
 ALLOWED_ROLES = {"admin", "supervisor", "advogado", "atendimento"}
 TEMPLATE_MANAGER_ROLES = {"admin", "supervisor", "advogado"}
 DEFAULT_TEMPLATE_CONTENT = """CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS
